@@ -168,7 +168,7 @@ export async function runGenesisAgent(
     onStream: (line: string) => Promise<void>,
     onComplete: (result: GenesisOutput) => Promise<void>
 ): Promise<void> {
-Research this venture concept thoroughly using Google Search.
+    const userMessage = `Research this venture concept thoroughly using Google Search.
     Find real, current market data with citations.
 
 ${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}Specific Venture Focus: ${venture.name}
@@ -180,7 +180,7 @@ Run at minimum 8 distinct searches covering:
 4. Recent trends and market timing signals
 5. Reddit and community discussions about this problem
 
-Then output your full GenesisOutput JSON.
+Then output your full GenesisOutput JSON.`
 
     const run = async () => {
         const model = getFlashModelWithSearch()
