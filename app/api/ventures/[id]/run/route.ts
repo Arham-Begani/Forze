@@ -7,6 +7,7 @@ import {
     updateConversationStatus,
     setConversationResult,
     updateVentureContext,
+    getProject,
 } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -32,9 +33,12 @@ async function runAgent(
     const venture = await getVenture(ventureId, userId)
     if (!venture) throw new Error('Venture not found')
 
+    const project = venture.project_id ? await getProject(venture.project_id) : null
+
     const ventureInput = {
         ventureId: venture.id,
         name: `${venture.name}: ${prompt}`,
+        globalIdea: project?.global_idea ?? undefined,
         context: venture.context as unknown as Record<string, unknown>,
     }
 
