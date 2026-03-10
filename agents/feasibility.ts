@@ -204,7 +204,7 @@ Output the FeasibilityOutput JSON as the final thing you write.
 // ── Agent Runner ──────────────────────────────────────────────────────────────
 
 export async function runFeasibilityAgent(
-    venture: { ventureId: string; name: string; context: Record<string, unknown> },
+    venture: { ventureId: string; name: string; globalIdea?: string; context: Record<string, unknown> },
     onStream: (line: string) => Promise<void>,
     onComplete: (result: FeasibilityOutput) => Promise<void>
 ): Promise<void> {
@@ -214,7 +214,7 @@ export async function runFeasibilityAgent(
 
     const userMessage = `Produce a complete feasibility study with GO/NO-GO verdict.
 
-Venture: ${venture.name}
+${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}Specific Venture Focus: ${venture.name}
 
 Market research (base all numbers on this data):
 ${JSON.stringify(venture.context.research, null, 2)}
@@ -228,7 +228,7 @@ All projections must be internally consistent.
 Output the full FeasibilityOutput JSON at the end.`
 
     const run = async () => {
-        const model = getProModelWithThinking(8000)
+        const model = getProModelWithThinking(8000, 'gemini-2.5-pro')
 
         // streamPrompt returns the full accumulated text
         const fullText = await streamPrompt(
