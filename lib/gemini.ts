@@ -7,7 +7,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 // Flash model — used by Research, Branding, Marketing, Landing agents
 export function getFlashModel(): GenerativeModel {
     return genAI.getGenerativeModel({
-        model: 'gemini-3.0-flash',
+        model: 'gemini-2.5-flash',
         generationConfig: {
             temperature: 0.7,
             topP: 0.95,
@@ -19,7 +19,7 @@ export function getFlashModel(): GenerativeModel {
 // Flash model with Google Search grounding — used by Genesis (Research) only
 export function getFlashModelWithSearch(): GenerativeModel {
     return genAI.getGenerativeModel({
-        model: 'gemini-3.0-flash',
+        model: 'gemini-2.5-flash',
         tools: [{ googleSearch: {} }],
         generationConfig: {
             temperature: 0.4,   // lower temp for factual research
@@ -32,7 +32,7 @@ export function getFlashModelWithSearch(): GenerativeModel {
 // Pro model with thinking — used by Feasibility and Full Launch Architect
 export function getProModelWithThinking(thinkingBudget: number = 8000): GenerativeModel {
     return genAI.getGenerativeModel({
-        model: 'gemini-3.0-pro',
+        model: 'gemini-2.5-pro',
         generationConfig: {
             temperature: 0.6,
             topP: 0.95,
