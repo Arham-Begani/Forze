@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,15 +52,24 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [hoveredProject, setHoveredProject] = useState<string | null>(null)
 
+  // ── Idea intake ─────────────────────────────────────────────────────────────
+  const [idea, setIdea] = useState<string | null>(null)
+  const [ideaInput, setIdeaInput] = useState('')
+  const [ideaSubmitting, setIdeaSubmitting] = useState(false)
+  const [ideaError, setIdeaError] = useState(false)
+
   useEffect(() => {
     async function load() {
       try {
-        const [projRes, ventRes] = await Promise.all([
+        const [projRes, ventRes, ideaRes] = await Promise.all([
           fetch('/api/projects'),
           fetch('/api/ventures'),
+          fetch('/api/user/idea'),
         ])
         if (projRes.ok) setProjects(await projRes.json())
         if (ventRes.ok) setVentures(await ventRes.json())
+        const ideaData = ideaRes.ok ? await ideaRes.json() : null
+        setIdea(ideaData?.idea ?? null)
       } finally {
         setLoading(false)
       }
@@ -75,24 +85,176 @@ export default function DashboardPage() {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
+  async function handleIdeaSubmit() {
+    const trimmed = ideaInput.trim()
+    if (!trimmed || ideaSubmitting) return
+    setIdeaSubmitting(true)
+    setIdeaError(false)
+    try {
+      const res = await fetch('/api/user/idea', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea: trimmed }),
+      })
+      if (res.ok) {
+        setIdea(trimmed)
+      } else {
+        setIdeaError(true)
+      }
+    } catch {
+      setIdeaError(true)
+    } finally {
+      setIdeaSubmitting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div style={pageStyle}>
-        {/* Ambient blobs */}
         <div style={ambientBlob1} />
         <div style={ambientBlob2} />
         <div style={contentStyle}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, paddingTop: 120 }}>
-            <motion.div
-              style={loadingHexStyle}
-              animate={{ rotate: 360, scale: [1, 1.1, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <div style={{ width: 180, height: 14, borderRadius: 6 }} className="skeleton" />
-            <div style={{ width: 240, height: 10, borderRadius: 6, opacity: 0.5 }} className="skeleton" />
+          {/* Skeleton Hero */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ width: 240, height: 38, borderRadius: 10, marginBottom: 10 }} className="skeleton" />
+            <div style={{ width: 140, height: 16, borderRadius: 6, opacity: 0.5 }} className="skeleton" />
+          </div>
+
+          {/* Skeleton Quick Actions */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ width: 110, height: 38, borderRadius: 10 }} className="skeleton" />
+            ))}
+          </div>
+
+          {/* Skeleton Stats Bar */}
+          <div className="glass" style={{ ...statsBarStyle, border: 'none' }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 32, height: 28, borderRadius: 6 }} className="skeleton" />
+                <div style={{ width: 60, height: 12, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
+              </div>
+            ))}
+          </div>
+
+          {/* Skeleton Grid */}
+          <div style={gridStyle}>
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="glass-card" style={{ ...projectCardStyle, border: 'none', shadow: 'none', pointerEvents: 'none' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 13 }} className="skeleton" />
+                  <div style={{ width: 40, height: 12, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ width: '70%', height: 18, borderRadius: 6 }} className="skeleton" />
+                  <div style={{ width: '90%', height: 14, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+                  <div style={{ width: 70, height: 12, borderRadius: 4 }} className="skeleton" />
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[1, 2, 3, 4].map(j => (
+                      <div key={j} style={{ width: 6, height: 6, borderRadius: '50%' }} className="skeleton" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+    )
+  }
+
+  // ── Idea intake ─────────────────────────────────────────────────────────────
+  if (idea === null) {
+    return (
+      <motion.div
+        style={intakePageStyle}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        {/* Ambient glow */}
+        <div style={intakeGlow} />
+
+        {/* Logo */}
+        <motion.div
+          style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
+          <motion.div
+            style={intakeHexStyle}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+          />
+          <span style={intakeWordmarkStyle}>Forge</span>
+        </motion.div>
+
+        {/* Pill input */}
+        <motion.div
+          style={intakePillStyle}
+          initial={{ opacity: 0, y: 20, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.2, type: 'spring', stiffness: 300, damping: 24 }}
+        >
+          {/* Left icon */}
+          <div style={intakeIconWrapStyle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+            </svg>
+          </div>
+
+          {/* Input */}
+          <input
+            type="text"
+            value={ideaInput}
+            onChange={e => setIdeaInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleIdeaSubmit()}
+            placeholder="What's your big idea?"
+            style={intakeInputStyle}
+            autoFocus
+          />
+
+          {/* Submit button */}
+          <motion.button
+            onClick={handleIdeaSubmit}
+            disabled={!ideaInput.trim() || ideaSubmitting}
+            whileHover={ideaInput.trim() && !ideaSubmitting ? { scale: 1.08 } : {}}
+            whileTap={ideaInput.trim() && !ideaSubmitting ? { scale: 0.94 } : {}}
+            style={{
+              ...intakeSubmitStyle,
+              background: ideaInput.trim() && !ideaSubmitting ? 'var(--accent)' : 'var(--border)',
+              cursor: ideaInput.trim() && !ideaSubmitting ? 'pointer' : 'default',
+            }}
+          >
+            {ideaSubmitting ? (
+              <motion.div
+                style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%' }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+              />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
+              </svg>
+            )}
+          </motion.button>
+        </motion.div>
+
+        {/* Hint */}
+        <motion.p
+          style={intakeHintStyle}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          {ideaError
+            ? 'Something went wrong. Please try again.'
+            : 'Press Enter or click ↑ · Your AI workforce will handle the rest'}
+        </motion.p>
+      </motion.div>
     )
   }
 
@@ -154,7 +316,8 @@ export default function DashboardPage() {
 
   // ── Main dashboard ──────────────────────────────────────────────────────────
   return (
-    <div style={pageStyle}>
+    <ErrorBoundary>
+      <div style={pageStyle}>
       {/* Ambient background blobs */}
       <div style={ambientBlob1} />
       <div style={ambientBlob2} />
@@ -352,6 +515,7 @@ export default function DashboardPage() {
         </motion.p>
       </div>
     </div>
+    </ErrorBoundary>
   )
 }
 
@@ -604,4 +768,100 @@ const footerTextStyle: React.CSSProperties = {
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
   color: 'var(--muted)',
+}
+
+// ─── Intake Styles ────────────────────────────────────────────────────────────
+
+const intakePageStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'var(--bg)',
+  position: 'relative',
+  overflow: 'hidden',
+  padding: '0 24px',
+}
+
+const intakeGlow: React.CSSProperties = {
+  position: 'absolute',
+  top: '30%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 600,
+  height: 400,
+  background: 'radial-gradient(ellipse, var(--accent-glow) 0%, transparent 65%)',
+  filter: 'blur(60px)',
+  opacity: 0.35,
+  pointerEvents: 'none',
+}
+
+const intakeHexStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
+  clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+  flexShrink: 0,
+}
+
+const intakeWordmarkStyle: React.CSSProperties = {
+  fontSize: 26,
+  fontWeight: 700,
+  color: 'var(--text)',
+  letterSpacing: '-0.04em',
+}
+
+const intakePillStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  width: '100%',
+  maxWidth: 660,
+  background: 'var(--glass-bg)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: '1px solid var(--glass-border)',
+  borderRadius: 999,
+  padding: '10px 10px 10px 20px',
+  boxShadow: 'var(--shadow-lg), 0 0 40px var(--accent-glow)',
+}
+
+const intakeIconWrapStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  opacity: 0.5,
+}
+
+const intakeInputStyle: React.CSSProperties = {
+  flex: 1,
+  background: 'transparent',
+  border: 'none',
+  outline: 'none',
+  fontSize: 16,
+  color: 'var(--text)',
+  fontFamily: 'inherit',
+  letterSpacing: '-0.01em',
+}
+
+const intakeSubmitStyle: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: '50%',
+  border: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  transition: 'background 200ms ease',
+}
+
+const intakeHintStyle: React.CSSProperties = {
+  marginTop: 20,
+  fontSize: 12,
+  color: 'var(--muted)',
+  letterSpacing: '0.01em',
+  textAlign: 'center',
 }
