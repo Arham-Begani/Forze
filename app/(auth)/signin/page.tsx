@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { motion } from "framer-motion";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -35,35 +36,68 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="page">
-      <div className="card">
+    <div style={pageStyle}>
+      {/* Ambient background blobs */}
+      <div style={blob1Style} />
+      <div style={blob2Style} />
+      <div style={blob3Style} />
+
+      {/* Noise overlay */}
+      <div style={noiseStyle} />
+
+      <motion.div
+        style={cardStyle}
+        className="glass-auth-card"
+        initial={{ opacity: 0, y: 32, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {/* Top accent line */}
+        <div style={accentLineStyle} />
+
         {/* Logo */}
-        <div className="logo">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 36 36"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M18 2L32.124 10V26L18 34L3.876 26V10L18 2Z"
-              fill="#c07a3a"
-            />
-          </svg>
-          <span className="wordmark">Forge</span>
-        </div>
+        <motion.div
+          style={logoStyle}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
+        >
+          <motion.div
+            style={hexLogoStyle}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+          />
+          <span style={wordmarkStyle}>Forge</span>
+        </motion.div>
 
-        <h1 className="title">Sign in to your account</h1>
+        <motion.h1
+          style={titleStyle}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, duration: 0.4 }}
+        >
+          Welcome back
+        </motion.h1>
+        <motion.p
+          style={subtitleStyle}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.24, duration: 0.4 }}
+        >
+          Sign in to your Forge account
+        </motion.p>
 
-        <form onSubmit={handleSubmit}>
-          <label className="label" htmlFor="email">
-            Email
-          </label>
+        <motion.form
+          onSubmit={handleSubmit}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.45 }}
+        >
+          <label className="auth-label" htmlFor="email">Email address</label>
           <input
             id="email"
             type="email"
-            className="input"
+            className="auth-input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
@@ -71,13 +105,11 @@ export default function SignInPage() {
             required
           />
 
-          <label className="label" htmlFor="password">
-            Password
-          </label>
+          <label className="auth-label" htmlFor="password">Password</label>
           <input
             id="password"
             type="password"
-            className="input"
+            className="auth-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
@@ -85,172 +117,195 @@ export default function SignInPage() {
             required
           />
 
-          {error && <p className="error">{error}</p>}
+          {error && (
+            <motion.p
+              className="auth-error"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              {error}
+            </motion.p>
+          )}
 
-          <button type="submit" className="button" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+          <motion.button
+            type="submit"
+            className="auth-btn"
+            disabled={loading}
+            whileHover={!loading ? { scale: 1.015, translateY: -1 } : {}}
+            whileTap={!loading ? { scale: 0.985 } : {}}
+            style={{ marginTop: 4 }}
+          >
+            {loading ? (
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <motion.span
+                  style={spinnerStyle}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+                />
+                Signing in…
+              </span>
+            ) : (
+              "Sign in"
+            )}
+          </motion.button>
+        </motion.form>
 
-        <p className="footer">
+        <motion.p
+          style={footerTextStyle}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.45 }}
+        >
           Don&apos;t have an account?{" "}
-          <a href="/signup" className="link">
-            Sign up
-          </a>
-        </p>
-      </div>
-
-      <style jsx>{`
-        @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap");
-
-        .page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #faf9f6;
-          font-family: "DM Sans", sans-serif;
-          padding: 1rem;
-        }
-
-        @media (prefers-color-scheme: dark) {
-          .page {
-            background: #111110;
-          }
-
-          .card {
-            background: #1a1918 !important;
-            border-color: #272523 !important;
-          }
-
-          .title {
-            color: #f5f5f4 !important;
-          }
-
-          .label {
-            color: #a8a29e !important;
-          }
-
-          .input {
-            background: #111110 !important;
-            border-color: #272523 !important;
-            color: #f5f5f4 !important;
-          }
-
-          .input::placeholder {
-            color: #57534e !important;
-          }
-
-          .footer {
-            color: #a8a29e !important;
-          }
-        }
-
-        .card {
-          width: 100%;
-          max-width: 400px;
-          background: #ffffff;
-          border: 1px solid #e8e4dc;
-          border-radius: 12px;
-          padding: 2.5rem 2rem;
-        }
-
-        .logo {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
-        }
-
-        .wordmark {
-          font-size: 1.5rem;
-          font-weight: 600;
-          color: #c07a3a;
-          letter-spacing: -0.02em;
-        }
-
-        .title {
-          font-size: 1.125rem;
-          font-weight: 500;
-          color: #1c1917;
-          text-align: center;
-          margin: 0 0 1.5rem;
-        }
-
-        .label {
-          display: block;
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: #44403c;
-          margin-bottom: 0.375rem;
-        }
-
-        .input {
-          width: 100%;
-          padding: 0.625rem 0.75rem;
-          font-size: 0.875rem;
-          font-family: "DM Sans", sans-serif;
-          border: 1px solid #e8e4dc;
-          border-radius: 8px;
-          background: #faf9f6;
-          color: #1c1917;
-          outline: none;
-          margin-bottom: 1rem;
-          box-sizing: border-box;
-        }
-
-        .input:focus {
-          border-color: #c07a3a;
-          box-shadow: 0 0 0 2px rgba(192, 122, 58, 0.15);
-        }
-
-        .error {
-          font-size: 0.8125rem;
-          color: #dc2626;
-          margin: 0 0 1rem;
-        }
-
-        .button {
-          width: 100%;
-          padding: 0.625rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-          font-family: "DM Sans", sans-serif;
-          color: #ffffff;
-          background: #c07a3a;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: opacity 0.15s;
-        }
-
-        .button:hover {
-          opacity: 0.9;
-        }
-
-        .button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .footer {
-          text-align: center;
-          font-size: 0.8125rem;
-          color: #78716c;
-          margin: 1.25rem 0 0;
-        }
-
-        .link {
-          color: #c07a3a;
-          text-decoration: none;
-          font-weight: 500;
-        }
-
-        .link:hover {
-          text-decoration: underline;
-        }
-      `}</style>
+          <a href="/signup" style={linkStyle}>Sign up</a>
+        </motion.p>
+      </motion.div>
     </div>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const pageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--bg)",
+  fontFamily: "'Inter', sans-serif",
+  padding: "1rem",
+  position: "relative",
+  overflow: "hidden",
+};
+
+const blob1Style: React.CSSProperties = {
+  position: "fixed",
+  width: 560,
+  height: 560,
+  borderRadius: "50%",
+  background: "radial-gradient(circle, rgba(192,122,58,0.22) 0%, transparent 70%)",
+  filter: "blur(80px)",
+  top: -180,
+  right: -140,
+  pointerEvents: "none",
+  zIndex: 0,
+  animation: "blob-float 14s ease-in-out infinite",
+};
+
+const blob2Style: React.CSSProperties = {
+  position: "fixed",
+  width: 480,
+  height: 480,
+  borderRadius: "50%",
+  background: "radial-gradient(circle, rgba(90,110,140,0.18) 0%, transparent 70%)",
+  filter: "blur(90px)",
+  bottom: -160,
+  left: -120,
+  pointerEvents: "none",
+  zIndex: 0,
+  animation: "blob-float 18s ease-in-out infinite reverse",
+};
+
+const blob3Style: React.CSSProperties = {
+  position: "fixed",
+  width: 300,
+  height: 300,
+  borderRadius: "50%",
+  background: "radial-gradient(circle, rgba(122,90,140,0.12) 0%, transparent 70%)",
+  filter: "blur(60px)",
+  top: "40%",
+  left: "10%",
+  pointerEvents: "none",
+  zIndex: 0,
+  animation: "blob-float 10s ease-in-out infinite",
+};
+
+const noiseStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E")`,
+  opacity: 0.4,
+  pointerEvents: "none",
+  zIndex: 0,
+};
+
+const cardStyle: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 420,
+  padding: "40px 36px 32px",
+  position: "relative",
+  zIndex: 1,
+};
+
+const accentLineStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: "10%",
+  right: "10%",
+  height: 2,
+  background: "linear-gradient(90deg, transparent, var(--accent), transparent)",
+  borderRadius: 2,
+  opacity: 0.7,
+};
+
+const logoStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+  marginBottom: 24,
+};
+
+const hexLogoStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  background: "linear-gradient(135deg, var(--accent), #e8963a)",
+  clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+  flexShrink: 0,
+  boxShadow: "0 4px 14px var(--accent-glow)",
+};
+
+const wordmarkStyle: React.CSSProperties = {
+  fontSize: "1.5rem",
+  fontWeight: 700,
+  color: "var(--accent)",
+  letterSpacing: "-0.03em",
+};
+
+const titleStyle: React.CSSProperties = {
+  fontSize: "1.25rem",
+  fontWeight: 700,
+  color: "var(--text)",
+  textAlign: "center",
+  margin: "0 0 6px",
+  letterSpacing: "-0.02em",
+};
+
+const subtitleStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "var(--muted)",
+  textAlign: "center",
+  margin: "0 0 28px",
+};
+
+const footerTextStyle: React.CSSProperties = {
+  textAlign: "center",
+  fontSize: 13,
+  color: "var(--muted)",
+  margin: "20px 0 0",
+};
+
+const linkStyle: React.CSSProperties = {
+  color: "var(--accent)",
+  textDecoration: "none",
+  fontWeight: 600,
+};
+
+const spinnerStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  borderRadius: "50%",
+  border: "2px solid rgba(255,255,255,0.3)",
+  borderTopColor: "#fff",
+  display: "inline-block",
+};
