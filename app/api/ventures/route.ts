@@ -1,5 +1,5 @@
 // app/api/ventures/route.ts
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import { getVenturesByUser, createVenture } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -10,7 +10,7 @@ export async function GET() {
         const ventures = await getVenturesByUser(session.userId)
         return NextResponse.json(ventures)
     } catch (e) {
-        if (e instanceof NextResponse) return e
+        if (isAuthError(e)) return e.toResponse()
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
         const venture = await createVenture(session.userId, name, projectId)
         return NextResponse.json(venture, { status: 201 })
     } catch (e) {
-        if (e instanceof NextResponse) return e
+        if (isAuthError(e)) return e.toResponse()
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
