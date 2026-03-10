@@ -3,9 +3,22 @@ import { createDb } from '@/lib/db'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface Project {
+  id: string
+  user_id: string
+  name: string
+  description: string
+  icon: string
+  status: 'active' | 'archived'
+  global_idea: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Venture {
   id: string
   user_id: string
+  project_id: string | null
   name: string
   context: VentureContext
   created_at: string
@@ -31,13 +44,84 @@ export interface Conversation {
   created_at: string
 }
 
-// ─── Ventures ─────────────────────────────────────────────────────────────────
+// ─── Projects ─────────────────────────────────────────────────────────────────
 
-export async function createVenture(userId: string, name: string): Promise<Venture> {
+export async function createProject(
+  userId: string,
+  name: string,
+  description = '',
+  icon = '🚀'
+): Promise<Project> {
   const db = await createDb()
   const { data, error } = await db
+    .from('projects')
+    .insert({ user_id: userId, name, description, icon })
+    .select()
+    .single()
+
+  if (error) throw new Error(`createProject failed: ${error.message}`)
+  return data
+}
+
+export async function getProjectsByUser(userId: string): Promise<Project[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('projects')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getProjectsByUser failed: ${error.message}`)
+  return data ?? []
+}
+
+export async function getProject(id: string, userId: string): Promise<Project | null> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('projects')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .single()
+
+  if (error) return null
+  return data
+}
+
+export async function updateProject(
+  id: string,
+  updates: { name?: string; description?: string; icon?: string; status?: 'active' | 'archived'; global_idea?: string }
+): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('projects')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (error) throw new Error(`updateProject failed: ${error.message}`)
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db.from('projects').delete().eq('id', id)
+  if (error) throw new Error(`deleteProject failed: ${error.message}`)
+}
+
+// ─── Ventures ─────────────────────────────────────────────────────────────────
+
+export async function createVenture(userId: string, name: string, projectId?: string): Promise<Venture> {
+  const db = await createDb()
+  const insertData: Record<string, unknown> = {
+    user_id: userId,
+    name,
+    context: { research: null, branding: null, marketing: null, landing: null, feasibility: null },
+  }
+  if (projectId) insertData.project_id = projectId
+
+  const { data, error } = await db
     .from('ventures')
-    .insert({ user_id: userId, name, context: { research: null, branding: null, marketing: null, landing: null, feasibility: null } })
+    .insert(insertData)
     .select()
     .single()
 
@@ -54,6 +138,18 @@ export async function getVenturesByUser(userId: string): Promise<Venture[]> {
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(`getVenturesByUser failed: ${error.message}`)
+  return data ?? []
+}
+
+export async function getVenturesByProject(projectId: string): Promise<Venture[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('ventures')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getVenturesByProject failed: ${error.message}`)
   return data ?? []
 }
 
