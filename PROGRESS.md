@@ -8,7 +8,7 @@ This file is the Agent's memory between sessions.
 ---
 
 ## Current Status
-**Phase:** 9 — Design QA (Project Expansion)
+**Phase:** 10 — Polish
 **Last updated:** March 10, 2026
 
 ---
@@ -104,3 +104,22 @@ This file is the Agent's memory between sessions.
 - **Commits:** Successfully executed a **21-commit marathon**, committing every modified file and new feature component individually for a granular history.
 **Broken:** None.
 **Tomorrow:** Phase 10 — Polish (Skeletons, Error Boundaries, Retries).
+
+### Day 2 — March 10, 2026
+**Goal:** Idea intake screen on first sign-in.
+**Built:**
+- `db/migrations/003_user_ideas.sql` — `user_ideas` table (one row per user, UNIQUE on user_id, upsert-safe)
+- `app/api/user/idea/route.ts` — GET (returns idea or null) + POST (saves/updates idea via upsert)
+- `lib/queries.ts` — `getUserIdea()` and `setUserIdea()` helpers appended (no existing code touched)
+- `app/dashboard/page.tsx` — Idea state + intake screen injected before main dashboard render. Shows Grok-style pill input with Forge branding. On submit → idea saved to DB → normal dashboard renders. Returning users skip intake automatically (idea already in DB).
+**Broken:** None. All pre-existing pages and API routes unchanged.
+**Next:** Run `003_user_ideas.sql` migration in Antigravity DB console.
+
+### Day 3 — March 10, 2026
+**Goal:** Phase 10 — Polish (Skeletons, Error Boundaries, Retries).
+**Built:**
+- `components/ui/ErrorBoundary.tsx` — Reusable error catching component.
+- Dashboard refinements: Replaced simple loading state with full-page skeletons matching the real layout.
+- `lib/queries.ts` — Implemented `withRetry` helper and wrapped critical mutations (Project/Venture/Idea creation) for better reliability.
+- Wrapped `DashboardPage` in `ErrorBoundary` for fault tolerance.
+**Next:** Final verification of Idea Intake flow once migration is confirmed.
