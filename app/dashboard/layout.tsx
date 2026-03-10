@@ -140,6 +140,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
   }, [pathname, projects, ventures, loading, router])
 
+  // Listen for forge:new-project events from dashboard buttons
+  useEffect(() => {
+    function handleNewProject() { setShowNewProject(true) }
+    window.addEventListener('forge:new-project', handleNewProject)
+    return () => window.removeEventListener('forge:new-project', handleNewProject)
+  }, [])
+
   useEffect(() => { if (showNewProject && newProjectRef.current) newProjectRef.current.focus() }, [showNewProject])
   useEffect(() => { if (showNewVenture && newVentureRef.current) newVentureRef.current.focus() }, [showNewVenture])
 
@@ -156,7 +163,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         const project: ProjectItem = await res.json()
         setProjects(prev => [project, ...prev])
         setExpandedProjects(prev => new Set(prev).add(project.id))
+        // Navigate to greeting page so user can describe their idea
+        router.push(`/dashboard/greeting?projectId=${project.id}`)
+      } else {
+        const err = await res.json()
+        alert(`Error creating project: ${err.error || 'Unknown error'}`)
       }
+    } catch (e) {
+      alert(`Network error creating project: ${e}`)
     } finally {
       setShowNewProject(false)
       setNewProjectName('')
@@ -176,7 +190,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         const venture: VentureItem = await res.json()
         setVentures(prev => [venture, ...prev])
         setExpandedVentures(prev => new Set(prev).add(venture.id))
+      } else {
+        const err = await res.json()
+        alert(`Error creating venture: ${err.error || 'Unknown error'}`)
       }
+    } catch (e) {
+      alert(`Network error creating venture: ${e}`)
     } finally {
       setShowNewVenture(null)
       setNewVentureName('')
