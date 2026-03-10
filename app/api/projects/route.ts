@@ -1,5 +1,5 @@
 // app/api/projects/route.ts
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import { getProjectsByUser, createProject } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -11,13 +11,19 @@ const CreateProjectSchema = z.object({
 })
 
 export async function GET() {
+  let step = 'init'
   try {
+    step = 'auth'
     const session = await requireAuth()
+    step = 'query'
     const projects = await getProjectsByUser(session.userId)
     return NextResponse.json(projects)
   } catch (e) {
-    if (e instanceof NextResponse) return e
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    if (isAuthError(e)) return e.toResponse()
+    const message = e instanceof Error ? e.message : String(e)
+    const stack = e instanceof Error ? e.stack : undefined
+    console.error(`[GET /api/projects] failed at step="${step}"`, e)
+    return NextResponse.json({ error: message, step, stack }, { status: 500 })
   }
 }
 
@@ -39,7 +45,9 @@ export async function POST(request: NextRequest) {
     )
     return NextResponse.json(project, { status: 201 })
   } catch (e) {
-    if (e instanceof NextResponse) return e
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    if (isAuthError(e)) return e.toResponse()
+    console.error('[POST /api/projects]', e)
+    const message = e instanceof Error ? e.message : 'Internal error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
