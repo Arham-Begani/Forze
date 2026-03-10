@@ -1,0 +1,46 @@
+﻿{
+    "id":  {
+               "default":  "gen_random_uuid()",
+               "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+               "format":  "uuid",
+               "type":  "string"
+           },
+    "user_id":  {
+                    "description":  "Note:\nThis is a Foreign Key to `users.id`.\u003cfk table=\u0027users\u0027 column=\u0027id\u0027/\u003e",
+                    "format":  "uuid",
+                    "type":  "string"
+                },
+    "name":  {
+                 "format":  "text",
+                 "type":  "string"
+             },
+    "description":  {
+                        "default":  "",
+                        "format":  "text",
+                        "type":  "string"
+                    },
+    "icon":  {
+                 "default":  "🚀",
+                 "format":  "text",
+                 "type":  "string"
+             },
+    "status":  {
+                   "default":  "active",
+                   "format":  "text",
+                   "type":  "string"
+               },
+    "global_idea":  {
+                        "format":  "text",
+                        "type":  "string"
+                    },
+    "created_at":  {
+                       "default":  "now()",
+                       "format":  "timestamp with time zone",
+                       "type":  "string"
+                   },
+    "updated_at":  {
+                       "default":  "now()",
+                       "format":  "timestamp with time zone",
+                       "type":  "string"
+                   }
+}
