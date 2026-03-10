@@ -47,7 +47,7 @@ export function ResultCard({ moduleId, result, deploymentUrl }: ResultCardProps)
         display: "flex",
         flexDirection: "column",
         gap: "20px",
-        boxShadow: "var(--shadow-subtle)",
+        boxShadow: "var(--shadow-sm)",
         overflow: "hidden",
         position: "relative",
       }}
