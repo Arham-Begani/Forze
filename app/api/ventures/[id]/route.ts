@@ -1,5 +1,5 @@
 // app/api/ventures/[id]/route.ts
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import {
     getVenture,
     updateVentureName,
@@ -32,7 +32,7 @@ export async function GET(
             conversations: Object.fromEntries(MODULES.map((m, i) => [m, conversations[i]])),
         })
     } catch (e) {
-        if (e instanceof NextResponse) return e
+        if (isAuthError(e)) return e.toResponse()
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
@@ -58,7 +58,7 @@ export async function PATCH(
         await updateVentureName(id, name)
         return NextResponse.json({ ...venture, name })
     } catch (e) {
-        if (e instanceof NextResponse) return e
+        if (isAuthError(e)) return e.toResponse()
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
@@ -78,7 +78,7 @@ export async function DELETE(
         await deleteVenture(id)
         return new NextResponse(null, { status: 204 })
     } catch (e) {
-        if (e instanceof NextResponse) return e
+        if (isAuthError(e)) return e.toResponse()
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
