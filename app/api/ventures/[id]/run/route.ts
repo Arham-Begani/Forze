@@ -99,6 +99,7 @@ async function runAgent(
                 await runFullLaunch(ventureInput, onStream, onAgentStatus, async (result) => {
                     if (result.research) await updateVentureContext(ventureId, 'research', result.research)
                     if (result.branding) await updateVentureContext(ventureId, 'branding', result.branding)
+                    if (result.marketing) await updateVentureContext(ventureId, 'marketing', result.marketing)
                     if (result.landing) await updateVentureContext(ventureId, 'landing', result.landing)
                     if (result.feasibility) await updateVentureContext(ventureId, 'feasibility', result.feasibility)
                     await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
