@@ -61,12 +61,56 @@ export async function streamPrompt(
     const result = await chat.sendMessageStream(userMessage)
 
     let fullText = ''
+    let isThinking = false
+    let buffer = ''
+
     for await (const chunk of result.stream) {
         const chunkText = chunk.text()
-        if (chunkText) {
-            fullText += chunkText
-            await onChunk(chunkText)
+        if (!chunkText) continue
+
+        fullText += chunkText
+        buffer += chunkText
+
+        while (buffer.length > 0) {
+            if (isThinking) {
+                const endMatch = buffer.match(/<\/(think|thought|thinking)>/i)
+                if (endMatch) {
+                    buffer = buffer.slice(endMatch.index! + endMatch[0].length)
+                    isThinking = false
+                } else {
+                    const lastOpenTagPos = buffer.lastIndexOf('<')
+                    if (lastOpenTagPos !== -1) {
+                        buffer = buffer.slice(lastOpenTagPos)
+                    } else {
+                        buffer = ''
+                    }
+                    break
+                }
+            } else {
+                const startMatch = buffer.match(/<(think|thought|thinking)>/i)
+                if (startMatch) {
+                    const textBefore = buffer.slice(0, startMatch.index)
+                    if (textBefore) await onChunk(textBefore)
+                    isThinking = true
+                    buffer = buffer.slice(startMatch.index! + startMatch[0].length)
+                } else {
+                    const lastOpenBracket = buffer.lastIndexOf('<')
+                    if (lastOpenBracket !== -1 && buffer.length - lastOpenBracket < 15) {
+                        const textBefore = buffer.slice(0, lastOpenBracket)
+                        if (textBefore) await onChunk(textBefore)
+                        buffer = buffer.slice(lastOpenBracket)
+                        break
+                    } else {
+                        await onChunk(buffer)
+                        buffer = ''
+                    }
+                }
+            }
         }
+    }
+
+    if (!isThinking && buffer.length > 0) {
+        await onChunk(buffer)
     }
 
     return fullText
