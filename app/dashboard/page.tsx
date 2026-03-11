@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ interface Venture {
   created_at: string
 }
 
-// ─── Module data for cards ───────────────────────────────────────────────────
+// ─── Module data ────────────────────────────────────────────────────────────
 
 const MODULES = [
   { id: 'full-launch', label: 'Full Launch', accent: '#C4975A', icon: '⬡' },
@@ -42,7 +42,7 @@ const QUICK_ACTIONS = [
   { label: 'Branding', icon: '🎨', action: 'branding' },
 ]
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [hoveredProject, setHoveredProject] = useState<string | null>(null)
 
-  // ── Idea intake ─────────────────────────────────────────────────────────────
+  // ── Idea intake ──────────────────────────────────────────────────────────
   const [idea, setIdea] = useState<string | null>(null)
   const [ideaInput, setIdeaInput] = useState('')
   const [ideaSubmitting, setIdeaSubmitting] = useState(false)
@@ -108,6 +108,7 @@ export default function DashboardPage() {
     }
   }
 
+  // ── Loading skeleton ────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={pageStyle}>
@@ -129,7 +130,7 @@ export default function DashboardPage() {
 
           {/* Skeleton Stats Bar */}
           <div className="glass" style={{ ...statsBarStyle, border: 'none' }}>
-            {[1, 2, 3, 4].map(i => (
+            {[1, 2, 3].map(i => (
               <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 32, height: 28, borderRadius: 6 }} className="skeleton" />
                 <div style={{ width: 60, height: 12, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
@@ -165,7 +166,7 @@ export default function DashboardPage() {
     )
   }
 
-  // ── Idea intake ─────────────────────────────────────────────────────────────
+  // ── Idea intake ─────────────────────────────────────────────────────────
   if (idea === null) {
     return (
       <motion.div
@@ -179,7 +180,7 @@ export default function DashboardPage() {
 
         {/* Logo */}
         <motion.div
-          style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 52 }}
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
@@ -192,6 +193,24 @@ export default function DashboardPage() {
           <span style={intakeWordmarkStyle}>Forge</span>
         </motion.div>
 
+        {/* Heading */}
+        <motion.h2
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15, duration: 0.5 }}
+          style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: '0 0 8px', letterSpacing: '-0.03em', textAlign: 'center' }}
+        >
+          What do you want to build?
+        </motion.h2>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.6 }}
+          transition={{ delay: 0.25 }}
+          style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 32px', textAlign: 'center', maxWidth: 420 }}
+        >
+          Tell us your big idea and our AI workforce will handle the rest.
+        </motion.p>
+
         {/* Pill input */}
         <motion.div
           style={intakePillStyle}
@@ -199,25 +218,23 @@ export default function DashboardPage() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.2, type: 'spring', stiffness: 300, damping: 24 }}
         >
-          {/* Left icon */}
           <div style={intakeIconWrapStyle}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
             </svg>
           </div>
 
-          {/* Input */}
           <input
             type="text"
             value={ideaInput}
             onChange={e => setIdeaInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleIdeaSubmit()}
-            placeholder="What's your big idea?"
+            placeholder="Describe your startup idea..."
             style={intakeInputStyle}
             autoFocus
+            aria-label="Your startup idea"
           />
 
-          {/* Submit button */}
           <motion.button
             onClick={handleIdeaSubmit}
             disabled={!ideaInput.trim() || ideaSubmitting}
@@ -228,6 +245,7 @@ export default function DashboardPage() {
               background: ideaInput.trim() && !ideaSubmitting ? 'var(--accent)' : 'var(--border)',
               cursor: ideaInput.trim() && !ideaSubmitting ? 'pointer' : 'default',
             }}
+            aria-label="Submit idea"
           >
             {ideaSubmitting ? (
               <motion.div
@@ -252,13 +270,13 @@ export default function DashboardPage() {
         >
           {ideaError
             ? 'Something went wrong. Please try again.'
-            : 'Press Enter or click ↑ · Your AI workforce will handle the rest'}
+            : 'Press Enter to continue'}
         </motion.p>
       </motion.div>
     )
   }
 
-  // ── Empty state ─────────────────────────────────────────────────────────────
+  // ── Empty state ────────────────────────────────────────────────────────
   if (!projects.length) {
     return (
       <div style={pageStyle}>
@@ -278,7 +296,7 @@ export default function DashboardPage() {
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             />
             <motion.div
-              style={{ ...emptyHexStyle, position: 'relative', zIndex: 1, boxShadow: '0 8px 32px var(--accent-glow)' }}
+              style={{ width: 48, height: 48, background: 'linear-gradient(135deg, var(--accent), #e8a04e)', clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)', position: 'relative', zIndex: 1, boxShadow: '0 8px 32px var(--accent-glow)' }}
               animate={{ rotate: 360 }}
               transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
             />
@@ -295,7 +313,7 @@ export default function DashboardPage() {
             style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 36px', textAlign: 'center', maxWidth: 360, lineHeight: 1.75 }}
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           >
-            Your one-stop platform for building startups. Create a project to organize your ventures and let AI agents do the heavy lifting.
+            Create a project to organize your ventures and let AI agents do the heavy lifting.
           </motion.p>
           <motion.button
             style={createProjectBtnStyle}
@@ -314,11 +332,10 @@ export default function DashboardPage() {
     )
   }
 
-  // ── Main dashboard ──────────────────────────────────────────────────────────
+  // ── Main dashboard ────────────────────────────────────────────────────
   return (
     <ErrorBoundary>
       <div style={pageStyle}>
-        {/* Ambient background blobs */}
         <div style={ambientBlob1} />
         <div style={ambientBlob2} />
 
@@ -326,7 +343,7 @@ export default function DashboardPage() {
           {/* Hero */}
           <motion.div
             style={heroStyle}
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
@@ -334,7 +351,7 @@ export default function DashboardPage() {
               <span className="gradient-text">Command Center</span>
             </h1>
             <p style={heroSubStyle}>
-              {projects.length} project{projects.length !== 1 ? 's' : ''}
+              {projects.length} project{projects.length !== 1 ? 's' : ''} · {ventures.length} venture{ventures.length !== 1 ? 's' : ''}
             </p>
           </motion.div>
 
@@ -342,7 +359,7 @@ export default function DashboardPage() {
           <motion.div
             style={quickActionsStyle}
             initial="hidden" animate="show"
-            variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }}
+            variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } }}
           >
             {QUICK_ACTIONS.map(a => (
               <motion.button
@@ -367,20 +384,22 @@ export default function DashboardPage() {
             style={statsBarStyle}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ delay: 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
-            <StatItem label="Projects" value={projects.length} delay={0.2} />
+            <StatItem label="Projects" value={projects.length} delay={0.15} />
             <div style={statDivider} />
-            <StatItem label="Modules" value={MODULES.length} delay={0.3} />
+            <StatItem label="Ventures" value={ventures.length} delay={0.2} />
             <div style={statDivider} />
-            <StatItem label="AI Agents" value={6} delay={0.4} />
+            <StatItem label="Modules" value={MODULES.length} delay={0.25} />
+            <div style={statDivider} />
+            <StatItem label="AI Agents" value={6} delay={0.3} />
           </motion.div>
 
           {/* Project grid */}
           <motion.div
             style={gridStyle}
             initial="hidden" animate="show"
-            variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.09 } } }}
+            variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }}
           >
             {projects.map(proj => {
               const ventureCount = getVentureCount(proj.id)
@@ -392,7 +411,7 @@ export default function DashboardPage() {
                     hidden: { opacity: 0, y: 24, scale: 0.96 },
                     show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 280, damping: 22 } }
                   }}
-                  whileHover={{ scale: 1.025, y: -3 }}
+                  whileHover={{ scale: 1.02, y: -3 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => router.push(`/dashboard/project/${proj.id}`)}
                   onMouseEnter={() => setHoveredProject(proj.id)}
@@ -401,7 +420,7 @@ export default function DashboardPage() {
                   style={{
                     ...projectCardStyle,
                     borderColor: isHovered ? 'var(--accent-glow)' : 'var(--glass-border)',
-                    boxShadow: isHovered ? 'var(--shadow-lg), 0 0 0 1px var(--accent-glow)' : 'var(--shadow-card)',
+                    boxShadow: isHovered ? 'var(--shadow-lg), 0 0 0 1px var(--accent-glow)' : 'var(--shadow-sm)',
                   }}
                 >
                   {/* Top accent bar */}
@@ -429,9 +448,15 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, position: 'relative', zIndex: 1 }}>
                     <motion.div
                       style={{
-                        ...projectIconWrap,
+                        width: 46,
+                        height: 46,
+                        borderRadius: 13,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         background: isHovered ? 'var(--accent-soft)' : 'var(--nav-active)',
                         boxShadow: isHovered ? '0 0 12px var(--accent-glow)' : 'none',
+                        transition: 'background 300ms ease, box-shadow 300ms ease',
                       }}
                       animate={isHovered ? { scale: 1.08 } : { scale: 1 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 15 }}
@@ -442,9 +467,9 @@ export default function DashboardPage() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, position: 'relative', zIndex: 1 }}>
-                    <span style={projectCardName}>{proj.name}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{proj.name}</span>
                     {proj.description && (
-                      <span style={projectCardDesc}>{proj.description}</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{proj.description}</span>
                     )}
                   </div>
 
@@ -456,9 +481,8 @@ export default function DashboardPage() {
                         background: ventureCount > 0 ? 'var(--accent)' : 'var(--border-strong)',
                         boxShadow: ventureCount > 0 ? '0 0 6px var(--accent-glow)' : 'none',
                       }} />
-                      <span style={ventureCountStyle}>{ventureCount} venture{ventureCount !== 1 ? 's' : ''}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-soft)' }}>{ventureCount} venture{ventureCount !== 1 ? 's' : ''}</span>
                     </div>
-                    {/* Module dots */}
                     <div style={{ display: 'flex', gap: 3 }}>
                       {MODULES.map((m, idx) => (
                         <motion.div
@@ -483,13 +507,18 @@ export default function DashboardPage() {
                 hidden: { opacity: 0, y: 24 },
                 show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 280, damping: 22 } }
               }}
-              whileHover={{ scale: 1.025, y: -3, borderColor: 'var(--accent)', boxShadow: 'var(--shadow-md)' }}
+              whileHover={{ scale: 1.02, y: -3, borderColor: 'var(--accent)', boxShadow: 'var(--shadow-md)' }}
               whileTap={{ scale: 0.98 }}
               onClick={() => window.dispatchEvent(new CustomEvent('forge:new-project'))}
               style={newProjectCardStyle}
             >
               <motion.div
-                style={newProjectIconWrap}
+                style={{
+                  width: 44, height: 44, borderRadius: 13,
+                  background: 'var(--accent-soft)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 10,
+                }}
                 whileHover={{ scale: 1.1, rotate: 90 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 15 }}
               >
@@ -498,7 +527,7 @@ export default function DashboardPage() {
                 </svg>
               </motion.div>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginTop: 2 }}>New Project</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Start a new startup workspace</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Start a new workspace</span>
             </motion.button>
           </motion.div>
 
@@ -506,8 +535,8 @@ export default function DashboardPage() {
           <motion.p
             style={footerTextStyle}
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.35 }}
-            transition={{ delay: 0.8 }}
+            animate={{ opacity: 0.3 }}
+            transition={{ delay: 0.6 }}
           >
             Forge Autonomous Venture Orchestrator · v2.0.0
           </motion.p>
@@ -517,7 +546,7 @@ export default function DashboardPage() {
   )
 }
 
-// ─── Stat Item ───────────────────────────────────────────────────────────────
+// ─── Stat Item ──────────────────────────────────────────────────────────────
 
 function StatItem({ label, value, delay = 0 }: { label: string; value: number; delay?: number }) {
   return (
@@ -542,7 +571,7 @@ function StatItem({ label, value, delay = 0 }: { label: string; value: number; d
   )
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const pageStyle: React.CSSProperties = {
   minHeight: '100vh',
@@ -582,7 +611,7 @@ const ambientBlob2: React.CSSProperties = {
 
 const contentStyle: React.CSSProperties = {
   width: '100%',
-  maxWidth: 840,
+  maxWidth: 880,
   display: 'flex',
   flexDirection: 'column',
   gap: 0,
@@ -590,40 +619,8 @@ const contentStyle: React.CSSProperties = {
   zIndex: 1,
 }
 
-const loadingHexStyle: React.CSSProperties = {
-  width: 46,
-  height: 46,
-  background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
-  clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-  boxShadow: '0 8px 24px var(--accent-glow)',
-}
-
-const emptyHexStyle: React.CSSProperties = {
-  width: 48,
-  height: 48,
-  background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
-  clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-}
-
-const createProjectBtnStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '12px 28px',
-  borderRadius: 14,
-  border: '1px solid var(--accent-glow)',
-  background: 'linear-gradient(135deg, var(--accent), #e8963a)',
-  color: '#fff',
-  fontSize: 14,
-  fontWeight: 600,
-  fontFamily: 'inherit',
-  cursor: 'pointer',
-  boxShadow: '0 4px 16px var(--accent-glow)',
-  letterSpacing: '0.01em',
-}
-
 const heroStyle: React.CSSProperties = {
-  marginBottom: 28,
+  marginBottom: 24,
 }
 
 const heroHeadingStyle: React.CSSProperties = {
@@ -697,38 +694,21 @@ const projectCardStyle: React.CSSProperties = {
   transition: 'box-shadow 300ms ease, border-color 300ms ease',
 }
 
-const projectIconWrap: React.CSSProperties = {
-  width: 46,
-  height: 46,
-  borderRadius: 13,
+const createProjectBtnStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center',
-  transition: 'background 300ms ease, box-shadow 300ms ease',
-}
-
-const projectCardName: React.CSSProperties = {
-  fontSize: 15,
-  fontWeight: 700,
-  color: 'var(--text)',
-  letterSpacing: '-0.01em',
-}
-
-const projectCardDesc: React.CSSProperties = {
-  fontSize: 12,
-  color: 'var(--muted)',
-  lineHeight: 1.55,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-}
-
-const ventureCountStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 500,
-  color: 'var(--text-soft)',
+  gap: 8,
+  padding: '12px 28px',
+  borderRadius: 14,
+  border: '1px solid var(--accent-glow)',
+  background: 'linear-gradient(135deg, var(--accent), #e8963a)',
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: 600,
+  fontFamily: 'inherit',
+  cursor: 'pointer',
+  boxShadow: '0 4px 16px var(--accent-glow)',
+  letterSpacing: '0.01em',
 }
 
 const newProjectCardStyle: React.CSSProperties = {
@@ -747,18 +727,6 @@ const newProjectCardStyle: React.CSSProperties = {
   transition: 'border-color 300ms ease, box-shadow 300ms ease, transform 200ms ease',
 }
 
-const newProjectIconWrap: React.CSSProperties = {
-  width: 44,
-  height: 44,
-  borderRadius: 13,
-  background: 'var(--accent-soft)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginBottom: 10,
-  transition: 'background 200ms ease',
-}
-
 const footerTextStyle: React.CSSProperties = {
   marginTop: 52,
   textAlign: 'center',
@@ -768,7 +736,7 @@ const footerTextStyle: React.CSSProperties = {
   color: 'var(--muted)',
 }
 
-// ─── Intake Styles ────────────────────────────────────────────────────────────
+// ─── Intake Styles ──────────────────────────────────────────────────────────
 
 const intakePageStyle: React.CSSProperties = {
   minHeight: '100vh',
@@ -796,11 +764,12 @@ const intakeGlow: React.CSSProperties = {
 }
 
 const intakeHexStyle: React.CSSProperties = {
-  width: 28,
-  height: 28,
+  width: 32,
+  height: 32,
   background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
   clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
   flexShrink: 0,
+  boxShadow: '0 0 20px var(--accent-glow)',
 }
 
 const intakeWordmarkStyle: React.CSSProperties = {
@@ -815,7 +784,7 @@ const intakePillStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: 12,
   width: '100%',
-  maxWidth: 660,
+  maxWidth: 620,
   background: 'var(--glass-bg)',
   backdropFilter: 'blur(20px)',
   WebkitBackdropFilter: 'blur(20px)',
@@ -838,7 +807,7 @@ const intakeInputStyle: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
   outline: 'none',
-  fontSize: 16,
+  fontSize: 15,
   color: 'var(--text)',
   fontFamily: 'inherit',
   letterSpacing: '-0.01em',
