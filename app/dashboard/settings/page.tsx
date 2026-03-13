@@ -162,12 +162,14 @@ function SectionHeader({ icon, title, description, delay = 0 }: { icon: React.Re
 
 export default function SettingsPage() {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const [session, setSession] = useState<SessionData | null>(null)
   const [settings, setSettings] = useState<ForgeSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    setMounted(true)
     setSettings(loadSettings())
     fetch('/api/auth/session')
       .then(r => r.ok ? r.json() : null)
@@ -184,6 +186,8 @@ export default function SettingsPage() {
       return next
     })
   }, [])
+
+  if (!mounted) return <div style={{ minHeight: '100vh', background: 'var(--bg)' }} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
@@ -269,7 +273,8 @@ export default function SettingsPage() {
           </div>
 
           {/* Save indicator */}
-          <AnimatePresence>
+          {mounted && (
+            <AnimatePresence mode="wait">
             {saved && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.8, x: -8 }}
@@ -295,7 +300,8 @@ export default function SettingsPage() {
                 Saved
               </motion.div>
             )}
-          </AnimatePresence>
+            </AnimatePresence>
+          )}
         </div>
       </motion.header>
 

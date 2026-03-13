@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { AgentStatusRow } from '@/components/ui/AgentStatusRow'
 import { ResultCard } from '@/components/ui/ResultCard'
 import ReactMarkdown from 'react-markdown'
+import { downloadPDFFromResult, downloadPDFFromElement } from '@/lib/client-pdf'
 
 // ─── Module metadata (mirrors ModulePicker) ──────────────────────────────────
 
@@ -23,7 +24,7 @@ const MODULES = [
   { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', description: '30-day GTM, 90 social posts, SEO outlines, email sequence', agentName: 'Content Factory' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', description: 'Sitemap, copy, Next.js component, live deployment', agentName: 'Pipeline' },
   { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', description: 'Financial model, risk matrix, GO/NO-GO verdict', agentName: 'Feasibility' },
-  { id: 'general', label: 'General', accent: '#6B8F71', description: 'Ask anything — names, features, pricing, quick feedback', agentName: 'Forge AI' },
+  { id: 'general', label: 'Co-pilot', accent: '#6B8F71', description: 'Your venture-aware co-founder — knows your data, competitors, financials', agentName: 'Co-pilot' },
 ] as const
 
 type ModuleId = typeof MODULES[number]['id']
@@ -41,7 +42,7 @@ const SUGGESTIONS: Record<string, [string, string]> = {
   'marketing': ['Create a high-converting 30-day GTM strategy', 'Build a content engine and social roadmap'],
   'landing': ['Draft a high-impact landing page with copy', 'Design a sitemap and wireframe for the app'],
   'feasibility': ['Run a detailed financial and risk analysis', 'Stress test the business model and scalability'],
-  'general': ['Suggest 10 creative names for my venture', 'What features should I prioritize for MVP?'],
+  'general': ["What's my biggest competitive risk?", 'Write me a cold email to investors'],
 }
 
 // ─── Full Launch agent rows ───────────────────────────────────────────────────
@@ -265,6 +266,23 @@ export default function ModulePage() {
   const [ventureName, setVentureName] = useState<string>('...')
   const [conversations, setConversations] = useState<ConversationEntry[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Timeline state
+  const [timelineOpen, setTimelineOpen] = useState(false)
+  const [timelineData, setTimelineData] = useState<any[]>([])
+  const [activeVersions, setActiveVersions] = useState<Record<string, string | null>>({})
+  const [pinningId, setPinningId] = useState<string | null>(null)
+
+  // Investor kit state
+  const [investorKit, setInvestorKit] = useState<any>(null)
+  const [generatingKit, setGeneratingKit] = useState(false)
+  const [kitError, setKitError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const [depth, setDepth] = useState<'brief' | 'medium' | 'detailed'>(() => {
     if (typeof window === 'undefined') return 'medium'
     try {
@@ -304,6 +322,72 @@ export default function ModulePage() {
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [readingPanelOpen, setReadingPanelOpen] = useState(true)
   const [isDocumentOpen, setIsDocumentOpen] = useState(false)
+
+  // ── Timeline functions ──────────────────────────────────────────────
+  async function loadTimeline() {
+    try {
+      const res = await fetch(`/api/ventures/${ventureId}/timeline`)
+      if (!res.ok) return
+      const data = await res.json()
+      setTimelineData(data.timeline ?? [])
+      setActiveVersions(data.activeVersions ?? {})
+    } catch { /* ignore */ }
+  }
+
+  async function handlePin(conversationId: string, moduleId: string) {
+    setPinningId(conversationId)
+    try {
+      const res = await fetch(`/api/ventures/${ventureId}/pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, moduleId }),
+      })
+      if (res.ok) {
+        setActiveVersions(prev => ({ ...prev, [moduleId]: conversationId }))
+      }
+    } catch { /* ignore */ } finally {
+      setPinningId(null)
+    }
+  }
+
+  useEffect(() => {
+    if (timelineOpen) loadTimeline()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelineOpen, ventureId])
+
+  // ── Investor Kit functions ──────────────────────────────────────────
+  async function loadInvestorKit() {
+    try {
+      const res = await fetch(`/api/ventures/${ventureId}/investor-kit`)
+      if (!res.ok) return // table may not exist yet — gracefully skip
+      const data = await res.json()
+      if (data.kit) setInvestorKit(data.kit)
+    } catch {
+      // Silently fail — table may not be migrated yet
+    }
+  }
+
+  async function handleGenerateKit() {
+    setGeneratingKit(true)
+    setKitError(null)
+    try {
+      const res = await fetch(`/api/ventures/${ventureId}/investor-kit`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setInvestorKit(data.kit)
+      } else {
+        setKitError(data.error || 'Failed to generate kit')
+        setTimeout(() => setKitError(null), 5000)
+      }
+    } catch {
+      setKitError('Network error — check connection')
+      setTimeout(() => setKitError(null), 5000)
+    } finally {
+      setGeneratingKit(false)
+    }
+  }
+
+  useEffect(() => { loadInvestorKit() }, [ventureId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-resize textarea ──────────────────────────────────────────────
   const autoResizeTextarea = useCallback(() => {
@@ -507,9 +591,9 @@ export default function ModulePage() {
       {/* ── Header ── */}
       <motion.header
         style={headerStyle}
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
+        transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
       >
         {/* Accent top line */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: `linear-gradient(90deg, ${mod.accent}40, ${mod.accent}80, ${mod.accent}40)` }} />
@@ -540,6 +624,167 @@ export default function ModulePage() {
         </div>
       </motion.header>
 
+      {/* ── Feature Action Bar ── */}
+      {activeModule !== 'general' && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, delay: 0.1 }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 20px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--sidebar)',
+            zIndex: 5,
+            flexShrink: 0,
+          }}
+        >
+          {/* Timeline toggle */}
+          {activeModule !== 'full-launch' && (
+            <motion.button
+              onClick={() => setTimelineOpen(p => !p)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '7px 14px',
+                borderRadius: 9,
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '-0.01em',
+                cursor: 'pointer',
+                border: timelineOpen ? `1.5px solid ${mod.accent}50` : '1.5px solid var(--border)',
+                background: timelineOpen ? `${mod.accent}12` : 'var(--glass-bg)',
+                color: timelineOpen ? mod.accent : 'var(--text-soft)',
+                transition: 'all 0.2s',
+                boxShadow: timelineOpen ? `0 2px 10px ${mod.accent}20` : 'none',
+              }}
+              whileHover={{ scale: 1.03, y: -1, boxShadow: `0 3px 12px ${mod.accent}18` }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+              </svg>
+              Version History
+            </motion.button>
+          )}
+
+          {/* Investor Kit button */}
+          <motion.button
+            onClick={() => investorKit ? window.open(`/investor/${investorKit.access_code}`, '_blank') : handleGenerateKit()}
+            disabled={generatingKit}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '7px 14px',
+              borderRadius: 9,
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
+              cursor: generatingKit ? 'wait' : 'pointer',
+              border: investorKit ? `1.5px solid ${mod.accent}50` : '1.5px solid var(--border)',
+              background: investorKit
+                ? `linear-gradient(135deg, ${mod.accent}15, ${mod.accent}08)`
+                : generatingKit
+                  ? `${mod.accent}08`
+                  : 'var(--glass-bg)',
+              color: investorKit ? mod.accent : 'var(--text-soft)',
+              transition: 'all 0.2s',
+              boxShadow: investorKit ? `0 2px 10px ${mod.accent}20` : 'none',
+              opacity: generatingKit ? 0.7 : 1,
+            }}
+            whileHover={generatingKit ? {} : { scale: 1.03, y: -1, boxShadow: `0 3px 12px ${mod.accent}18` }}
+            whileTap={generatingKit ? {} : { scale: 0.97 }}
+          >
+            {generatingKit ? (
+              <motion.div
+                style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${mod.accent}30`, borderTopColor: mod.accent }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+              />
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+              </svg>
+            )}
+            {generatingKit ? 'Generating Kit...' : investorKit ? 'Investor Kit' : 'Investor Kit'}
+            {investorKit && (
+              <span style={{
+                fontSize: 9,
+                fontWeight: 800,
+                background: mod.accent,
+                color: '#fff',
+                borderRadius: 4,
+                padding: '1px 5px',
+                marginLeft: 2,
+                letterSpacing: '0.03em',
+              }}>
+                LIVE
+              </span>
+            )}
+          </motion.button>
+
+          {/* Kit access code pill (shown when kit exists) */}
+          {investorKit && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => {
+                const url = `${window.location.origin}/investor/${investorKit.access_code}`
+                navigator.clipboard.writeText(url)
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '5px 10px',
+                borderRadius: 7,
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "'JetBrains Mono', monospace",
+                color: 'var(--muted)',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--border)',
+                cursor: 'pointer',
+                letterSpacing: '0.05em',
+              }}
+              whileHover={{ scale: 1.04, color: mod.accent }}
+              whileTap={{ scale: 0.96 }}
+              title="Click to copy shareable link"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
+              {investorKit.access_code}
+            </motion.button>
+          )}
+
+          {/* Kit error message */}
+          {kitError && (
+            <motion.span
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              style={{ fontSize: 11, color: '#e05252', fontWeight: 600, marginLeft: 4 }}
+            >
+              {kitError}
+            </motion.span>
+          )}
+
+          {/* Views counter (shown when kit exists) */}
+          {investorKit && typeof investorKit.views === 'number' && (
+            <span style={{ fontSize: 10, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', opacity: 0.6 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+              </svg>
+              {investorKit.views} view{investorKit.views !== 1 ? 's' : ''}
+            </span>
+          )}
+        </motion.div>
+      )}
+
       {/* ── Content area (chat + reading panel) ── */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
@@ -551,103 +796,160 @@ export default function ModulePage() {
       >
         <div style={chatInnerStyle}>
 
-            {/* Empty state */}
-            <AnimatePresence>
-              {!hasMessages && historyLoaded && (
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  style={emptyStateStyle}
-                >
-                  {/* Gradient card behind icon */}
-                  <div style={{ position: 'relative', marginBottom: 28 }}>
-                    <div style={{
-                      position: 'absolute', inset: -24,
-                      borderRadius: 28,
-                      background: `linear-gradient(135deg, ${mod.accent}15, ${mod.accent}08, transparent)`,
-                      border: `1px solid ${mod.accent}12`,
-                      filter: 'blur(0px)',
-                    }} />
-                    <div style={{
-                      position: 'absolute', inset: -20,
-                      borderRadius: '50%',
-                      background: `radial-gradient(circle, ${mod.accent}20 0%, transparent 70%)`,
-                      filter: 'blur(16px)',
-                      animation: 'glow-pulse 3s ease-in-out infinite',
-                    }} />
-                    <motion.div
-                      style={{
-                        width: 72, height: 72, borderRadius: 22,
-                        background: `linear-gradient(135deg, ${mod.accent}20, ${mod.accent}08)`,
-                        border: `1.5px solid ${mod.accent}30`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: mod.accent,
-                        position: 'relative', zIndex: 1,
-                        boxShadow: `0 12px 32px ${mod.accent}20, inset 0 1px 0 ${mod.accent}15`,
-                      }}
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                    >
-                      <ModuleIconSvg id={activeModule} size={32} />
-                    </motion.div>
-                  </div>
-
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-                    {mod.label}
-                  </h2>
-                  <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 6px', textAlign: 'center', maxWidth: 380, lineHeight: 1.7 }}>
-                    {mod.description}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 32px', textAlign: 'center', opacity: 0.5 }}>
-                    Powered by {mod.agentName} agent
-                  </p>
-
-                  {/* Suggestion chips */}
+            {/* Loading skeleton — shown while history is fetching */}
+            {mounted && (
+              <AnimatePresence>
+                {!historyLoaded && (
                   <motion.div
-                    className="flex gap-2 flex-wrap justify-center"
-                    style={{ maxWidth: 520 }}
-                    initial="hidden"
-                    animate="show"
-                    variants={{
-                      hidden: { opacity: 0 },
-                      show: { opacity: 1, transition: { staggerChildren: 0.12 } }
-                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                    transition={{ duration: 0.2 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 28, paddingTop: 8 }}
                   >
-                    {suggestions.map(s => (
-                      <motion.button
-                        key={s}
-                        variants={{
-                          hidden: { opacity: 0, y: 12, scale: 0.95 },
-                          show: { opacity: 1, y: 0, scale: 1 }
-                        }}
-                        whileHover={{ scale: 1.04, y: -1, boxShadow: `0 4px 16px ${mod.accent}20` }}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => { setPrompt(s); textareaRef.current?.focus() }}
-                        style={chipStyle(mod.accent)}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={mod.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6, flexShrink: 0 }}>
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                        </svg>
-                        {s}
-                      </motion.button>
+                    {/* Simulate 2 skeleton conversation entries */}
+                    {[0, 1].map(i => (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 16, opacity: i === 1 ? 0.5 : 1 }}>
+                        {/* User bubble skeleton */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <div style={{
+                            width: i === 0 ? 280 : 200,
+                            height: 56,
+                            borderRadius: 14,
+                            background: `linear-gradient(90deg, ${mod.accent}08, ${mod.accent}15, ${mod.accent}08)`,
+                            backgroundSize: '400px 100%',
+                            animation: 'shimmer 1.6s infinite linear',
+                            border: `1px solid ${mod.accent}15`,
+                          }} />
+                        </div>
+                        {/* Agent response skeleton */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {/* Agent avatar + name */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{
+                              width: 28, height: 28, borderRadius: 8,
+                              background: `${mod.accent}15`,
+                              border: `1.5px solid ${mod.accent}25`,
+                              flexShrink: 0,
+                            }} />
+                            <div style={{ width: 80, height: 13, borderRadius: 4 }} className="skeleton" />
+                          </div>
+                          {/* Content lines */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 4 }}>
+                            <div style={{ width: '92%', height: 14, borderRadius: 4 }} className="skeleton" />
+                            <div style={{ width: '76%', height: 14, borderRadius: 4 }} className="skeleton" />
+                            <div style={{ width: '84%', height: 14, borderRadius: 4 }} className="skeleton" />
+                            {i === 0 && <div style={{ width: '60%', height: 14, borderRadius: 4 }} className="skeleton" />}
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                )}
+              </AnimatePresence>
+            )}
+
+            {/* Empty state */}
+            {mounted && (
+              <AnimatePresence>
+                {!hasMessages && historyLoaded && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 24 }}
+
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    style={emptyStateStyle}
+                  >
+                    {/* Gradient card behind icon */}
+                    <div style={{ position: 'relative', marginBottom: 28 }}>
+                      <div style={{
+                        position: 'absolute', inset: -24,
+                        borderRadius: 28,
+                        background: `linear-gradient(135deg, ${mod.accent}15, ${mod.accent}08, transparent)`,
+                        border: `1px solid ${mod.accent}12`,
+                        filter: 'blur(0px)',
+                      }} />
+                      <div style={{
+                        position: 'absolute', inset: -20,
+                        borderRadius: '50%',
+                        background: `radial-gradient(circle, ${mod.accent}20 0%, transparent 70%)`,
+                        filter: 'blur(16px)',
+                        animation: 'glow-pulse 3s ease-in-out infinite',
+                      }} />
+                      <motion.div
+                        style={{
+                          width: 72, height: 72, borderRadius: 22,
+                          background: `linear-gradient(135deg, ${mod.accent}20, ${mod.accent}08)`,
+                          border: `1.5px solid ${mod.accent}30`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: mod.accent,
+                          position: 'relative', zIndex: 1,
+                          boxShadow: `0 12px 32px ${mod.accent}20, inset 0 1px 0 ${mod.accent}15`,
+                        }}
+                        animate={{ y: [0, -5, 0] }}
+                        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                      >
+                        <ModuleIconSvg id={activeModule} size={32} />
+                      </motion.div>
+                    </div>
+
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+                      {mod.label}
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 6px', textAlign: 'center', maxWidth: 380, lineHeight: 1.7 }}>
+                      {mod.description}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 32px', textAlign: 'center', opacity: 0.5 }}>
+                      Powered by {mod.agentName} agent
+                    </p>
+
+                    {/* Suggestion chips */}
+                    <motion.div
+                      className="flex gap-2 flex-wrap justify-center"
+                      style={{ maxWidth: 520 }}
+                      initial="hidden"
+                      animate="show"
+                      variants={{
+                        hidden: { opacity: 0 },
+                        show: { opacity: 1, transition: { staggerChildren: 0.12 } }
+                      }}
+                    >
+                      {suggestions.map(s => (
+                        <motion.button
+                          key={s}
+                          variants={{
+                            hidden: { opacity: 0, y: 12, scale: 0.95 },
+                            show: { opacity: 1, y: 0, scale: 1 }
+                          }}
+                          whileHover={{ scale: 1.04, y: -1, boxShadow: `0 4px 16px ${mod.accent}20` }}
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => { setPrompt(s); textareaRef.current?.focus() }}
+                          style={chipStyle(mod.accent)}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={mod.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6, flexShrink: 0 }}>
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                          {s}
+                        </motion.button>
+                      ))}
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            )}
 
             {/* Conversations */}
-            <AnimatePresence initial={false}>
-              {conversations.map((entry, i) => (
-                <motion.div
-                  key={entry.conversationId}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: i === conversations.length - 1 ? 0.05 : 0 }}
-                  style={{ marginBottom: 36 }}
-                >
+            {mounted && (
+              <AnimatePresence initial={false}>
+                {conversations.map((entry, i) => (
+                  <motion.div
+                    key={entry.conversationId}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: i === conversations.length - 1 ? 0.05 : 0 }}
+                    style={{ marginBottom: 36 }}
+                  >
                   {/* User message */}
                   <div className="flex justify-end" style={{ marginBottom: 18 }}>
                     <motion.div
@@ -723,7 +1025,7 @@ export default function ModulePage() {
                       <StreamPanel lines={entry.lines} accent={mod.accent} />
                     )}
 
-                    {/* General chat: show response as formatted text */}
+                    {/* Co-pilot: show response as rich markdown */}
                     {activeModule === 'general' && entry.result && !entry.isRunning && (
                       <motion.div
                         style={{ marginTop: 4 }}
@@ -731,15 +1033,14 @@ export default function ModulePage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4 }}
                       >
-                        <div style={{
+                        <div className="doc-markdown" style={{
                           fontSize: 14,
                           color: 'var(--text-soft)',
                           lineHeight: 1.75,
-                          whiteSpace: 'pre-wrap',
                           padding: '4px 0',
                           letterSpacing: '0.01em',
                         }}>
-                          {(entry.result as Record<string, unknown>).response as string || ''}
+                          <ReactMarkdown>{(entry.result as Record<string, unknown>).response as string || ''}</ReactMarkdown>
                         </div>
                       </motion.div>
                     )}
@@ -811,13 +1112,27 @@ export default function ModulePage() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            )}
 
             <div ref={chatEndRef} />
         </div>
       </div>
 
+      {/* ── Timeline Panel ── */}
+      {timelineOpen && (
+        <TimelinePanel
+          moduleId={activeModule}
+          timeline={timelineData.filter(c => c.module_id === activeModule)}
+          activeVersionId={activeVersions[activeModule] ?? null}
+          accent={mod.accent}
+          pinningId={pinningId}
+          onPin={(convId) => handlePin(convId, activeModule)}
+          onClose={() => setTimelineOpen(false)}
+        />
+      )}
+
       {/* ── Reading Panel (all modules) ── */}
-      {showReadingPanel && (
+      {showReadingPanel && !timelineOpen && (
         <ReadingPanel
           moduleId={activeModule}
           result={latestResult!}
@@ -828,249 +1143,255 @@ export default function ModulePage() {
       </div> {/* End content area flex */}
 
       {/* ── Scroll to bottom button ── */}
-      <AnimatePresence>
-        {showScrollBtn && hasMessages && !isDocumentOpen && (
-          <motion.button
-            initial={{ opacity: 0, y: 10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-            onClick={scrollToBottom}
-            style={{
-              position: 'fixed',
-              bottom: 120,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 15,
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              background: 'var(--glass-bg-strong)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-lg)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text)',
-              fontFamily: 'inherit',
-            }}
-            whileHover={{ scale: 1.1, boxShadow: `0 4px 20px ${mod.accent}30` }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
-            </svg>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {mounted && (
+        <AnimatePresence>
+          {showScrollBtn && hasMessages && !isDocumentOpen && (
+            <motion.button
+              initial={{ opacity: 0, y: 10, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              onClick={scrollToBottom}
+              style={{
+                position: 'fixed',
+                bottom: 120,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 15,
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: 'var(--glass-bg-strong)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--shadow-lg)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text)',
+                fontFamily: 'inherit',
+              }}
+              whileHover={{ scale: 1.1, boxShadow: `0 4px 20px ${mod.accent}30` }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
+              </svg>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* ── Intensity Selector (only for Research/Full Launch) ── */}
-      <AnimatePresence>
-        {(activeModule === 'research' || activeModule === 'full-launch' || activeModule === 'feasibility') && !isSubmitting && !isDocumentOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            style={{
-              position: 'absolute',
-              bottom: 155,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 10,
-              display: 'flex',
-              gap: 8,
-              padding: '6px',
-              background: 'var(--glass-bg-strong)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: 12,
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-lg)',
-            }}
-          >
-            {(['brief', 'medium', 'detailed'] as const).map((d) => (
-              <motion.button
-                key={d}
-                type="button"
-                onClick={() => setDepth(d)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  transition: 'all 0.2s',
-                  background: depth === d ? mod.accent : 'transparent',
-                  color: depth === d ? '#fff' : 'var(--muted)',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {d}
-              </motion.button>
-            ))}
-            <div style={{
-              position: 'absolute',
-              top: -24,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              whiteSpace: 'nowrap',
-              fontSize: 10,
-              fontWeight: 700,
-              color: 'var(--muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              opacity: 0.6,
-            }}>
-              Research Intensity
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Input area ── */}
-      <AnimatePresence>
-      {!isDocumentOpen && (
-      <motion.div
-        style={inputAreaStyle}
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div style={inputInnerStyle}>
-          <form onSubmit={handleSubmit}>
+      {mounted && (
+        <AnimatePresence>
+          {(activeModule === 'research' || activeModule === 'full-launch' || activeModule === 'feasibility') && !isSubmitting && !isDocumentOpen && (
             <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
               style={{
-                ...inputWrapStyle,
-                borderColor: inputFocused ? mod.accent : 'var(--glass-border)',
-                boxShadow: inputFocused
-                  ? `var(--shadow-lg), 0 0 0 3px ${mod.accent}18`
-                  : 'var(--shadow-md)',
+                position: 'absolute',
+                bottom: 155,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 10,
+                display: 'flex',
+                gap: 8,
+                padding: '6px',
+                background: 'var(--glass-bg-strong)',
+                backdropFilter: 'blur(20px)',
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--shadow-lg)',
               }}
-              transition={{ duration: 0.2 }}
             >
-              {/* Module picker pill */}
-              <div style={{ position: 'relative' }}>
+              {(['brief', 'medium', 'detailed'] as const).map((d) => (
                 <motion.button
+                  key={d}
                   type="button"
-                  onClick={() => setPickerOpen(p => !p)}
-                  style={modulePickerPillStyle(mod.accent)}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <span style={{ color: mod.accent, display: 'flex', alignItems: 'center' }}>
-                    <ModuleIconSvg id={activeModule} size={13} />
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: mod.accent }}>{mod.label}</span>
-                  <motion.svg
-                    width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={mod.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                    animate={{ rotate: pickerOpen ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </motion.svg>
-                </motion.button>
-
-                {/* Dropdown */}
-                <AnimatePresence>
-                  {pickerOpen && (
-                    <motion.div
-                      style={pickerDropdownStyle}
-                      initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                    >
-                      {MODULES.map(m => (
-                        <motion.button
-                          key={m.id}
-                          type="button"
-                          onClick={() => { setActiveModule(m.id as ModuleId); setPickerOpen(false) }}
-                          style={{
-                            ...pickerOptionStyle,
-                            background: m.id === activeModule ? `${m.accent}12` : 'transparent',
-                          }}
-                          whileHover={{ backgroundColor: `${m.accent}10`, x: 2 }}
-                        >
-                          <span style={{ color: m.accent, display: 'flex', alignItems: 'center' }}>
-                            <ModuleIconSvg id={m.id} size={13} />
-                          </span>
-                          <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: m.id === activeModule ? 600 : 400 }}>{m.label}</span>
-                          {m.id === activeModule && (
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: m.accent, marginLeft: 'auto' }} />
-                          )}
-                        </motion.button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Textarea */}
-              <textarea
-                ref={textareaRef}
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setInputFocused(false)}
-                placeholder={`Ask ${mod.label} anything about your venture...`}
-                rows={1}
-                style={textareaStyle}
-              />
-
-              {/* Send button + hint row */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}>
-                  <span style={kbdStyle}>
-                    {typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent) ? '\u2318' : 'Ctrl'}
-                  </span>
-                  <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.5 }}>+</span>
-                  <span style={kbdStyle}>Enter</span>
-                  <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.4, marginLeft: 4 }}>to run</span>
-                </div>
-                <motion.button
-                  type="submit"
-                  whileHover={canSubmit ? { scale: 1.08 } : {}}
-                  whileTap={canSubmit ? { scale: 0.92 } : {}}
-                  disabled={!canSubmit}
+                  onClick={() => setDepth(d)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   style={{
-                    ...sendBtnStyle,
-                    background: canSubmit
-                      ? `linear-gradient(135deg, ${mod.accent}, ${mod.accent}cc)`
-                      : 'var(--border)',
-                    boxShadow: canSubmit ? `0 4px 12px ${mod.accent}40` : 'none',
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    transition: 'all 0.2s',
+                    background: depth === d ? mod.accent : 'transparent',
+                    color: depth === d ? '#fff' : 'var(--muted)',
+                    border: 'none',
+                    cursor: 'pointer',
                   }}
                 >
-                  {isSubmitting ? (
-                    <motion.div
-                      style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff' }}
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                    />
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
-                    </svg>
-                  )}
+                  {d}
                 </motion.button>
+              ))}
+              <div style={{
+                position: 'absolute',
+                top: -24,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                whiteSpace: 'nowrap',
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                opacity: 0.6,
+              }}>
+                Research Intensity
               </div>
             </motion.div>
-          </form>
-        </div>
-      </motion.div>
+          )}
+        </AnimatePresence>
       )}
-      </AnimatePresence>
+
+      {/* ── Input area ── */}
+      {mounted && (
+        <AnimatePresence>
+          {!isDocumentOpen && (
+            <motion.div
+              style={inputAreaStyle}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div style={inputInnerStyle}>
+                <form onSubmit={handleSubmit}>
+                  <motion.div
+                    style={{
+                      ...inputWrapStyle,
+                      borderColor: inputFocused ? mod.accent : 'var(--glass-border)',
+                      boxShadow: inputFocused
+                        ? `var(--shadow-lg), 0 0 0 3px ${mod.accent}18`
+                        : 'var(--shadow-md)',
+                    }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {/* Module picker pill */}
+                    <div style={{ position: 'relative' }}>
+                      <motion.button
+                        type="button"
+                        onClick={() => setPickerOpen(p => !p)}
+                        style={modulePickerPillStyle(mod.accent)}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        <span style={{ color: mod.accent, display: 'flex', alignItems: 'center' }}>
+                          <ModuleIconSvg id={activeModule} size={13} />
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: mod.accent }}>{mod.label}</span>
+                        <motion.svg
+                          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={mod.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                          animate={{ rotate: pickerOpen ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </motion.svg>
+                      </motion.button>
+
+                      {/* Dropdown */}
+                      <AnimatePresence>
+                        {pickerOpen && (
+                          <motion.div
+                            style={pickerDropdownStyle}
+                            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                          >
+                            {MODULES.map(m => (
+                              <motion.button
+                                key={m.id}
+                                type="button"
+                                onClick={() => { setActiveModule(m.id as ModuleId); setPickerOpen(false) }}
+                                style={{
+                                  ...pickerOptionStyle,
+                                  background: m.id === activeModule ? `${m.accent}12` : 'transparent',
+                                }}
+                                whileHover={{ backgroundColor: `${m.accent}10`, x: 2 }}
+                              >
+                                <span style={{ color: m.accent, display: 'flex', alignItems: 'center' }}>
+                                  <ModuleIconSvg id={m.id} size={13} />
+                                </span>
+                                <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: m.id === activeModule ? 600 : 400 }}>{m.label}</span>
+                                {m.id === activeModule && (
+                                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: m.accent, marginLeft: 'auto' }} />
+                                )}
+                              </motion.button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Textarea */}
+                    <textarea
+                      ref={textareaRef}
+                      value={prompt}
+                      onChange={e => setPrompt(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => setInputFocused(true)}
+                      onBlur={() => setInputFocused(false)}
+                      placeholder={`Ask ${mod.label} anything about your venture...`}
+                      rows={1}
+                      style={textareaStyle}
+                    />
+
+                    {/* Send button + hint row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}>
+                        <span style={kbdStyle}>
+                          {typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent) ? '\u2318' : 'Ctrl'}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.5 }}>+</span>
+                        <span style={kbdStyle}>Enter</span>
+                        <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.4, marginLeft: 4 }}>to run</span>
+                      </div>
+                      <motion.button
+                        type="submit"
+                        whileHover={canSubmit ? { scale: 1.08 } : {}}
+                        whileTap={canSubmit ? { scale: 0.92 } : {}}
+                        disabled={!canSubmit}
+                        style={{
+                          ...sendBtnStyle,
+                          background: canSubmit
+                            ? `linear-gradient(135deg, ${mod.accent}, ${mod.accent}cc)`
+                            : 'var(--border)',
+                          boxShadow: canSubmit ? `0 4px 12px ${mod.accent}40` : 'none',
+                        }}
+                      >
+                        {isSubmitting ? (
+                          <motion.div
+                            style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff' }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                          />
+                        ) : (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
+                          </svg>
+                        )}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                </form>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Click-away for picker */}
       {pickerOpen && (
@@ -1094,6 +1415,151 @@ function buildInitialStatuses(): Record<string, AgentState> {
 function buildCompletedStatuses(_accent: string): Record<string, AgentState> {
   return Object.fromEntries(
     FULL_LAUNCH_AGENTS.map(a => [a.key, { status: 'complete' as AgentStatus, detail: a.detail }])
+  )
+}
+
+// ─── Timeline Panel ──────────────────────────────────────────────────────────
+
+function TimelinePanel({ moduleId, timeline, activeVersionId, accent, pinningId, onPin, onClose }: {
+  moduleId: string
+  timeline: any[]
+  activeVersionId: string | null
+  accent: string
+  pinningId: string | null
+  onPin: (conversationId: string) => void
+  onClose: () => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      className="reading-panel"
+      style={{
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--sidebar)',
+        borderLeft: '1px solid var(--border)',
+        height: '100%',
+      }}
+    >
+      {/* Top Bar */}
+      <div style={{
+        padding: '0 14px',
+        height: 44,
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', opacity: 0.8 }}>Version History</span>
+          <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.5 }}>{timeline.length} run{timeline.length !== 1 ? 's' : ''}</span>
+        </div>
+        <button onClick={onClose} style={{ ...panelActionBtnStyle, padding: '4px 6px', display: 'flex', alignItems: 'center' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+
+      {/* Timeline entries */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {timeline.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>
+            No runs yet for this module
+          </div>
+        )}
+        {timeline.map((conv: any) => {
+          const isActive = conv.id === activeVersionId
+          const isComplete = conv.status === 'complete'
+          const date = new Date(conv.created_at)
+          const timeStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
+          return (
+            <motion.div
+              key={conv.id}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: `1px solid ${isActive ? accent + '40' : 'var(--border)'}`,
+                background: isActive ? `${accent}08` : 'transparent',
+                transition: 'all 0.2s',
+              }}
+              whileHover={{ background: `${accent}06` }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {/* Status dot */}
+                  <div style={{
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: conv.status === 'complete' ? '#22c55e' : conv.status === 'failed' ? '#ef4444' : accent,
+                    boxShadow: isActive ? `0 0 6px ${accent}60` : 'none',
+                  }} />
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: isActive ? accent : 'var(--muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    {isActive ? 'Active' : conv.status}
+                  </span>
+                </div>
+                <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.6, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {timeStr}
+                </span>
+              </div>
+
+              {/* Prompt */}
+              <p style={{
+                fontSize: 12,
+                color: 'var(--text-soft)',
+                margin: '0 0 8px',
+                lineHeight: 1.4,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+              }}>
+                {conv.prompt}
+              </p>
+
+              {/* Pin button */}
+              {isComplete && !isActive && (
+                <motion.button
+                  onClick={() => onPin(conv.id)}
+                  disabled={pinningId === conv.id}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    background: `${accent}12`,
+                    color: accent,
+                    border: `1px solid ${accent}25`,
+                    cursor: 'pointer',
+                    opacity: pinningId === conv.id ? 0.5 : 1,
+                    transition: 'all 0.15s',
+                  }}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                >
+                  {pinningId === conv.id ? 'Pinning...' : 'Pin as Active'}
+                </motion.button>
+              )}
+            </motion.div>
+          )
+        })}
+      </div>
+    </motion.div>
   )
 }
 
@@ -1131,23 +1597,11 @@ function ReadingPanel({ moduleId, result, accent, onClose }: {
   }
 
   function handleExportPDF() {
-    const content = contentRef.current?.innerHTML || ''
-    const win = window.open('', '_blank')
-    if (!win) return
-    win.document.write(`<html><head><title>${title}</title><style>
-      body{font-family:'DM Sans',system-ui,sans-serif;padding:48px;max-width:800px;margin:0 auto;color:#1a1a1a;line-height:1.6}
-      h1{font-size:26px;border-bottom:2px solid #e5e5e5;padding-bottom:12px;margin-bottom:20px}
-      h2{font-size:18px;margin-top:28px;margin-bottom:10px;color:#333}
-      h3{font-size:15px;margin-top:20px;margin-bottom:8px;color:#444}
-      table{width:100%;border-collapse:collapse;margin:12px 0}
-      th,td{padding:10px 14px;border:1px solid #ddd;text-align:left;font-size:13px}
-      th{background:#f5f5f5;font-weight:600}
-      p,li{font-size:14px;margin-bottom:8px}
-      ul{padding-left:20px}
-      .badge{display:inline-block;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700}
-    </style></head><body>${content}</body></html>`)
-    win.document.close()
-    setTimeout(() => { win.print(); win.close() }, 300)
+    if (result && typeof result === 'object') {
+      downloadPDFFromResult(title, result as Record<string, any>, title.replace(/\s+/g, '_'))
+    } else if (contentRef.current) {
+      downloadPDFFromElement(title, contentRef.current, title.replace(/\s+/g, '_'))
+    }
   }
 
   async function handleShare() {

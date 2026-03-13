@@ -40,6 +40,7 @@ export default function ProjectDetailPage() {
   const router = useRouter()
   const projectId = params.id as string
 
+  const [mounted, setMounted] = useState(false)
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [hoveredVenture, setHoveredVenture] = useState<string | null>(null)
@@ -55,6 +56,7 @@ export default function ProjectDetailPage() {
   const renameVentureRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    setMounted(true)
     fetch(`/api/projects/${projectId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setProject(data))
@@ -125,6 +127,18 @@ export default function ProjectDetailPage() {
     const ctx = (venture.context || {}) as Record<string, unknown>
     return ['research', 'branding', 'marketing', 'landing', 'feasibility'].filter(
       k => ctx[k] !== null && ctx[k] !== undefined
+    )
+  }
+
+  if (!mounted) {
+    return (
+      <div style={pageStyle}>
+        <div style={contentStyle}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 60 }}>
+            <div style={{ width: 200, height: 18, borderRadius: 6 }} className="skeleton" />
+          </div>
+        </div>
+      </div>
     )
   }
 
