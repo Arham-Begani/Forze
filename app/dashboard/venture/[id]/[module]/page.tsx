@@ -12,6 +12,7 @@ import { useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AgentStatusRow } from '@/components/ui/AgentStatusRow'
 import { ResultCard } from '@/components/ui/ResultCard'
+import ReactMarkdown from 'react-markdown'
 
 // ─── Module metadata (mirrors ModulePicker) ──────────────────────────────────
 
@@ -22,6 +23,7 @@ const MODULES = [
   { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', description: '30-day GTM, 90 social posts, SEO outlines, email sequence', agentName: 'Content Factory' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', description: 'Sitemap, copy, Next.js component, live deployment', agentName: 'Pipeline' },
   { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', description: 'Financial model, risk matrix, GO/NO-GO verdict', agentName: 'Feasibility' },
+  { id: 'general', label: 'General', accent: '#6B8F71', description: 'Ask anything — names, features, pricing, quick feedback', agentName: 'Forge AI' },
 ] as const
 
 type ModuleId = typeof MODULES[number]['id']
@@ -33,12 +35,13 @@ function getModule(id: string) {
 // ─── Suggestions ─────────────────────────────────────────────────────────────
 
 const SUGGESTIONS: Record<string, [string, string]> = {
-  'full-launch': ['Launch an async client portal for freelance developers', 'Build a B2B expense tracking tool for remote teams'],
-  'research': ['Validate an AI writing assistant for solo lawyers', 'Research the market for async video feedback tools'],
-  'branding': ['Create a brand for a B2B invoice automation startup', 'Build the identity for a wellness app for remote workers'],
-  'marketing': ['Build a 30-day GTM for a Notion template marketplace', 'Create a social strategy for a SaaS HR onboarding tool'],
-  'landing': ['Build a landing page for a code review automation tool', 'Deploy a page for an AI meeting notes product'],
-  'feasibility': ['Validate financial model for a subscription recipe app', 'Assess feasibility of a niche job board for designers'],
+  'full-launch': ['Orchestrate a complete end-to-end launch plan', 'Build the comprehensive venture blueprint'],
+  'research': ['Conduct a deep dive into my target market', 'Analyze my top competitors and market gaps'],
+  'branding': ['Design a premium brand identity and voice', 'Generate a naming strategy and color palette'],
+  'marketing': ['Create a high-converting 30-day GTM strategy', 'Build a content engine and social roadmap'],
+  'landing': ['Draft a high-impact landing page with copy', 'Design a sitemap and wireframe for the app'],
+  'feasibility': ['Run a detailed financial and risk analysis', 'Stress test the business model and scalability'],
+  'general': ['Suggest 10 creative names for my venture', 'What features should I prioritize for MVP?'],
 }
 
 // ─── Full Launch agent rows ───────────────────────────────────────────────────
@@ -105,6 +108,11 @@ function ModuleIconSvg({ id, size = 20 }: { id: string; size?: number }) {
     case 'feasibility': return (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    )
+    case 'general': return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     )
     default: return null
@@ -257,6 +265,34 @@ export default function ModulePage() {
   const [ventureName, setVentureName] = useState<string>('...')
   const [conversations, setConversations] = useState<ConversationEntry[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [depth, setDepth] = useState<'brief' | 'medium' | 'detailed'>(() => {
+    if (typeof window === 'undefined') return 'medium'
+    try {
+      const s = localStorage.getItem('forge-settings')
+      if (s) { const p = JSON.parse(s); if (p.defaultDepth) return p.defaultDepth }
+    } catch { /* ignore */ }
+    return 'medium'
+  })
+
+  const [showThoughtProcess, setShowThoughtProcess] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    try {
+      const s = localStorage.getItem('forge-settings')
+      if (s) { const p = JSON.parse(s); if (typeof p.showThoughtProcess === 'boolean') return p.showThoughtProcess }
+    } catch { /* ignore */ }
+    return true
+  })
+
+  // Listen for settings changes from the settings page
+  useEffect(() => {
+    function onSettingsChanged(e: Event) {
+      const detail = (e as CustomEvent).detail
+      if (typeof detail?.showThoughtProcess === 'boolean') setShowThoughtProcess(detail.showThoughtProcess)
+      if (detail?.defaultDepth) setDepth(detail.defaultDepth)
+    }
+    window.addEventListener('forge:settings-changed', onSettingsChanged)
+    return () => window.removeEventListener('forge:settings-changed', onSettingsChanged)
+  }, [])
 
   const [prompt, setPrompt] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -267,6 +303,7 @@ export default function ModulePage() {
 
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [readingPanelOpen, setReadingPanelOpen] = useState(true)
+  const [isDocumentOpen, setIsDocumentOpen] = useState(false)
 
   // ── Auto-resize textarea ──────────────────────────────────────────────
   const autoResizeTextarea = useCallback(() => {
@@ -363,7 +400,7 @@ export default function ModulePage() {
       const runRes = await fetch(`/api/ventures/${ventureId}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ moduleId: activeModule, prompt: text }),
+        body: JSON.stringify({ moduleId: activeModule, prompt: text, depth }),
       })
       if (!runRes.ok) throw new Error('Failed to start run')
       const { conversationId: serverConversationId } = await runRes.json()
@@ -447,7 +484,7 @@ export default function ModulePage() {
 
   // Compute latest result for reading panel
   const latestResult = [...conversations].reverse().find(c => c.result && Object.keys(c.result).length > 0)?.result as Record<string, any> | null
-  const showReadingPanel = readingPanelOpen && latestResult !== null
+  const showReadingPanel = readingPanelOpen && latestResult !== null && activeModule !== 'general'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
@@ -681,13 +718,34 @@ export default function ModulePage() {
                       </div>
                     )}
 
-                    {/* Stream output */}
-                    {entry.lines.length > 0 && (
+                    {/* Stream output (thought process) — hidden for general chat */}
+                    {activeModule !== 'general' && showThoughtProcess && entry.lines.length > 0 && (
                       <StreamPanel lines={entry.lines} accent={mod.accent} />
                     )}
 
-                    {/* Result */}
-                    {entry.result && !entry.isRunning && (
+                    {/* General chat: show response as formatted text */}
+                    {activeModule === 'general' && entry.result && !entry.isRunning && (
+                      <motion.div
+                        style={{ marginTop: 4 }}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4 }}
+                      >
+                        <div style={{
+                          fontSize: 14,
+                          color: 'var(--text-soft)',
+                          lineHeight: 1.75,
+                          whiteSpace: 'pre-wrap',
+                          padding: '4px 0',
+                          letterSpacing: '0.01em',
+                        }}>
+                          {(entry.result as Record<string, unknown>).response as string || ''}
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Specialized module results */}
+                    {activeModule !== 'general' && entry.result && !entry.isRunning && (
                       <motion.div
                         style={{ marginTop: 4 }}
                         initial={{ opacity: 0, y: 8 }}
@@ -698,6 +756,7 @@ export default function ModulePage() {
                           moduleId={activeModule}
                           result={entry.result}
                           deploymentUrl={entry.result.deploymentUrl as string}
+                          onModalChange={setIsDocumentOpen}
                         />
                       </motion.div>
                     )}
@@ -770,7 +829,7 @@ export default function ModulePage() {
 
       {/* ── Scroll to bottom button ── */}
       <AnimatePresence>
-        {showScrollBtn && hasMessages && (
+        {showScrollBtn && hasMessages && !isDocumentOpen && (
           <motion.button
             initial={{ opacity: 0, y: 10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -808,12 +867,81 @@ export default function ModulePage() {
         )}
       </AnimatePresence>
 
+      {/* ── Intensity Selector (only for Research/Full Launch) ── */}
+      <AnimatePresence>
+        {(activeModule === 'research' || activeModule === 'full-launch' || activeModule === 'feasibility') && !isSubmitting && !isDocumentOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            style={{
+              position: 'absolute',
+              bottom: 155,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 10,
+              display: 'flex',
+              gap: 8,
+              padding: '6px',
+              background: 'var(--glass-bg-strong)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: 12,
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            {(['brief', 'medium', 'detailed'] as const).map((d) => (
+              <motion.button
+                key={d}
+                type="button"
+                onClick={() => setDepth(d)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  transition: 'all 0.2s',
+                  background: depth === d ? mod.accent : 'transparent',
+                  color: depth === d ? '#fff' : 'var(--muted)',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {d}
+              </motion.button>
+            ))}
+            <div style={{
+              position: 'absolute',
+              top: -24,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              opacity: 0.6,
+            }}>
+              Research Intensity
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Input area ── */}
+      <AnimatePresence>
+      {!isDocumentOpen && (
       <motion.div
         style={inputAreaStyle}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ duration: 0.3 }}
       >
         <div style={inputInnerStyle}>
           <form onSubmit={handleSubmit}>
@@ -941,6 +1069,8 @@ export default function ModulePage() {
           </form>
         </div>
       </motion.div>
+      )}
+      </AnimatePresence>
 
       {/* Click-away for picker */}
       {pickerOpen && (
@@ -1034,8 +1164,8 @@ function ReadingPanel({ moduleId, result, accent, onClose }: {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3 }}
+      className="reading-panel"
       style={{
-        width: 380,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -1055,12 +1185,11 @@ function ReadingPanel({ moduleId, result, accent, onClose }: {
         flexShrink: 0,
         background: 'rgba(255,255,255,0.02)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 6, opacity: 0.5 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', opacity: 0.8 }}>{title} · MD</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', opacity: 0.8 }}>{title}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button onClick={handleCopy} style={panelActionBtnStyle}>{copied ? 'Copied!' : 'Copy'}</button>
@@ -1117,6 +1246,15 @@ function DocList({ items }: { items: any[] }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+function MarkdownBlock({ content }: { content: string }) {
+  if (!content) return null
+  return (
+    <div className="doc-markdown" style={{ fontSize: 13, color: 'var(--text-soft)', lineHeight: 1.7 }}>
+      <ReactMarkdown>{content}</ReactMarkdown>
+    </div>
   )
 }
 
@@ -1359,52 +1497,142 @@ function LandingDoc({ result }: { result: Record<string, any> }) {
   if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
   const l = result.landing || result
   const copy = l.landingPageCopy || l.copy || {}
-  const heroHeadline = copy.hero?.headline || l.heroHeadline || l.headline
-  const heroSubheadline = copy.hero?.subheadline || l.heroSubheadline
-  const cta = copy.cta || l.cta
-  const sections = Array.isArray(copy.sections || l.sections) ? (copy.sections || l.sections) : []
+  const hero = copy.hero || {}
+  const features = Array.isArray(copy.features) ? copy.features : []
+  const socialProof = Array.isArray(copy.socialProof) ? copy.socialProof : []
+  const pricing = Array.isArray(copy.pricing) ? copy.pricing : []
+  const faq = Array.isArray(copy.faq) ? copy.faq : []
+  const sitemap = Array.isArray(l.sitemap) ? l.sitemap : []
+  const seo = l.seoMetadata || {}
   const deployUrl = l.deploymentUrl || result.deploymentUrl
 
   return (
     <>
       <h1 style={docTitleStyle}>Production Pipeline</h1>
 
+      {/* Deployment Status Banner */}
+      {deployUrl && (
+        <div style={{ background: '#8C7A5A10', borderRadius: 10, padding: '14px 16px', border: '1px solid #8C7A5A24', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#8C7A5A', textTransform: 'uppercase', marginBottom: 2, letterSpacing: '0.04em' }}>Live Preview</div>
+            <a href={deployUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, textDecoration: 'none', wordBreak: 'break-all' }}>
+              {deployUrl}
+            </a>
+          </div>
+          <a href={deployUrl} target="_blank" rel="noopener noreferrer" style={{ padding: '6px 14px', background: '#8C7A5A', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
+            Open Site
+          </a>
+        </div>
+      )}
+
+      {/* Hero Section */}
       <DocSection title="Hero Section">
-        <DocKV label="Headline" value={heroHeadline} />
-        <DocKV label="Subheadline" value={heroSubheadline} />
-        <DocKV label="CTA" value={typeof cta === 'object' ? (cta.text || cta.label || JSON.stringify(cta)) : cta} />
+        <DocKV label="Headline" value={hero.headline} />
+        <DocKV label="Subheadline" value={hero.subheadline} />
+        <DocKV label="Primary CTA" value={hero.ctaPrimary} />
+        <DocKV label="Secondary CTA" value={hero.ctaSecondary} />
       </DocSection>
 
-      {sections.length > 0 && (
-        <DocSection title="Page Sections">
-          {sections.map((s: any, i: number) => (
-            <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                {typeof s === 'object' ? (s.title || s.name || `Section ${i + 1}`) : String(s)}
+      {/* Features */}
+      {features.length > 0 && (
+        <DocSection title={`Features (${features.length})`}>
+          {features.map((f: any, i: number) => (
+            <div key={i} style={{ padding: '10px 0', borderBottom: i < features.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                {f.icon && <span style={{ fontSize: 14 }}>{f.icon}</span>}
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{f.title}</span>
               </div>
-              {typeof s === 'object' && s.content && (
-                <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 2, lineHeight: 1.4 }}>{s.content}</div>
-              )}
+              <p style={{ fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.6, margin: 0 }}>{f.description}</p>
             </div>
           ))}
         </DocSection>
       )}
 
-      {deployUrl && (
-        <DocSection title="Deployment">
-          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '12px', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#8C7A5A', textTransform: 'uppercase', marginBottom: 4 }}>Live URL</div>
-            <a href={deployUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, textDecoration: 'none', wordBreak: 'break-all' }}>
-              {deployUrl}
-            </a>
+      {/* Social Proof */}
+      {socialProof.length > 0 && (
+        <DocSection title="Social Proof">
+          {socialProof.map((t: string, i: number) => (
+            <div key={i} style={{ padding: '10px 12px', background: 'var(--glass-bg)', borderRadius: 8, border: '1px solid var(--border)', marginBottom: i < socialProof.length - 1 ? 8 : 0 }}>
+              <p style={{ fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>{t}</p>
+            </div>
+          ))}
+        </DocSection>
+      )}
+
+      {/* Pricing */}
+      {pricing.length > 0 && (
+        <DocSection title="Pricing Tiers">
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(pricing.length, 3)}, 1fr)`, gap: 10 }}>
+            {pricing.map((p: any, i: number) => (
+              <div key={i} style={{ padding: '14px', background: 'var(--glass-bg)', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{p.tier}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#8C7A5A', letterSpacing: '-0.02em' }}>{p.price}</div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {(p.features || []).map((f: string, j: number) => (
+                    <li key={j} style={{ fontSize: 11, color: 'var(--text-soft)', lineHeight: 1.4 }}>{f}</li>
+                  ))}
+                </ul>
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#8C7A5A', textTransform: 'uppercase', marginTop: 'auto', letterSpacing: '0.04em' }}>{p.cta}</div>
+              </div>
+            ))}
           </div>
         </DocSection>
       )}
 
-      <DocSection title="Status">
+      {/* FAQ */}
+      {faq.length > 0 && (
+        <DocSection title={`FAQ (${faq.length})`}>
+          {faq.map((f: any, i: number) => (
+            <div key={i} style={{ padding: '8px 0', borderBottom: i < faq.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>{f.question}</div>
+              <p style={{ fontSize: 11, color: 'var(--text-soft)', lineHeight: 1.6, margin: 0 }}>{f.answer}</p>
+            </div>
+          ))}
+        </DocSection>
+      )}
+
+      {/* Sitemap */}
+      {sitemap.length > 0 && (
+        <DocSection title="Sitemap">
+          {sitemap.map((s: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+              <span style={{ width: 100, flexShrink: 0, fontWeight: 600, color: 'var(--muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', paddingTop: 2 }}>{s.path || s.page}</span>
+              <div>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{s.page}</span>
+                {s.purpose && <p style={{ fontSize: 11, color: 'var(--text-soft)', margin: '2px 0 0', lineHeight: 1.4 }}>{s.purpose}</p>}
+              </div>
+            </div>
+          ))}
+        </DocSection>
+      )}
+
+      {/* SEO */}
+      {(seo.title || seo.description) && (
+        <DocSection title="SEO Metadata">
+          <DocKV label="Title" value={seo.title} />
+          <DocKV label="Description" value={seo.description} />
+          {Array.isArray(seo.keywords) && seo.keywords.length > 0 && (
+            <div style={{ display: 'flex', gap: 10, padding: '6px 0', fontSize: 12 }}>
+              <span style={{ width: 100, flexShrink: 0, fontWeight: 600, color: 'var(--muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', paddingTop: 2 }}>Keywords</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {seo.keywords.map((k: string, i: number) => (
+                  <span key={i} style={{ padding: '2px 8px', background: 'var(--glass-bg)', borderRadius: 4, fontSize: 10, color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{k}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </DocSection>
+      )}
+
+      {/* Tech Stack */}
+      <DocSection title="Tech Stack & Infrastructure">
+        <DocKV label="Framework" value="Next.js 15 (App Router)" />
+        <DocKV label="Styling" value="Tailwind CSS" />
+        <DocKV label="Language" value="TypeScript / React" />
+        <DocKV label="Hosting" value="Vercel (Edge)" />
         <DocKV label="Pipeline" value={deployUrl ? 'Deployed' : 'Generating...'} />
-        <DocKV label="Framework" value={l.framework || 'Next.js'} />
-        <DocKV label="Conversion" value="Lead capture hooks active" />
+        <DocKV label="Lead Capture" value={l.leadCaptureActive ? 'Active' : 'Inactive'} />
+        <DocKV label="Analytics" value={l.analyticsActive ? 'Active' : 'Ready for integration'} />
       </DocSection>
     </>
   )
@@ -1415,52 +1643,115 @@ function FeasibilityDoc({ result }: { result: Record<string, any> }) {
   const f = result.feasibility || result
   const fm = f.financialModel || {}
   const risks = Array.isArray(f.riskMatrix || f.risks) ? (f.riskMatrix || f.risks) : []
-  const strengths = Array.isArray(f.strengths) ? f.strengths : []
-  const weaknesses = Array.isArray(f.weaknesses) ? f.weaknesses : []
+  const keyAssumptions = Array.isArray(f.keyAssumptions) ? f.keyAssumptions : []
+  const keyRisksToMonitor = Array.isArray(f.keyRisksToMonitor) ? f.keyRisksToMonitor : []
+  const assumptions = fm.assumptions ? Object.entries(fm.assumptions) : []
+
+  const verdictColor = f.verdict?.toLowerCase()?.includes('no') ? '#dc2626' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d97706' : '#16a34a'
+  const verdictBg = f.verdict?.toLowerCase()?.includes('no') ? '#dc262612' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d9770612' : '#16a34a12'
 
   return (
     <>
       <h1 style={docTitleStyle}>Feasibility Assessment</h1>
 
-      <DocSection title="Verdict">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      {/* Verdict + Timing */}
+      <DocSection title="Verdict & Market Timing">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <span style={{
-            fontSize: 13,
-            fontWeight: 700,
-            padding: '6px 14px',
-            borderRadius: 8,
-            color: f.verdict?.toLowerCase()?.includes('no') ? '#dc2626' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d97706' : '#16a34a',
-            background: f.verdict?.toLowerCase()?.includes('no') ? '#dc262612' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d9770612' : '#16a34a12',
-            border: `1px solid ${f.verdict?.toLowerCase()?.includes('no') ? '#dc262624' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d9770624' : '#16a34a24'}`,
-            textTransform: 'uppercase',
+            fontSize: 13, fontWeight: 700, padding: '6px 14px', borderRadius: 8,
+            color: verdictColor, background: verdictBg,
+            border: `1px solid ${verdictColor}24`, textTransform: 'uppercase',
           }}>
             {f.verdict || 'Pending'}
           </span>
+          {f.marketTimingScore && (
+            <span style={{
+              fontSize: 12, fontWeight: 700, padding: '5px 12px', borderRadius: 8,
+              color: '#7A5A8C', background: '#7A5A8C14', border: '1px solid #7A5A8C24',
+            }}>
+              Timing: {f.marketTimingScore}/10
+            </span>
+          )}
         </div>
-        {f.rationale && <p style={docParaStyle}>{f.rationale}</p>}
+        {f.verdictRationale && <p style={docParaStyle}>{f.verdictRationale}</p>}
+        {f.marketTimingRationale && (
+          <p style={{ ...docParaStyle, marginTop: 8, fontStyle: 'italic', opacity: 0.85 }}>{f.marketTimingRationale}</p>
+        )}
       </DocSection>
 
-      <DocSection title="Financial Model">
-        <DocKV label="CAC" value={fm.cac} />
-        <DocKV label="LTV" value={fm.ltv} />
-        <DocKV label="Margin" value={fm.margin || fm.grossMargin} />
-        <DocKV label="Breakeven" value={fm.breakeven || fm.breakevenMonths} />
-        <DocKV label="Payback" value={fm.paybackPeriod} />
-        <DocKV label="Revenue Y1" value={fm.revenueYear1 || fm.yearOneRevenue} />
+      {/* Unit Economics */}
+      <DocSection title="Unit Economics">
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+          {[
+            { label: 'CAC', value: fm.cac },
+            { label: 'LTV', value: fm.ltv },
+            { label: 'LTV:CAC', value: fm.ltvCacRatio },
+            { label: 'Break-even', value: fm.breakEvenMonth ? `Month ${fm.breakEvenMonth}` : undefined },
+          ].filter(m => m.value).map((m, i) => (
+            <div key={i} style={{
+              background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px',
+              border: '1px solid var(--border)', flex: '1 1 70px', textAlign: 'center', minWidth: 70,
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{m.value}</div>
+              <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', marginTop: 2 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
       </DocSection>
 
+      {/* 3-Year Projections */}
+      <DocSection title="3-Year Projections">
+        {['yearOne', 'yearTwo', 'yearThree'].map((yearKey, i) => {
+          const year = fm[yearKey]
+          if (!year) return null
+          return (
+            <div key={yearKey} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Year {i + 1}
+              </div>
+              <DocKV label="Revenue" value={year.revenue} />
+              <DocKV label="Costs" value={year.costs} />
+              <DocKV label="Net" value={year.netIncome} />
+              <DocKV label="Customers" value={year.customers} />
+            </div>
+          )
+        })}
+      </DocSection>
+
+      {/* Assumptions */}
+      {assumptions.length > 0 && (
+        <DocSection title="Model Assumptions">
+          {assumptions.map(([key, val], i) => (
+            <DocKV key={i} label={key} value={val as string} />
+          ))}
+        </DocSection>
+      )}
+
+      {/* Risks */}
       {risks.length > 0 && (
-        <DocSection title="Risk Matrix">
+        <DocSection title={`Risk Matrix (${risks.length} risks)`}>
           {risks.map((risk: any, i: number) => (
             <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                {typeof risk === 'object' ? (risk.risk || risk.name || risk.category || JSON.stringify(risk)) : String(risk)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                  color: risk.category?.includes('Financial') || risk.category?.includes('Market') ? '#dc2626' : '#7A5A8C',
+                  background: risk.category?.includes('Financial') || risk.category?.includes('Market') ? '#dc262610' : '#7A5A8C10',
+                }}>
+                  {risk.category || 'Risk'}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                  {risk.risk || risk.name || JSON.stringify(risk)}
+                </span>
               </div>
-              {typeof risk === 'object' && (
-                <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 2, display: 'flex', gap: 12 }}>
-                  {risk.likelihood && <span>Likelihood: {risk.likelihood}</span>}
-                  {risk.impact && <span>Impact: {risk.impact}</span>}
-                  {risk.mitigation && <div style={{ marginTop: 2 }}>Mitigation: {risk.mitigation}</div>}
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 10 }}>
+                {risk.likelihood && <span>Likelihood: <strong style={{ color: risk.likelihood === 'high' ? '#dc2626' : risk.likelihood === 'medium' ? '#d97706' : '#16a34a' }}>{risk.likelihood}</strong></span>}
+                {risk.impact && <span>Impact: <strong style={{ color: risk.impact === 'high' ? '#dc2626' : risk.impact === 'medium' ? '#d97706' : '#16a34a' }}>{risk.impact}</strong></span>}
+              </div>
+              {risk.mitigation && (
+                <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4, lineHeight: 1.5, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
+                  {risk.mitigation}
                 </div>
               )}
             </div>
@@ -1468,15 +1759,31 @@ function FeasibilityDoc({ result }: { result: Record<string, any> }) {
         </DocSection>
       )}
 
-      {strengths.length > 0 && (
-        <DocSection title="Strengths">
-          <DocList items={strengths} />
+      {/* Competitive Moat */}
+      {f.competitiveMoat && (
+        <DocSection title="Competitive Moat">
+          <p style={docParaStyle}>{f.competitiveMoat}</p>
         </DocSection>
       )}
 
-      {weaknesses.length > 0 && (
-        <DocSection title="Weaknesses">
-          <DocList items={weaknesses} />
+      {/* Regulatory */}
+      {f.regulatoryLandscape && (
+        <DocSection title="Regulatory Landscape">
+          <p style={docParaStyle}>{f.regulatoryLandscape}</p>
+        </DocSection>
+      )}
+
+      {/* Key Assumptions */}
+      {keyAssumptions.length > 0 && (
+        <DocSection title="Key Assumptions to Validate">
+          <DocList items={keyAssumptions} />
+        </DocSection>
+      )}
+
+      {/* Key Risks to Monitor */}
+      {keyRisksToMonitor.length > 0 && (
+        <DocSection title="Key Risks to Monitor">
+          <DocList items={keyRisksToMonitor} />
         </DocSection>
       )}
     </>
@@ -1669,7 +1976,7 @@ const panelActionBtnStyle: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   height: 54,
-  padding: '0 24px',
+  padding: '0 16px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -1709,7 +2016,7 @@ function agentBadgeStyle(accent: string): React.CSSProperties {
 const chatInnerStyle: React.CSSProperties = {
   maxWidth: 780,
   margin: '0 auto',
-  padding: '32px 24px 32px',
+  padding: '24px 16px 32px',
   width: '100%',
 }
 
@@ -1743,7 +2050,7 @@ function chipStyle(accent: string): React.CSSProperties {
 }
 
 const userBubbleStyle: React.CSSProperties = {
-  maxWidth: '78%',
+  maxWidth: '85%',
   fontSize: 14,
   color: 'var(--text)',
   background: 'var(--glass-bg-strong)',
@@ -1752,7 +2059,7 @@ const userBubbleStyle: React.CSSProperties = {
   border: '1px solid var(--glass-border)',
   boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
   borderRadius: '20px 20px 4px 20px',
-  padding: '12px 18px',
+  padding: '12px 16px',
   lineHeight: 1.6,
   letterSpacing: '0.01em',
 }
@@ -1800,7 +2107,7 @@ const inputAreaStyle: React.CSSProperties = {
   backdropFilter: 'blur(28px)',
   WebkitBackdropFilter: 'blur(28px)',
   borderTop: '1px solid var(--border)',
-  padding: '14px 24px 22px',
+  padding: '12px 16px 18px',
   flexShrink: 0,
   zIndex: 10,
   position: 'relative',
