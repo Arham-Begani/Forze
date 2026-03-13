@@ -135,7 +135,7 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
                   </div>
                   <h3 className="text-xl font-semibold text-[var(--text)]">Section Pending</h3>
                   <p className="max-w-xs mt-2 text-sm text-[var(--muted)]">
-                    This module hasn't been run for this venture yet. Run the full launch or individual agent to populate this data.
+                    This module hasn&apos;t been run for this venture yet. Run the full launch or individual agent to populate this data.
                   </p>
                 </div>
               )}

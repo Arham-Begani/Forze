@@ -33,6 +33,7 @@ const MODULES = [
   { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', icon: '▲' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', icon: '▣' },
   { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', icon: '◈' },
+  { id: 'general', label: 'General', accent: '#6B8F71', icon: '◉' },
 ]
 
 const QUICK_ACTIONS = [
@@ -57,6 +58,8 @@ export default function DashboardPage() {
   const [ideaInput, setIdeaInput] = useState('')
   const [ideaSubmitting, setIdeaSubmitting] = useState(false)
   const [ideaError, setIdeaError] = useState(false)
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhanced, setEnhanced] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -105,6 +108,30 @@ export default function DashboardPage() {
       setIdeaError(true)
     } finally {
       setIdeaSubmitting(false)
+    }
+  }
+
+  async function handleEnhance() {
+    if (!ideaInput.trim() || enhancing || ideaInput.trim().length < 5) return
+    setEnhancing(true)
+    try {
+      const res = await fetch('/api/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea: ideaInput.trim() }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.enhanced) {
+          setIdeaInput(data.enhanced)
+          setEnhanced(true)
+          setTimeout(() => setEnhanced(false), 3000)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to enhance:', err)
+    } finally {
+      setEnhancing(false)
     }
   }
 
@@ -168,6 +195,9 @@ export default function DashboardPage() {
 
   // ── Idea intake ─────────────────────────────────────────────────────────
   if (idea === null) {
+    const canSubmitIdea = ideaInput.trim().length > 5 && !ideaSubmitting
+    const canEnhance = ideaInput.trim().length >= 5 && !enhancing && !ideaSubmitting
+
     return (
       <motion.div
         style={intakePageStyle}
@@ -211,67 +241,205 @@ export default function DashboardPage() {
           Tell us your big idea and our AI workforce will handle the rest.
         </motion.p>
 
-        {/* Pill input */}
+        {/* Input card */}
         <motion.div
-          style={intakePillStyle}
           initial={{ opacity: 0, y: 20, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.2, type: 'spring', stiffness: 300, damping: 24 }}
+          style={{ width: '100%', maxWidth: 620 }}
         >
-          <div style={intakeIconWrapStyle}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
+          <div
+            className="glass-card"
+            style={{
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Gradient top accent */}
+            <motion.div
+              style={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0,
+                height: 2,
+                background: 'linear-gradient(90deg, var(--accent), #e8a04e, var(--accent))',
+                backgroundSize: '200% 100%',
+                borderRadius: '16px 16px 0 0',
+              }}
+              animate={ideaInput.trim() ? { backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] } : {}}
+              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+            />
+
+            <textarea
+              value={ideaInput}
+              onChange={e => setIdeaInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleIdeaSubmit()
+              }}
+              placeholder="Describe your startup idea in detail — the problem it solves, who it's for, and what makes it unique..."
+              style={{
+                width: '100%',
+                minHeight: 100,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: 'var(--text)',
+                fontSize: 15,
+                lineHeight: 1.7,
+                resize: 'none',
+                fontFamily: 'inherit',
+              }}
+              autoFocus
+              maxLength={2000}
+              aria-label="Describe your startup idea"
+            />
+
+            {/* Action bar */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderTop: '1px solid var(--border)',
+              paddingTop: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  fontSize: 11,
+                  color: ideaInput.length > 1800 ? '#e05252' : 'var(--muted)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 500,
+                  transition: 'color 200ms',
+                }}>
+                  {ideaInput.length}/2000
+                </span>
+
+                {/* AI Enhance button */}
+                <AnimatePresence>
+                  {ideaInput.trim().length >= 5 && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      onClick={handleEnhance}
+                      disabled={!canEnhance}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '5px 14px',
+                        borderRadius: 20,
+                        background: enhanced ? 'rgba(90, 140, 110, 0.12)' : 'var(--accent-soft)',
+                        border: `1px solid ${enhanced ? 'rgba(90, 140, 110, 0.3)' : 'var(--accent-glow)'}`,
+                        color: enhanced ? '#5A8C6E' : 'var(--accent)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: enhancing ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                        transition: 'all 200ms',
+                      }}
+                      whileHover={canEnhance ? { scale: 1.04, boxShadow: '0 2px 12px var(--accent-glow)' } : {}}
+                      whileTap={canEnhance ? { scale: 0.96 } : {}}
+                    >
+                      {enhancing ? (
+                        <>
+                          <motion.div
+                            style={{
+                              width: 12, height: 12,
+                              border: '2px solid var(--accent-glow)',
+                              borderTopColor: 'var(--accent)',
+                              borderRadius: '50%',
+                            }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                          />
+                          <span>Enhancing...</span>
+                        </>
+                      ) : enhanced ? (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>Enhanced</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                          </svg>
+                          <span>Enhance with AI</span>
+                        </>
+                      )}
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <AnimatePresence>
+                {canSubmitIdea && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8, x: 12 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, x: 12 }}
+                    onClick={handleIdeaSubmit}
+                    disabled={ideaSubmitting}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 20px',
+                      borderRadius: 12,
+                      background: 'linear-gradient(135deg, var(--accent), #e8963a)',
+                      border: 'none',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      boxShadow: '0 4px 14px var(--accent-glow)',
+                      transition: 'box-shadow 200ms',
+                    }}
+                    whileHover={{ scale: 1.05, boxShadow: '0 6px 20px var(--accent-glow)' }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    {ideaSubmitting ? (
+                      <motion.div
+                        style={{
+                          width: 16, height: 16,
+                          border: '2px solid rgba(255,255,255,0.3)',
+                          borderTopColor: '#fff',
+                          borderRadius: '50%',
+                        }}
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                      />
+                    ) : (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>Initialize</span>
+                      </>
+                    )}
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
-          <input
-            type="text"
-            value={ideaInput}
-            onChange={e => setIdeaInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleIdeaSubmit()}
-            placeholder="Describe your startup idea..."
-            style={intakeInputStyle}
-            autoFocus
-            aria-label="Your startup idea"
-          />
-
-          <motion.button
-            onClick={handleIdeaSubmit}
-            disabled={!ideaInput.trim() || ideaSubmitting}
-            whileHover={ideaInput.trim() && !ideaSubmitting ? { scale: 1.08 } : {}}
-            whileTap={ideaInput.trim() && !ideaSubmitting ? { scale: 0.94 } : {}}
-            style={{
-              ...intakeSubmitStyle,
-              background: ideaInput.trim() && !ideaSubmitting ? 'var(--accent)' : 'var(--border)',
-              cursor: ideaInput.trim() && !ideaSubmitting ? 'pointer' : 'default',
-            }}
-            aria-label="Submit idea"
+          {/* Hint */}
+          <motion.p
+            style={{ marginTop: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center', opacity: 0.5 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
           >
-            {ideaSubmitting ? (
-              <motion.div
-                style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%' }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-              />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
-              </svg>
-            )}
-          </motion.button>
+            {ideaError
+              ? <span style={{ color: '#e05252', opacity: 1 }}>Something went wrong. Please try again.</span>
+              : <>Press <kbd style={{ background: 'var(--nav-active)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'system-ui', fontSize: 11 }}>Ctrl</kbd> + <kbd style={{ background: 'var(--nav-active)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'system-ui', fontSize: 11 }}>Enter</kbd> to initialize your vision</>
+            }
+          </motion.p>
         </motion.div>
-
-        {/* Hint */}
-        <motion.p
-          style={intakeHintStyle}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
-          {ideaError
-            ? 'Something went wrong. Please try again.'
-            : 'Press Enter to continue'}
-        </motion.p>
       </motion.div>
     )
   }
@@ -320,7 +488,7 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.04, boxShadow: '0 8px 28px var(--accent-glow)' }}
             whileTap={{ scale: 0.97 }}
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-            onClick={() => window.dispatchEvent(new CustomEvent('forge:new-project'))}
+            onClick={() => router.push('/dashboard/new')}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -369,7 +537,7 @@ export default function DashboardPage() {
                 whileTap={{ scale: 0.96 }}
                 style={quickActionBtnStyle}
                 onClick={() => {
-                  if (a.action === 'new-project') window.dispatchEvent(new CustomEvent('forge:new-project'))
+                  if (a.action === 'new-project') router.push('/dashboard/new')
                 }}
               >
                 <span style={{ fontSize: 15 }}>{a.icon}</span>
@@ -509,7 +677,7 @@ export default function DashboardPage() {
               }}
               whileHover={{ scale: 1.02, y: -3, borderColor: 'var(--accent)', boxShadow: 'var(--shadow-md)' }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => window.dispatchEvent(new CustomEvent('forge:new-project'))}
+              onClick={() => router.push('/dashboard/new')}
               style={newProjectCardStyle}
             >
               <motion.div

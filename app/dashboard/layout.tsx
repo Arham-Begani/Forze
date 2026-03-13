@@ -38,6 +38,7 @@ const MODULES = [
   { id: 'marketing',    label: 'Marketing',    icon: '▲', accent: '#8C5A7A' },
   { id: 'landing',      label: 'Landing Page', icon: '▣', accent: '#8C7A5A' },
   { id: 'feasibility',  label: 'Feasibility',  icon: '◈', accent: '#7A5A8C' },
+  { id: 'general',      label: 'General',      icon: '◉', accent: '#6B8F71' },
 ] as const
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -77,6 +78,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [showNewVenture, setShowNewVenture] = useState<string | null>(null)
   const [newVentureName, setNewVentureName] = useState('')
   const newVentureRef = useRef<HTMLInputElement>(null)
+
+  // Rename state
+  const [renamingProject, setRenamingProject] = useState<string | null>(null)
+  const [renameProjectValue, setRenameProjectValue] = useState('')
+  const renameProjectRef = useRef<HTMLInputElement>(null)
+  const [renamingVenture, setRenamingVenture] = useState<string | null>(null)
+  const [renameVentureValue, setRenameVentureValue] = useState('')
+  const renameVentureRef = useRef<HTMLInputElement>(null)
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -122,7 +131,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   // ─── Idea Guard Rail ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (loading || !projects.length || pathname === '/dashboard/greeting') return
+    if (loading || !projects.length || pathname === '/dashboard/greeting' || pathname === '/dashboard/new') return
 
     const projectMatch = pathname.match(/\/dashboard\/project\/([^\/]+)/)
     const ventureMatch = pathname.match(/\/dashboard\/venture\/([^\/]+)/)
@@ -147,7 +156,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   // ─── Custom events ────────────────────────────────────────────────────────
   useEffect(() => {
-    function handleNewProject() { setShowNewProject(true) }
+    function handleNewProject() { router.push('/dashboard/new') }
     function handleProjectUpdated(e: Event) {
       const { projectId, global_idea } = (e as CustomEvent).detail
       setProjects(prev => prev.map(p => p.id === projectId ? { ...p, global_idea } : p))
@@ -157,19 +166,33 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       setVentures(prev => [venture, ...prev])
       setExpandedVentures(prev => new Set(prev).add(venture.id))
     }
+    function handleRefreshProjects() {
+      // Reload projects and ventures when a new project is created externally
+      Promise.all([
+        fetch('/api/projects').then(r => r.ok ? r.json() : []),
+        fetch('/api/ventures').then(r => r.ok ? r.json() : []),
+      ]).then(([projs, vents]) => {
+        setProjects(projs)
+        setVentures(vents)
+      }).catch(() => {})
+    }
 
     window.addEventListener('forge:new-project', handleNewProject)
     window.addEventListener('forge:project-updated', handleProjectUpdated)
     window.addEventListener('forge:venture-added', handleVentureAdded)
+    window.addEventListener('forge:refresh-projects', handleRefreshProjects)
     return () => {
       window.removeEventListener('forge:new-project', handleNewProject)
       window.removeEventListener('forge:project-updated', handleProjectUpdated)
       window.removeEventListener('forge:venture-added', handleVentureAdded)
+      window.removeEventListener('forge:refresh-projects', handleRefreshProjects)
     }
   }, [])
 
   useEffect(() => { if (showNewProject && newProjectRef.current) newProjectRef.current.focus() }, [showNewProject])
   useEffect(() => { if (showNewVenture && newVentureRef.current) newVentureRef.current.focus() }, [showNewVenture])
+  useEffect(() => { if (renamingProject && renameProjectRef.current) { renameProjectRef.current.focus(); renameProjectRef.current.select() } }, [renamingProject])
+  useEffect(() => { if (renamingVenture && renameVentureRef.current) { renameVentureRef.current.focus(); renameVentureRef.current.select() } }, [renamingVenture])
 
   // ─── Close mobile sidebar on route change ─────────────────────────────────
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -283,6 +306,59 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
     } catch(err) {
       console.error('Failed to delete venture', err)
+    }
+  }
+
+  // ─── Rename handlers ────────────────────────────────────────────────────────
+  function startRenameProject(id: string, currentName: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    setRenamingProject(id)
+    setRenameProjectValue(currentName)
+  }
+
+  async function submitRenameProject() {
+    const trimmed = renameProjectValue.trim()
+    if (!trimmed || !renamingProject) { setRenamingProject(null); return }
+    try {
+      const res = await fetch(`/api/projects/${renamingProject}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      if (res.ok) {
+        setProjects(prev => prev.map(p => p.id === renamingProject ? { ...p, name: trimmed } : p))
+      }
+    } catch (err) {
+      console.error('Failed to rename project', err)
+    } finally {
+      setRenamingProject(null)
+      setRenameProjectValue('')
+    }
+  }
+
+  function startRenameVenture(id: string, currentName: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    setRenamingVenture(id)
+    setRenameVentureValue(currentName)
+  }
+
+  async function submitRenameVenture() {
+    const trimmed = renameVentureValue.trim()
+    if (!trimmed || !renamingVenture) { setRenamingVenture(null); return }
+    try {
+      const res = await fetch(`/api/ventures/${renamingVenture}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      if (res.ok) {
+        setVentures(prev => prev.map(v => v.id === renamingVenture ? { ...v, name: trimmed } : v))
+      }
+    } catch (err) {
+      console.error('Failed to rename venture', err)
+    } finally {
+      setRenamingVenture(null)
+      setRenameVentureValue('')
     }
   }
 
@@ -513,8 +589,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   )}
                 </AnimatePresence>
 
-                {/* Section Label */}
-                <p style={sectionLabelStyle}>PROJECTS</p>
+                {/* Section Label + Manage Projects */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 8px 4px' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', opacity: 0.5, textTransform: 'uppercase' }}>PROJECTS</span>
+                  <motion.button
+                    onClick={() => router.push('/dashboard/manage')}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: 'var(--accent)',
+                      background: 'var(--accent-soft)',
+                      border: '1px solid var(--accent-glow)',
+                      borderRadius: 5,
+                      padding: '2px 7px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      letterSpacing: '0.02em',
+                    }}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                  >
+                    Manage
+                  </motion.button>
+                </div>
 
                 {/* Loading skeleton */}
                 {loading && (
@@ -545,6 +642,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           variants={{ hidden: { opacity: 0, x: -8 }, show: { opacity: 1, x: 0 } }}
                         >
                           {/* Project row */}
+                          {renamingProject === proj.id ? (
+                            <motion.input
+                              ref={renameProjectRef}
+                              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                              value={renameProjectValue}
+                              onChange={e => setRenameProjectValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') { e.preventDefault(); submitRenameProject() }
+                                else if (e.key === 'Escape') { setRenamingProject(null) }
+                              }}
+                              onBlur={() => submitRenameProject()}
+                              style={{ ...newInputStyle, height: 32, fontSize: 12, margin: '2px 0' }}
+                            />
+                          ) : (
                           <motion.div
                             role="button"
                             tabIndex={0}
@@ -603,6 +714,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                               {projVentures.length}
                             </span>
                             <button
+                              onClick={(e) => startRenameProject(proj.id, proj.name, e)}
+                              className="hidden group-hover:flex"
+                              style={deleteButtonStyle}
+                              title="Rename project"
+                              aria-label={`Rename project ${proj.name}`}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
+                              </svg>
+                            </button>
+                            <button
                               onClick={(e) => handleDeleteProject(proj.id, e)}
                               className="hidden group-hover:flex"
                               style={deleteButtonStyle}
@@ -614,6 +736,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                               </svg>
                             </button>
                           </motion.div>
+                          )}
 
                           {/* Ventures under project */}
                           <AnimatePresence>
@@ -638,6 +761,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                   const vOpen = expandedVentures.has(v.id)
                                   return (
                                     <div key={v.id} className="flex flex-col">
+                                      {renamingVenture === v.id ? (
+                                        <motion.input
+                                          ref={renameVentureRef}
+                                          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                                          value={renameVentureValue}
+                                          onChange={e => setRenameVentureValue(e.target.value)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') { e.preventDefault(); submitRenameVenture() }
+                                            else if (e.key === 'Escape') { setRenamingVenture(null) }
+                                          }}
+                                          onBlur={() => submitRenameVenture()}
+                                          style={{ ...newInputStyle, height: 28, fontSize: 11, margin: '1px 0' }}
+                                        />
+                                      ) : (
                                       <motion.div
                                         role="button"
                                         tabIndex={0}
@@ -679,6 +816,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                         }}>{v.name}</span>
                                         <span style={{ fontSize: 10, color: 'var(--muted)', flexShrink: 0 }} className="group-hover:hidden">{formatDate(v.created_at)}</span>
                                         <button
+                                          onClick={(e) => startRenameVenture(v.id, v.name, e)}
+                                          className="hidden group-hover:flex"
+                                          style={deleteButtonStyle}
+                                          title="Rename venture"
+                                          aria-label={`Rename venture ${v.name}`}
+                                        >
+                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
+                                          </svg>
+                                        </button>
+                                        <button
                                           onClick={(e) => handleDeleteVenture(v.id, e)}
                                           className="hidden group-hover:flex"
                                           style={deleteButtonStyle}
@@ -690,6 +838,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                           </svg>
                                         </button>
                                       </motion.div>
+                                      )}
 
                                       {/* Modules */}
                                       <AnimatePresence>
@@ -783,46 +932,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                   )
                                 })}
 
-                                {/* Add venture inline */}
-                                {showNewVenture === proj.id ? (
-                                  <motion.input
-                                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
-                                    ref={newVentureRef}
-                                    value={newVentureName}
-                                    onChange={e => setNewVentureName(e.target.value)}
-                                    onKeyDown={e => handleVentureKeyDown(e, proj.id)}
-                                    onBlur={() => submitNewVenture(proj.id)}
-                                    placeholder="Venture name..."
-                                    style={{ ...newInputStyle, marginLeft: 8, marginTop: 4, fontSize: 12 }}
-                                  />
-                                ) : (
-                                  <motion.button
-                                    whileHover={{ opacity: 1 }}
-                                    onClick={() => setShowNewVenture(proj.id)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '4px 6px',
-                                      marginTop: 2,
-                                      marginLeft: 4,
-                                      borderRadius: 5,
-                                      border: 'none',
-                                      background: 'transparent',
-                                      cursor: 'pointer',
-                                      fontFamily: 'inherit',
-                                      fontSize: 10,
-                                      fontWeight: 500,
-                                      color: 'var(--muted)',
-                                      opacity: 0.55,
-                                    }}
-                                  >
-                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2.5" strokeLinecap="round">
-                                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                                    </svg>
-                                    <span>Add venture</span>
-                                  </motion.button>
-                                )}
+                                {/* Venture creation removed — ventures are auto-created from greeting flow */}
                               </motion.div>
                             )}
                           </AnimatePresence>
@@ -878,6 +988,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                   whiteSpace: 'nowrap',
                                 }}>{v.name}</span>
                                 <span style={{ fontSize: 10, color: 'var(--muted)', flexShrink: 0 }} className="group-hover:hidden">{formatDate(v.created_at)}</span>
+                                <button
+                                  onClick={(e) => startRenameVenture(v.id, v.name, e)}
+                                  className="hidden group-hover:flex"
+                                  style={deleteButtonStyle}
+                                  title="Rename venture"
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
+                                  </svg>
+                                </button>
                                 <button
                                   onClick={(e) => handleDeleteVenture(v.id, e)}
                                   className="hidden group-hover:flex"

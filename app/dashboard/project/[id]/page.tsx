@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,7 @@ const MODULES = [
   { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', icon: '▲' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', icon: '▣' },
   { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', icon: '◈' },
+  { id: 'general', label: 'General', accent: '#6B8F71', icon: '◉' },
 ]
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -42,8 +43,16 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [hoveredVenture, setHoveredVenture] = useState<string | null>(null)
-  const [showNewVenture, setShowNewVenture] = useState(false)
-  const [newName, setNewName] = useState('')
+
+  // Rename project
+  const [renamingProject, setRenamingProject] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const renameRef = useRef<HTMLInputElement>(null)
+
+  // Rename venture
+  const [renamingVentureId, setRenamingVentureId] = useState<string | null>(null)
+  const [renameVentureValue, setRenameVentureValue] = useState('')
+  const renameVentureRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
@@ -52,20 +61,60 @@ export default function ProjectDetailPage() {
       .finally(() => setLoading(false))
   }, [projectId])
 
-  async function createVenture() {
-    const trimmed = newName.trim()
-    if (!trimmed) { setShowNewVenture(false); return }
-    const res = await fetch('/api/ventures', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed, projectId }),
-    })
-    if (res.ok) {
-      const venture = await res.json()
-      setProject(prev => prev ? { ...prev, ventures: [venture, ...(prev.ventures || [])] } : prev)
+  useEffect(() => { if (renamingProject && renameRef.current) { renameRef.current.focus(); renameRef.current.select() } }, [renamingProject])
+  useEffect(() => { if (renamingVentureId && renameVentureRef.current) { renameVentureRef.current.focus(); renameVentureRef.current.select() } }, [renamingVentureId])
+
+  async function submitRenameProject() {
+    const trimmed = renameValue.trim()
+    if (!trimmed || !project) { setRenamingProject(false); return }
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      if (res.ok) {
+        setProject(prev => prev ? { ...prev, name: trimmed } : prev)
+      }
+    } catch (err) {
+      console.error('Failed to rename project', err)
+    } finally {
+      setRenamingProject(false)
     }
-    setShowNewVenture(false)
-    setNewName('')
+  }
+
+  async function submitRenameVenture() {
+    const trimmed = renameVentureValue.trim()
+    if (!trimmed || !renamingVentureId) { setRenamingVentureId(null); return }
+    try {
+      const res = await fetch(`/api/ventures/${renamingVentureId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      if (res.ok) {
+        setProject(prev => {
+          if (!prev) return prev
+          return { ...prev, ventures: prev.ventures.map(v => v.id === renamingVentureId ? { ...v, name: trimmed } : v) }
+        })
+      }
+    } catch (err) {
+      console.error('Failed to rename venture', err)
+    } finally {
+      setRenamingVentureId(null)
+    }
+  }
+
+  async function handleDeleteVenture(ventureId: string) {
+    if (!confirm('Delete this venture?')) return
+    try {
+      const res = await fetch(`/api/ventures/${ventureId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setProject(prev => prev ? { ...prev, ventures: prev.ventures.filter(v => v.id !== ventureId) } : prev)
+      }
+    } catch (err) {
+      console.error('Failed to delete venture', err)
+    }
   }
 
   function formatDate(iso: string) {
@@ -133,8 +182,59 @@ export default function ProjectDetailPage() {
             <div style={projectIconStyle}>
               <span style={{ fontSize: 28 }}>{project.icon}</span>
             </div>
-            <div>
-              <h1 style={titleStyle}>{project.name}</h1>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {renamingProject ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
+                >
+                  <input
+                    ref={renameRef}
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') submitRenameProject()
+                      if (e.key === 'Escape') setRenamingProject(false)
+                    }}
+                    onBlur={() => submitRenameProject()}
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 800,
+                      color: 'var(--text)',
+                      letterSpacing: '-0.03em',
+                      background: 'var(--glass-bg)',
+                      border: '1px solid var(--accent)',
+                      borderRadius: 10,
+                      padding: '4px 12px',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      boxShadow: 'var(--shadow-input)',
+                      width: '100%',
+                      maxWidth: 360,
+                    }}
+                  />
+                </motion.div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h1 style={titleStyle}>{project.name}</h1>
+                  <motion.button
+                    onClick={() => { setRenamingProject(true); setRenameValue(project.name) }}
+                    style={{
+                      padding: 4, border: 'none', background: 'transparent',
+                      cursor: 'pointer', color: 'var(--muted)', borderRadius: 6,
+                      display: 'flex', alignItems: 'center',
+                    }}
+                    whileHover={{ scale: 1.1, color: 'var(--accent)' }}
+                    whileTap={{ scale: 0.9 }}
+                    title="Rename project"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
+                    </svg>
+                  </motion.button>
+                </div>
+              )}
               {project.description && (
                 <p style={descStyle}>{project.description}</p>
               )}
@@ -146,49 +246,7 @@ export default function ProjectDetailPage() {
         {/* Venture grid */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h2 style={sectionTitle}>Ventures</h2>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setShowNewVenture(true)}
-            style={addBtnStyle}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Venture
-          </motion.button>
         </div>
-
-        {/* New venture input */}
-        {showNewVenture && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            style={{ marginBottom: 16 }}
-          >
-            <div className="glass" style={{ display: 'flex', gap: 8, padding: 12, borderRadius: 12 }}>
-              <input
-                autoFocus
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') createVenture()
-                  if (e.key === 'Escape') { setShowNewVenture(false); setNewName('') }
-                }}
-                placeholder="Venture name..."
-                style={ventureInputStyle}
-              />
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={createVenture}
-                style={createBtnStyle}
-              >
-                Create
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
 
         <motion.div
           style={ventureGridStyle}
@@ -211,7 +269,60 @@ export default function ProjectDetailPage() {
                 onMouseLeave={() => setHoveredVenture(null)}
               >
                 <div style={{ marginBottom: 14 }}>
-                  <h3 style={ventureNameStyle}>{v.name}</h3>
+                  {renamingVentureId === v.id ? (
+                    <motion.input
+                      ref={renameVentureRef}
+                      initial={{ opacity: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      value={renameVentureValue}
+                      onChange={e => setRenameVentureValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') submitRenameVenture()
+                        if (e.key === 'Escape') setRenamingVentureId(null)
+                      }}
+                      onBlur={() => submitRenameVenture()}
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: 'var(--text)',
+                        background: 'var(--glass-bg)',
+                        border: '1px solid var(--accent)',
+                        borderRadius: 8,
+                        padding: '3px 10px',
+                        outline: 'none',
+                        fontFamily: 'inherit',
+                        boxShadow: 'var(--shadow-input)',
+                        width: '100%',
+                        marginBottom: 4,
+                      }}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <h3 style={{ ...ventureNameStyle, margin: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</h3>
+                      <motion.button
+                        onClick={(e) => { e.stopPropagation(); setRenamingVentureId(v.id); setRenameVentureValue(v.name) }}
+                        style={{ padding: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', borderRadius: 4, display: 'flex', alignItems: 'center', flexShrink: 0, opacity: isHovered ? 1 : 0, transition: 'opacity 150ms' }}
+                        whileHover={{ scale: 1.1, color: 'var(--accent)' }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Rename venture"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
+                        </svg>
+                      </motion.button>
+                      <motion.button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteVenture(v.id) }}
+                        style={{ padding: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', borderRadius: 4, display: 'flex', alignItems: 'center', flexShrink: 0, opacity: isHovered ? 1 : 0, transition: 'opacity 150ms' }}
+                        whileHover={{ scale: 1.1, color: '#e05252' }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Delete venture"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </motion.button>
+                    </div>
+                  )}
                   <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0 }}>{formatDate(v.created_at)}</p>
                 </div>
 
@@ -265,15 +376,20 @@ export default function ProjectDetailPage() {
               animate={{ opacity: 1 }}
               style={emptyVentureStyle}
             >
-              <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>No ventures yet</p>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setShowNewVenture(true)}
-                style={addBtnStyle}
-              >
-                Create your first venture
-              </motion.button>
+              <div style={{
+                width: 40, height: 40, borderRadius: 12,
+                background: 'var(--accent-soft)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 12,
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+                </svg>
+              </div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>No ventures yet</p>
+              <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 0, textAlign: 'center', maxWidth: 280 }}>
+                Ventures are automatically created when you describe your idea. Head to the greeting page to get started.
+              </p>
             </motion.div>
           )}
         </motion.div>

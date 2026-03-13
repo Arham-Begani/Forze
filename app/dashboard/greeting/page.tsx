@@ -22,6 +22,8 @@ function GreetingContent() {
   const [isFocused, setIsFocused] = useState(false)
   const [charCount, setCharCount] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(true)
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhanced, setEnhanced] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -97,6 +99,30 @@ function GreetingContent() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       handleSubmit()
+    }
+  }
+
+  async function handleEnhance() {
+    if (!idea.trim() || enhancing || idea.trim().length < 5) return
+    setEnhancing(true)
+    try {
+      const res = await fetch('/api/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea: idea.trim() }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.enhanced) {
+          setIdea(data.enhanced)
+          setEnhanced(true)
+          setTimeout(() => setEnhanced(false), 3000)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to enhance:', err)
+    } finally {
+      setEnhancing(false)
     }
   }
 
@@ -212,7 +238,7 @@ function GreetingContent() {
 
             {/* Action bar */}
             <div style={actionsBar}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{
                   fontSize: 11,
                   color: charCount > 1800 ? '#e05252' : 'var(--muted)',
@@ -222,25 +248,66 @@ function GreetingContent() {
                 }}>
                   {charCount}/2000
                 </span>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 10px',
-                  borderRadius: 20,
-                  background: 'var(--nav-active)',
-                  color: 'var(--text-soft)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                }}>
-                  <div style={{
-                    width: 6, height: 6,
-                    borderRadius: '50%',
-                    background: 'var(--accent)',
-                    boxShadow: '0 0 6px var(--accent-glow)',
-                  }} />
-                  Forge v2
-                </div>
+
+                {/* AI Enhance button */}
+                <AnimatePresence>
+                  {idea.trim().length >= 5 && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      onClick={handleEnhance}
+                      disabled={enhancing}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '5px 14px',
+                        borderRadius: 20,
+                        background: enhanced ? 'rgba(90, 140, 110, 0.12)' : 'var(--accent-soft)',
+                        border: `1px solid ${enhanced ? 'rgba(90, 140, 110, 0.3)' : 'var(--accent-glow)'}`,
+                        color: enhanced ? '#5A8C6E' : 'var(--accent)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: enhancing ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                        transition: 'all 200ms',
+                      }}
+                      whileHover={!enhancing ? { scale: 1.04, boxShadow: '0 2px 12px var(--accent-glow)' } : {}}
+                      whileTap={!enhancing ? { scale: 0.96 } : {}}
+                    >
+                      {enhancing ? (
+                        <>
+                          <motion.div
+                            style={{
+                              width: 12, height: 12,
+                              border: '2px solid var(--accent-glow)',
+                              borderTopColor: 'var(--accent)',
+                              borderRadius: '50%',
+                            }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                          />
+                          <span>Enhancing...</span>
+                        </>
+                      ) : enhanced ? (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>Enhanced</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                          </svg>
+                          <span>Enhance with AI</span>
+                        </>
+                      )}
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </div>
 
               <AnimatePresence>
