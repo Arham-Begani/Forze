@@ -53,7 +53,7 @@ export interface VentureContext {
 export interface Conversation {
   id: string
   venture_id: string
-  module_id: 'research' | 'branding' | 'marketing' | 'landing' | 'feasibility' | 'full-launch' | 'general' | 'shadow-board'
+  module_id: 'research' | 'branding' | 'marketing' | 'landing' | 'feasibility' | 'full-launch' | 'general' | 'shadow-board' | 'investor-kit'
   prompt: string
   status: 'running' | 'complete' | 'failed'
   stream_output: string[]
@@ -357,4 +357,96 @@ export async function getVenturePublic(id: string): Promise<Venture | null> {
 
   if (error) return null
   return data
+}
+
+// ─── Timeline ─────────────────────────────────────────────────────────────────
+
+export async function getConversationsByVenture(ventureId: string): Promise<Conversation[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('conversations')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getConversationsByVenture failed: ${error.message}`)
+  return data ?? []
+}
+
+// ─── Investor Kits ────────────────────────────────────────────────────────────
+
+export interface InvestorKit {
+  id: string
+  venture_id: string
+  user_id: string
+  access_code: string
+  kit_data: Record<string, unknown>
+  is_active: boolean
+  views: number
+  created_at: string
+}
+
+export async function createInvestorKit(
+  ventureId: string,
+  userId: string,
+  accessCode: string,
+  kitData: Record<string, unknown>
+): Promise<InvestorKit> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('investor_kits')
+      .insert({ venture_id: ventureId, user_id: userId, access_code: accessCode, kit_data: kitData })
+      .select()
+      .single()
+
+    if (error) throw new Error(`createInvestorKit failed: ${error.message}`)
+    return data
+  })
+}
+
+export async function getInvestorKitByVenture(ventureId: string): Promise<InvestorKit | null> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('investor_kits')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error) return null
+  return data
+}
+
+export async function getInvestorKitByCode(code: string): Promise<(InvestorKit & { venture: Venture }) | null> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('investor_kits')
+    .select('*, venture:ventures(*)')
+    .eq('access_code', code)
+    .eq('is_active', true)
+    .single()
+
+  if (error) return null
+  return data as any
+}
+
+export async function incrementKitViews(kitId: string): Promise<void> {
+  const db = await createDb()
+  const { data, error: fetchError } = await db
+    .from('investor_kits')
+    .select('views')
+    .eq('id', kitId)
+    .single()
+
+  if (fetchError) return
+
+  const { error } = await db
+    .from('investor_kits')
+    .update({ views: (data.views ?? 0) + 1 })
+    .eq('id', kitId)
+
+  if (error) console.error('incrementKitViews failed:', error.message)
 }
