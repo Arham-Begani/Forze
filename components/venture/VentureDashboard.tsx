@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ResultCard, ModuleId } from "../ui/ResultCard";
 import { FileText, Download, Rocket, Info, Palette, Globe, ShieldCheck, Share2 } from "lucide-react";
+import { downloadPDFFromResult } from "@/lib/client-pdf";
 
 interface VentureDashboardProps {
   venture: {
@@ -30,22 +31,20 @@ const TABS: { id: ModuleId; label: string; icon: React.ReactNode; color: string 
 export function VentureDashboard({ venture }: VentureDashboardProps) {
   const [activeTab, setActiveTab] = useState<ModuleId>("research");
   const [isExporting, setIsExporting] = useState(false);
+  const [mounted, setMounted] = React.useState(false);
 
-  const handleExportPDF = async () => {
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const handleExportPDF = () => {
     setIsExporting(true);
     try {
-      const response = await fetch(`/api/ventures/${venture.id}/export`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${venture.name.replace(/\s+/g, "_")}_Dossier.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
+      downloadPDFFromResult(
+        `${venture.name} — Venture Dossier`,
+        venture.context,
+        `${venture.name.replace(/\s+/g, "_")}_Dossier`
+      );
     } catch (error) {
       console.error("Export failed:", error);
     } finally {
@@ -115,32 +114,34 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-8 bg-[var(--bg)] scroll-smooth no-scrollbar">
         <div className="max-w-5xl mx-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-            >
-              {venture.context[activeTab as keyof typeof venture.context] ? (
-                <ResultCard
-                  moduleId={activeTab}
-                  result={venture.context[activeTab as keyof typeof venture.context]}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-[var(--border)] rounded-3xl opacity-60">
-                  <div className="w-16 h-16 mb-4 rounded-full bg-[var(--glass-bg)] flex items-center justify-center text-[var(--muted)]">
-                     <FileText size={32} />
+          {mounted && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+              >
+                {venture.context[activeTab as keyof typeof venture.context] ? (
+                  <ResultCard
+                    moduleId={activeTab}
+                    result={venture.context[activeTab as keyof typeof venture.context]}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-[var(--border)] rounded-3xl opacity-60">
+                    <div className="w-16 h-16 mb-4 rounded-full bg-[var(--glass-bg)] flex items-center justify-center text-[var(--muted)]">
+                       <FileText size={32} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-[var(--text)]">Section Pending</h3>
+                    <p className="max-w-xs mt-2 text-sm text-[var(--muted)]">
+                      This module hasn&apos;t been run for this venture yet. Run the full launch or individual agent to populate this data.
+                    </p>
                   </div>
-                  <h3 className="text-xl font-semibold text-[var(--text)]">Section Pending</h3>
-                  <p className="max-w-xs mt-2 text-sm text-[var(--muted)]">
-                    This module hasn&apos;t been run for this venture yet. Run the full launch or individual agent to populate this data.
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       </div>
     </div>

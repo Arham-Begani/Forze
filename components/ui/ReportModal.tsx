@@ -4,6 +4,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { X } from "lucide-react";
+import { downloadPDF } from "@/lib/client-pdf";
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -127,7 +128,32 @@ export function ReportModal({ isOpen, onClose, title, content, accentColor }: Re
               background: "var(--nav-bg)",
             }}>
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const lines = content.split('\n')
+                  const sections: { title: string; content: string }[] = []
+                  let currentTitle = title
+                  let currentContent: string[] = []
+
+                  for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (trimmed.startsWith('# ') && !trimmed.startsWith('## ')) {
+                      if (currentContent.length) {
+                        sections.push({ title: currentTitle, content: currentContent.join('\n') })
+                        currentContent = []
+                      }
+                      currentTitle = trimmed.replace(/^#\s+/, '')
+                    } else {
+                      currentContent.push(line)
+                    }
+                  }
+                  if (currentContent.length) {
+                    sections.push({ title: currentTitle, content: currentContent.join('\n') })
+                  }
+                  if (sections.length === 0) {
+                    sections.push({ title, content })
+                  }
+                  downloadPDF(title, sections)
+                }}
                 style={{
                   padding: "8px 20px",
                   background: "transparent",

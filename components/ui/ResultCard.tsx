@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ReportModal } from "./ReportModal";
 import { MoveUpRight, FileText } from "lucide-react";
+import { downloadPDFFromResult } from "@/lib/client-pdf";
 
 export type ModuleId =
   | "research"
@@ -44,19 +45,73 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "shadow-board": "Shadow Board Review",
 };
 
-export function ResultCard({ moduleId, result, deploymentUrl, onModalChange }: ResultCardProps) {
+// ─── Action Button ──────────────────────────────────────────────────────────
+
+function ActionButton({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick?: () => void }) {
+  return (
+    <motion.button
+      onClick={onClick}
+      whileHover={{ scale: 1.04, backgroundColor: "var(--nav-active)" }}
+      whileTap={{ scale: 0.96 }}
+      style={{
+        padding: "7px 14px",
+        background: "transparent",
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        color: "var(--text-soft)",
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        transition: "background 200ms",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      {icon}
+      {label}
+    </motion.button>
+  );
+}
+
+export const ResultCard = React.memo(function ResultCard({ moduleId, result, deploymentUrl, onModalChange }: ResultCardProps) {
   const accent = MODULE_ACCENTS[moduleId] || "#666";
   const label = MODULE_LABELS[moduleId] || "Analysis";
   const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const [expanded, setExpanded] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", content: "" });
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const openReport = (title: string, content: string) => {
     setModalContent({ title, content });
     setModalOpen(true);
     onModalChange?.(true);
   };
+
+  if (!mounted) {
+    return (
+      <div style={{
+        background: "var(--glass-bg-strong)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid var(--glass-border)",
+        borderRadius: 16,
+        padding: "16px 20px",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -179,12 +234,7 @@ export function ResultCard({ moduleId, result, deploymentUrl, onModalChange }: R
                   label="Export PDF"
                   icon={<FileText size={12} />}
                   onClick={() => {
-                    const content = JSON.stringify(result, null, 2)
-                    const win = window.open('', '_blank')
-                    if (!win) return
-                    win.document.write(`<html><head><title>${label} Report</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:0 auto}h1{font-size:24px;border-bottom:2px solid #e5e5e5;padding-bottom:8px}pre{white-space:pre-wrap;font-size:13px;line-height:1.6;background:#f5f5f5;padding:20px;border-radius:8px}</style></head><body><h1>${label} Report</h1><pre>${content}</pre></body></html>`)
-                    win.document.close()
-                    setTimeout(() => { win.print(); win.close() }, 300)
+                    downloadPDFFromResult(`${label} Report`, result, `${label}_Report`)
                   }}
                 />
                 <ActionButton
@@ -254,37 +304,7 @@ export function ResultCard({ moduleId, result, deploymentUrl, onModalChange }: R
       />
     </>
   );
-}
-
-// ─── Action Button ──────────────────────────────────────────────────────────
-
-function ActionButton({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick?: () => void }) {
-  return (
-    <motion.button
-      onClick={onClick}
-      whileHover={{ scale: 1.04, backgroundColor: "var(--nav-active)" }}
-      whileTap={{ scale: 0.96 }}
-      style={{
-        padding: "7px 14px",
-        background: "transparent",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        color: "var(--text-soft)",
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        fontFamily: "inherit",
-        transition: "background 200ms",
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-      }}
-    >
-      {icon}
-      {label}
-    </motion.button>
-  );
-}
+})
 
 // ─── Module Specific Displays ───────────────────────────────────────────────
 
@@ -296,66 +316,170 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
+  Legend,
+  LabelList,
+  Cell,
 } from "recharts";
 
+// ─── Shared Chart Components ─────────────────────────────────────────────────
+
+function ChartTooltip({ active, payload, label, formatter }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{
+      background: "var(--glass-bg-strong)",
+      backdropFilter: "blur(16px)",
+      WebkitBackdropFilter: "blur(16px)",
+      border: "1px solid var(--border-strong)",
+      borderRadius: 10,
+      padding: "10px 14px",
+      boxShadow: "var(--shadow-md)",
+      minWidth: 120,
+    }}>
+      {label && (
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+          {label}
+        </div>
+      )}
+      {payload.map((entry: any, i: number) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: i < payload.length - 1 ? 4 : 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: entry.color || entry.fill, flexShrink: 0 }} />
+          <span style={{ fontSize: 11, color: "var(--text-soft)", fontWeight: 500 }}>{entry.name}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginLeft: "auto", paddingLeft: 8 }}>
+            {formatter ? formatter(entry.value) : entry.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatMillions(val: any): string {
+  const n = Number(val);
+  if (!n || isNaN(n)) return "$0";
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n}`;
+}
+
 function ResearchDisplay({ result, onOpenReport }: { result: Record<string, any>; onOpenReport: (content: string) => void }) {
-  const [showChart, setShowChart] = useState(false);
+  const ACCENT = "#5A8C6E";
   const tamVal = result.research?.tam?.value ?? result.tam?.value ?? result.tam;
+  const samVal = result.research?.sam?.value ?? result.sam?.value ?? result.sam;
+  const somVal = result.research?.som?.value ?? result.som?.value ?? result.som;
   const stringTam = typeof tamVal === 'object' ? JSON.stringify(tamVal) : String(tamVal || "");
-  
-  // Mock data for TAM/SAM/SOM chart based on result
+
+  function resultsToNumber(val: any): number {
+    if (!val) return 0;
+    const s = String(val).replace(/[^0-9.]/g, '');
+    return parseFloat(s) || 0;
+  }
+
+  const tamN = resultsToNumber(tamVal) || 1200;
+  const samN = resultsToNumber(samVal) || tamN * 0.35;
+  const somN = resultsToNumber(somVal) || tamN * 0.08;
+
   const marketData = [
-    { name: "TAM", value: 100, label: resultsToNumber(tamVal) || 1000 },
-    { name: "SAM", value: 60, label: resultsToNumber(result.sam?.value) || 600 },
-    { name: "SOM", value: 20, label: resultsToNumber(result.som?.value) || 200 },
+    { segment: "TAM", value: tamN, pct: 100 },
+    { segment: "SAM", value: samN, pct: Math.round((samN / tamN) * 100) },
+    { segment: "SOM", value: somN, pct: Math.round((somN / tamN) * 100) },
   ];
 
-  function resultsToNumber(val: any) {
-    if (!val) return null;
-    const s = String(val).replace(/[^0-9.]/g, '');
-    return parseFloat(s);
-  }
+  const gradientId = "researchGrad";
 
   return (
     <>
       <Row label="Market Summary" value={result.marketSummary} />
       <Row label="TAM" value={stringTam} />
       <Row label="Recommended Concept" value={result.recommendedConcept} />
-      
-      <div className="mt-4 flex flex-col gap-3">
-        <button
-          onClick={() => setShowChart(!showChart)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--glass-bg)] border border-[var(--border)] rounded-lg text-xs font-bold text-[var(--text-soft)] hover:bg-[var(--glass-bg-strong)] transition-all"
-        >
-          {showChart ? "Hide Visualization" : "📊 Visualize Market Growth"}
-        </button>
 
-        <AnimatePresence>
-          {showChart && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 200 }}
-              exit={{ opacity: 0, height: 0 }}
-              className="w-full bg-[var(--sidebar)] rounded-xl p-4 border border-[var(--border)]"
+      {/* ── Premium Market Sizing Chart ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        style={{
+          marginTop: 12,
+          background: "var(--glass-bg)",
+          borderRadius: 14,
+          border: "1px solid var(--border)",
+          padding: "16px 16px 12px",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        {/* Chart header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 8px ${ACCENT}60` }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Market Sizing
+          </span>
+          <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--muted)", fontWeight: 500 }}>TAM · SAM · SOM</span>
+        </div>
+
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={marketData} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ACCENT} stopOpacity={0.95} />
+                <stop offset="100%" stopColor={ACCENT} stopOpacity={0.35} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} strokeOpacity={0.6} />
+            <XAxis
+              dataKey="segment"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 11, fontWeight: 700, fill: "var(--muted)", letterSpacing: "0.04em" }}
+            />
+            <YAxis hide />
+            <Tooltip
+              content={<ChartTooltip formatter={(v: any) => formatMillions(v)} />}
+              cursor={{ fill: `${ACCENT}08`, radius: 8 }}
+            />
+            <Bar
+              dataKey="value"
+              name="Market Size"
+              fill={`url(#${gradientId})`}
+              radius={[8, 8, 3, 3]}
+              maxBarSize={72}
+              animationDuration={900}
+              animationEasing="ease-out"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={marketData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="name" stroke="var(--muted)" fontSize={10} />
-                  <YAxis hide />
-                  <Tooltip 
-                    contentStyle={{ background: 'var(--sidebar)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '11px' }}
-                    itemStyle={{ color: '#5A8C6E' }}
-                  />
-                  <Bar dataKey="label" fill="#5A8C6E" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              <LabelList
+                dataKey="value"
+                position="top"
+                formatter={(v: any) => formatMillions(v)}
+                style={{ fontSize: 10, fontWeight: 700, fill: ACCENT, letterSpacing: "0.01em" }}
+              />
+              {marketData.map((_, index) => (
+                <Cell
+                  key={index}
+                  fill={`url(#${gradientId})`}
+                  opacity={index === 0 ? 1 : index === 1 ? 0.75 : 0.5}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* Percentage row */}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          {marketData.map((d) => (
+            <div key={d.segment} style={{
+              flex: 1,
+              padding: "6px 0",
+              textAlign: "center",
+              background: `${ACCENT}0A`,
+              borderRadius: 8,
+              border: `1px solid ${ACCENT}20`,
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{d.segment}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: ACCENT, lineHeight: 1.2, marginTop: 2 }}>{d.pct}%</div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
 
       {result.researchPaper && (
         <button
@@ -465,6 +589,9 @@ function LandingDisplay({ result, externalUrl }: { result: Record<string, any>; 
 
 function FeasibilityDisplay({ result, onOpenReport }: { result: Record<string, any>; onOpenReport: (content: string) => void }) {
   const [showChart, setShowChart] = useState(false);
+  const ACCENT = "#7A5A8C";
+  const ACCENT_MUTED = "#5A8C6E";
+
   const verdict = result.feasibility?.verdict || result.verdict;
   const verdictRationale = result.verdictRationale || result.feasibility?.verdictRationale;
   const financialModel = result.financialModel || result.feasibility?.financialModel;
@@ -473,20 +600,21 @@ function FeasibilityDisplay({ result, onOpenReport }: { result: Record<string, a
   const risks = result.risks || result.feasibility?.risks || [];
   const competitiveMoat = result.competitiveMoat || result.feasibility?.competitiveMoat;
 
-  const chartData = [
-    { name: "Y1", revenue: resultsToNumber(financialModel?.yearOne?.revenue) || 0, costs: resultsToNumber(financialModel?.yearOne?.costs) || 0 },
-    { name: "Y2", revenue: resultsToNumber(financialModel?.yearTwo?.revenue) || 0, costs: resultsToNumber(financialModel?.yearTwo?.costs) || 0 },
-    { name: "Y3", revenue: resultsToNumber(financialModel?.yearThree?.revenue) || 0, costs: resultsToNumber(financialModel?.yearThree?.costs) || 0 },
-  ];
-
-  function resultsToNumber(val: any) {
-    if (!val) return null;
+  function resultsToNumber(val: any): number {
+    if (!val) return 0;
     const s = String(val).replace(/[^0-9.]/g, '');
-    return parseFloat(s) || null;
+    return parseFloat(s) || 0;
   }
+
+  const chartData = [
+    { year: "Yr 1", Revenue: resultsToNumber(financialModel?.yearOne?.revenue) || 0, Costs: resultsToNumber(financialModel?.yearOne?.costs) || 0 },
+    { year: "Yr 2", Revenue: resultsToNumber(financialModel?.yearTwo?.revenue) || 0, Costs: resultsToNumber(financialModel?.yearTwo?.costs) || 0 },
+    { year: "Yr 3", Revenue: resultsToNumber(financialModel?.yearThree?.revenue) || 0, Costs: resultsToNumber(financialModel?.yearThree?.costs) || 0 },
+  ];
 
   const timingColor = (marketTimingScore ?? 0) >= 7 ? "#16a34a" : (marketTimingScore ?? 0) >= 4 ? "#d97706" : "#dc2626";
   const highRisks = risks.filter((r: any) => r.impact === 'high' || r.likelihood === 'high').length;
+  const hasChartData = chartData.some(d => d.Revenue > 0 || d.Costs > 0);
 
   return (
     <>
@@ -511,16 +639,16 @@ function FeasibilityDisplay({ result, onOpenReport }: { result: Record<string, a
         )}
       </div>
 
-      {/* Verdict Rationale (truncated) */}
+      {/* Verdict Rationale */}
       {verdictRationale && (
-        <p style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, margin: "4px 0 0", maxHeight: 48, overflow: "hidden", textOverflow: "ellipsis" }}>
+        <p style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6, margin: "4px 0 0", maxHeight: 48, overflow: "hidden" }}>
           {String(verdictRationale).slice(0, 180)}{String(verdictRationale).length > 180 ? "..." : ""}
         </p>
       )}
 
       {/* Unit Economics Cards */}
       {financialModel && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8, marginTop: 4 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8, marginTop: 4 }}>
           {[
             { label: "CAC", value: financialModel.cac },
             { label: "LTV", value: financialModel.ltv },
@@ -529,13 +657,13 @@ function FeasibilityDisplay({ result, onOpenReport }: { result: Record<string, a
           ].filter(m => m.value).map((metric) => (
             <div key={metric.label} style={{
               padding: "8px 10px",
-              background: "var(--glass-bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
+              background: `${ACCENT}08`,
+              border: `1px solid ${ACCENT}20`,
+              borderRadius: 10,
               textAlign: "center",
             }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{metric.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#7A5A8C", marginTop: 2 }}>{String(metric.value)}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{metric.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: ACCENT, marginTop: 2 }}>{String(metric.value)}</div>
             </div>
           ))}
         </div>
@@ -561,61 +689,122 @@ function FeasibilityDisplay({ result, onOpenReport }: { result: Record<string, a
         </div>
       )}
 
-      {/* Revenue vs Costs Chart */}
-      <div className="mt-4 flex flex-col gap-3">
-        <button
-          onClick={() => setShowChart(!showChart)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--glass-bg)] border border-[var(--border)] rounded-lg text-xs font-bold text-[var(--text-soft)] hover:bg-[var(--glass-bg-strong)] transition-all"
-        >
-          {showChart ? "Hide Projections" : "3-Year Financial Projections"}
-        </button>
+      {/* ── Premium Financial Projections Chart ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        style={{
+          marginTop: 12,
+          background: "var(--glass-bg)",
+          borderRadius: 14,
+          border: "1px solid var(--border)",
+          padding: "16px 16px 12px",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        {/* Chart header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 8px ${ACCENT}60` }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            3-Year Financial Projections
+          </span>
+          <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--muted)", fontWeight: 500 }}>Revenue · Costs</span>
+        </div>
 
-        <AnimatePresence>
-          {showChart && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="w-full bg-[var(--sidebar)] rounded-xl p-4 border border-[var(--border)]"
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 24, right: 8, left: 0, bottom: 0 }}
+            barCategoryGap="30%"
+            barGap={4}
+          >
+            <defs>
+              <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ACCENT} stopOpacity={0.95} />
+                <stop offset="100%" stopColor={ACCENT} stopOpacity={0.4} />
+              </linearGradient>
+              <linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ACCENT_MUTED} stopOpacity={0.65} />
+                <stop offset="100%" stopColor={ACCENT_MUTED} stopOpacity={0.2} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} strokeOpacity={0.6} />
+            <XAxis
+              dataKey="year"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 11, fontWeight: 700, fill: "var(--muted)", letterSpacing: "0.04em" }}
+            />
+            <YAxis hide />
+            <Tooltip
+              content={<ChartTooltip formatter={(v: any) => formatMillions(v)} />}
+              cursor={{ fill: `${ACCENT}06`, radius: 8 }}
+            />
+            <Legend
+              iconType="circle"
+              iconSize={7}
+              wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", paddingTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}
+            />
+            <Bar
+              dataKey="Revenue"
+              fill="url(#revGrad)"
+              radius={[7, 7, 3, 3]}
+              maxBarSize={48}
+              animationDuration={900}
+              animationEasing="ease-out"
             >
-              <div style={{ height: 180 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barGap={2}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="name" stroke="var(--muted)" fontSize={10} />
-                    <YAxis hide />
-                    <Tooltip
-                      contentStyle={{ background: 'var(--sidebar)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '11px' }}
-                      formatter={(value: any) => `$${Number(value).toLocaleString()}`}
-                    />
-                    <Bar dataKey="revenue" fill="#7A5A8C" radius={[4, 4, 0, 0]} name="Revenue" />
-                    <Bar dataKey="costs" fill="#7A5A8C40" radius={[4, 4, 0, 0]} name="Costs" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              {/* Year detail rows */}
-              {financialModel && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
-                  {[
-                    { label: "Year 1", data: financialModel.yearOne },
-                    { label: "Year 2", data: financialModel.yearTwo },
-                    { label: "Year 3", data: financialModel.yearThree },
-                  ].map((yr) => yr.data && (
-                    <div key={yr.label} style={{ padding: "6px 8px", background: "var(--glass-bg)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#7A5A8C", marginBottom: 4 }}>{yr.label}</div>
-                      <div style={{ fontSize: 10, color: "var(--text-soft)", lineHeight: 1.6 }}>
-                        <div>Rev: {yr.data.revenue}</div>
-                        <div>Net: {yr.data.netIncome}</div>
-                        <div>Users: {yr.data.customers}</div>
-                      </div>
-                    </div>
-                  ))}
+              <LabelList
+                dataKey="Revenue"
+                position="top"
+                formatter={(v: any) => v > 0 ? formatMillions(v) : ""}
+                style={{ fontSize: 9, fontWeight: 700, fill: ACCENT }}
+              />
+            </Bar>
+            <Bar
+              dataKey="Costs"
+              fill="url(#costGrad)"
+              radius={[7, 7, 3, 3]}
+              maxBarSize={48}
+              animationDuration={900}
+              animationEasing="ease-out"
+              animationBegin={150}
+            >
+              <LabelList
+                dataKey="Costs"
+                position="top"
+                formatter={(v: any) => v > 0 ? formatMillions(v) : ""}
+                style={{ fontSize: 9, fontWeight: 700, fill: ACCENT_MUTED }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* Year detail cards */}
+        {financialModel && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 10 }}>
+            {[
+              { label: "Year 1", data: financialModel.yearOne },
+              { label: "Year 2", data: financialModel.yearTwo },
+              { label: "Year 3", data: financialModel.yearThree },
+            ].map((yr) => yr.data && (
+              <div key={yr.label} style={{
+                padding: "8px 10px",
+                background: `${ACCENT}06`,
+                borderRadius: 8,
+                border: `1px solid ${ACCENT}15`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: ACCENT, marginBottom: 5, letterSpacing: "0.03em" }}>{yr.label}</div>
+                <div style={{ fontSize: 10, color: "var(--text-soft)", lineHeight: 1.7 }}>
+                  {yr.data.revenue && <div><span style={{ color: "var(--muted)" }}>Rev </span>{yr.data.revenue}</div>}
+                  {yr.data.netIncome && <div><span style={{ color: "var(--muted)" }}>Net </span>{yr.data.netIncome}</div>}
+                  {yr.data.customers && <div><span style={{ color: "var(--muted)" }}>Users </span>{yr.data.customers}</div>}
                 </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
 
       {feasibilityReport && (
         <button

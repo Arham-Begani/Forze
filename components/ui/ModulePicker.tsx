@@ -40,8 +40,10 @@ export interface ModulePickerProps {
 export function ModulePicker({ selectedModule, onChange }: ModulePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -52,6 +54,32 @@ export function ModulePicker({ selectedModule, onChange }: ModulePickerProps) {
   }, []);
 
   const currentModule = MODULES[selectedModule] || MODULES["full-launch"];
+
+  if (!mounted) {
+    return (
+      <div className="relative inline-block">
+        <div 
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 12px 6px 8px",
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 600,
+            background: `${currentModule.accent}20`,
+            border: `1px solid ${currentModule.accent}40`,
+            color: currentModule.accent,
+          }}
+        >
+          <div style={{ width: 22, height: 22, borderRadius: 6, background: `${currentModule.accent}28`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>
+            {currentModule.icon}
+          </div>
+          <span>{currentModule.label}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="relative inline-block">
