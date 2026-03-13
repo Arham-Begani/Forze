@@ -19,7 +19,7 @@ export async function GET(
 
         const pdfBuffer = await generateUnifiedPDF(venture.name, venture.context)
 
-        return new NextResponse(pdfBuffer, {
+        return new NextResponse(pdfBuffer as unknown as BodyInit, {
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',

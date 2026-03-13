@@ -17,10 +17,13 @@ import { runContentAgent } from '@/agents/content'
 import { runPipelineAgent } from '@/agents/pipeline'
 import { runFeasibilityAgent } from '@/agents/feasibility'
 import { runFullLaunch } from '@/agents/orchestrator'
+import { runGeneralAgent } from '@/agents/general'
+import { runShadowBoard } from '@/agents/shadow'
 
 const bodySchema = z.object({
-    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch']),
+    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch', 'general', 'shadow-board']),
     prompt: z.string().min(1).max(2000),
+    depth: z.enum(['brief', 'medium', 'detailed']).optional(),
 })
 
 async function runAgent(
@@ -28,7 +31,8 @@ async function runAgent(
     conversationId: string,
     moduleId: string,
     prompt: string,
-    userId: string
+    userId: string,
+    depth: 'brief' | 'medium' | 'detailed' = 'medium'
 ) {
     const venture = await getVenture(ventureId, userId)
     if (!venture) throw new Error('Venture not found')
@@ -64,7 +68,7 @@ async function runAgent(
                 await runGenesisAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'research', result)
                     await setConversationResult(conversationId, result)
-                })
+                }, depth)
                 break
 
             case 'branding':
@@ -92,7 +96,7 @@ async function runAgent(
                 await runFeasibilityAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'feasibility', result)
                     await setConversationResult(conversationId, result)
-                })
+                }, depth)
                 break
 
             case 'full-launch':
@@ -102,6 +106,22 @@ async function runAgent(
                     if (result.marketing) await updateVentureContext(ventureId, 'marketing', result.marketing)
                     if (result.landing) await updateVentureContext(ventureId, 'landing', result.landing)
                     if (result.feasibility) await updateVentureContext(ventureId, 'feasibility', result.feasibility)
+                    await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
+                }, depth)
+                break
+
+            case 'general':
+                await runGeneralAgent(ventureInput, onStream, async (result) => {
+                    // General chat does NOT write to venture context — it's conversational only
+                    await setConversationResult(conversationId, result)
+                })
+                break
+
+            case 'shadow-board':
+                await runShadowBoard(ventureInput, onStream, async (result) => {
+                    // Shadow board results are stored in the conversation result but not venture context
+                    // unless we want to add a shadowBoard field to VentureContext later.
+                    // For now, let's keep it in the conversation.
                     await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
                 })
                 break
@@ -138,7 +158,7 @@ export async function POST(
             return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
         }
 
-        const { moduleId, prompt } = result.data
+        const { moduleId, prompt, depth } = result.data
 
         const venture = await getVenture(id, session.userId)
         if (!venture) {
@@ -148,7 +168,7 @@ export async function POST(
         const conversation = await createConversation(id, moduleId, prompt)
 
         // Fire and forget — agent runs async
-        runAgent(id, conversation.id, moduleId, prompt, session.userId).catch(
+        runAgent(id, conversation.id, moduleId, prompt, session.userId, depth).catch(
             err => console.error('Agent error:', err)
         )
 

@@ -9,7 +9,7 @@ import {
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
-const MODULES = ['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch'] as const
+const MODULES = ['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch', 'general'] as const
 
 export async function GET(
     _request: NextRequest,
