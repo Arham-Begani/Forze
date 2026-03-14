@@ -10,30 +10,30 @@ import {
 // ── ShadowBoard Zod Schema ───────────────────────────────────────────────────
 
 const ShadowBoardSchema = z.object({
-    survivalScore: z.number().min(1).max(100),
-    verdictLabel: z.string(), // e.g. "High Risk", "Hidden Gem", "Market Ready"
+    survivalScore: z.number().min(1).max(100).default(50),
+    verdictLabel: z.string().default('Market Ready'), // e.g. "High Risk", "Hidden Gem", "Market Ready"
     boardDialogue: z.array(
         z.object({
-            role: z.string(), // "The Skeptic", "The Evangelist", "The Alchemist"
-            thought: z.string(),
-            brutalHonesty: z.string(),
+            role: z.string().default('The Skeptic'), // "The Skeptic", "The Evangelist", "The Alchemist"
+            thought: z.string().default('Thought pending.'),
+            brutalHonesty: z.string().default('Honesty pending.'),
         })
-    ),
+    ).default([]),
     strategicPivots: z.array(
         z.object({
-            currentPath: z.string(),
-            betterPath: z.string(),
-            rationale: z.string(),
+            currentPath: z.string().default('Current path'),
+            betterPath: z.string().default('Better path'),
+            rationale: z.string().default('Rationale pending'),
         })
-    ),
+    ).default([]),
     syntheticFeedback: z.array(
         z.object({
-            persona: z.string(),
-            quote: z.string(),
-            sentiment: z.enum(['positive', 'neutral', 'negative']),
-            criticalFlaw: z.string(),
+            persona: z.string().default('Target User'),
+            quote: z.string().default('Feedback pending.'),
+            sentiment: z.enum(['positive', 'neutral', 'negative']).default('neutral'),
+            criticalFlaw: z.string().default('Critical flaw pending.'),
         })
-    ),
+    ).default([]),
 })
 
 export type ShadowBoardOutput = z.infer<typeof ShadowBoardSchema>
