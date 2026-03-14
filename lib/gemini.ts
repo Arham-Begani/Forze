@@ -11,7 +11,7 @@ export function getFlashModel(): GenerativeModel {
         generationConfig: {
             temperature: 0.7,
             topP: 0.95,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 16384,
         },
     })
 }
@@ -22,21 +22,21 @@ export function getFlashModelWithSearch(): GenerativeModel {
         model: 'gemini-3-flash-preview',
         tools: [{ googleSearch: {} } as any],
         generationConfig: {
-            temperature: 0.4,   // lower temp for factual research
+            temperature: 0.4,
             topP: 0.9,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 16384,
         },
     })
 }
 
 // Pro model with thinking — used by Feasibility and Full Launch Architect
-export function getProModelWithThinking(thinkingBudget: number = 8000, modelId: string = 'gemini-3-pro'): GenerativeModel {
+export function getProModelWithThinking(thinkingBudget: number = 10000, modelId: string = 'gemini-3-pro-preview'): GenerativeModel {
     return genAI.getGenerativeModel({
         model: modelId,
         generationConfig: {
             temperature: 0.6,
             topP: 0.95,
-            maxOutputTokens: 16384,
+            maxOutputTokens: 32768,
             // @ts-expect-error — thinkingConfig not yet in type definitions
             thinkingConfig: { thinkingBudget },
         },
@@ -44,9 +44,9 @@ export function getProModelWithThinking(thinkingBudget: number = 8000, modelId: 
 }
 
 // Pro model with thinking + Google Search — used by Feasibility for real-time data
-export function getProModelWithSearchAndThinking(thinkingBudget: number = 10000): GenerativeModel {
+export function getProModelWithSearchAndThinking(thinkingBudget: number = 12000): GenerativeModel {
     return genAI.getGenerativeModel({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-3-pro-preview',
         tools: [{ googleSearch: {} } as any],
         generationConfig: {
             temperature: 0.5,
@@ -147,9 +147,17 @@ export async function streamPrompt(
 // Extracts the first valid JSON object from a string.
 // Gemini often wraps JSON in markdown code fences — this strips them.
 export function extractJSON(text: string): unknown {
-    // Strip think/thought tags and their content first
-    const cleaned = text
+    // Strip think/thought tags and their content first.
+    // If tags are not closed (truncated), we try to strip until the end of the thought if possible.
+    let cleaned = text
         .replace(/<(think|thought|thinking)>[\s\S]*?<\/(think|thought|thinking)>/gi, '')
+
+    // Handle case where <think> is opened but not closed
+    if (cleaned.includes('<think') || cleaned.includes('<thought')) {
+        cleaned = cleaned.replace(/<(think|thought|thinking)>[\s\S]*/gi, '')
+    }
+
+    cleaned = cleaned
         // Strip markdown code fences
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/gi, '')
@@ -163,19 +171,60 @@ export function extractJSON(text: string): unknown {
         throw new Error('No JSON object found in model output')
     }
 
-    const jsonStr = cleaned.slice(start, end + 1)
+    let jsonStr = cleaned.slice(start, end + 1)
 
     try {
         return JSON.parse(jsonStr)
     } catch (e) {
-        // Try to fix common JSON issues (trailing commas, unescaped newlines in strings)
+        // Try to fix common JSON issues (trailing commas, unescaped character, truncated)
         try {
             const fixed = jsonStr
                 .replace(/,\s*([}\]])/g, '$1') // trailing commas
-                .replace(/[\x00-\x1F\x7F]/g, (c) => c === '\n' ? '\\n' : c === '\t' ? '\\t' : c === '\r' ? '\\r' : '') // control chars
+                // Fix unescaped backslashes that are not part of a valid escape sequence
+                // Valid escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+                .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
+                // Fix \u that is not followed by 4 hex digits
+                .replace(/\\u(?![0-9a-fA-F]{4})/g, '\\\\u')
+                // Fix unescaped control characters (newlines inside strings are the most common)
+                .replace(/[\x00-\x1F\x7F]/g, (c) => {
+                    if (c === '\n') return '\\n'
+                    if (c === '\t') return '\\t'
+                    if (c === '\r') return '\\r'
+                    return ''
+                })
+            
             return JSON.parse(fixed)
-        } catch {
-            throw new Error(`JSON parse failed: ${e}. Raw text: ${jsonStr.slice(0, 300)}`)
+        } catch (e2) {
+            // Check if it looks truncated (ends abruptly)
+            if (!jsonStr.endsWith('}') && !jsonStr.endsWith(']')) {
+                // Heuristic: try to close the last open quote and braces
+                try {
+                    let repaired = jsonStr.trim()
+                    if (repaired.endsWith(',')) repaired = repaired.slice(0, -1)
+                    
+                    // Simple stack-based closer
+                    let openBraces = 0
+                    let openBrackets = 0
+                    let inString = false
+                    for (let i = 0; i < repaired.length; i++) {
+                        if (repaired[i] === '"' && repaired[i-1] !== '\\') inString = !inString
+                        if (!inString) {
+                            if (repaired[i] === '{') openBraces++
+                            if (repaired[i] === '}') openBraces--
+                            if (repaired[i] === '[') openBrackets++
+                            if (repaired[i] === ']') openBrackets--
+                        }
+                    }
+                    if (inString) repaired += '"'
+                    while (openBrackets > 0) { repaired += ']'; openBrackets-- }
+                    while (openBraces > 0) { repaired += '}'; openBraces-- }
+                    
+                    return JSON.parse(repaired)
+                } catch {
+                    // fall back to original error
+                }
+            }
+            throw new Error(`JSON parse failed: ${e}. Position mismatch or bad escapes. Length: ${jsonStr.length}`)
         }
     }
 }
