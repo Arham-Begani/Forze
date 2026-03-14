@@ -180,5 +180,9 @@ This file is the Agent's memory between sessions.
 - **Granular Commit History:** Successfully executed a **30-commit marathon**, breaking down all Phase 11 features (Investor Kit, Timeline, Co-pilot) and UI refinements into individual, high-quality commits for a clean and professional repository history.
 - **Commit Attribution:** Ensured all commits are correctly attributed to `Arham-Begani <arhambegani2@gmail.com>`.
 - **Sync:** Pushed all changes to the remote repository.
+- **Gemini 3 API Fix:** Resolved `400 Bad Request` error related to `thinking_level` by switching to `thinkingBudget`.
+- **JSON Robustness:** Implemented a resilient `extractJSON` helper that fixes unescaped backslashes and truncated output. Increased `maxOutputTokens` to 32k for detailed reports.
+- **Orchestrator Upgrade:** Updated Architect agent to use `gemini-3-pro-preview`.
+- **Debug Route:** Refreshed `app/api/debug/gemini/route.ts` with working Gemini 3.0 test cases.
 **Broken:** None.
-**Next:** Phase 12 — Advanced Features (Batch PDF Export, External API integrations, Mobile App wrappers).
+**Next:** Finalize testing of Investor Kit and Co-pilot modules with the new model configuration.
