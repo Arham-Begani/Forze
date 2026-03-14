@@ -22,13 +22,14 @@
 
 | Module | Model | Features |
 |--------|-------|----------|
-| Full Launch (Architect) | gemini-3-pro | Agent Teams + extended thinking (10k tokens) |
+| Full Launch (Architect) | gemini-3-pro-preview | Agent Teams + HIGH level thinking |
+| Co-pilot (Genesis) | gemini-3-pro-preview | Deep context synthesis + HIGH level thinking |
 | Research | gemini-3-flash-preview | web_search tool enabled |
 | Branding | gemini-3-flash-preview | Structured JSON output + Zod validation |
 | Marketing | gemini-3-flash-preview | Brand context injection + structured output |
 | Landing Page | gemini-3-flash-preview | Code generation + Antigravity deploy hooks |
-| Feasibility | gemini-3-flash-preview | Extended thinking (8k tokens) |
-| Shadow Board | gemini-3-pro | Multi-persona simulation (10k tokens) |
+| Feasibility | gemini-3-pro-preview | HIGH level thinking (risk/financial analysis) |
+| Shadow Board | gemini-3-pro-preview | Multi-persona simulation + HIGH level thinking |
 | Formatting/cleanup | gemini-3-flash-preview | Mechanical tasks only |
 
 All models use prompt caching on system prompts.
