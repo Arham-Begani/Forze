@@ -4,6 +4,7 @@ import {
     streamPrompt,
     extractJSON,
     withTimeout,
+    Content,
 } from '@/lib/gemini'
 
 // NOTE: Do NOT import withRetry for this agent.
@@ -305,7 +306,8 @@ export async function runFeasibilityAgent(
     venture: { ventureId: string; name: string; globalIdea?: string; context: Record<string, unknown> },
     onStream: (line: string) => Promise<void>,
     onComplete: (result: FeasibilityOutput) => Promise<void>,
-    depth: 'brief' | 'medium' | 'detailed' = 'medium'
+    depth: 'brief' | 'medium' | 'detailed' = 'medium',
+    history: Content[] = []
 ): Promise<void> {
     const cfg = DEPTH_CONFIG[depth]
 
@@ -342,18 +344,24 @@ Search the web for real pricing, competitor data, industry benchmarks, and regul
 
 Output the full FeasibilityOutput JSON at the end.`
 
+    const isContinuation = history.length > 0
+    const finalUserMessage = isContinuation
+        ? "Continue from where you left off. Do not repeat anything already outputted. Complete the FeasibilityOutput JSON object strictly."
+        : userMessage
+
     const run = async () => {
         const model = getProModelWithSearchAndThinking(cfg.thinkingBudget)
-        let fullText = ''
+        let fullText = (history.find(h => h.role === 'model')?.parts[0] as any)?.text || ''
 
         await streamPrompt(
             model,
             buildSystemPrompt(depth),
-            userMessage,
+            finalUserMessage,
             async (chunk) => {
                 fullText += chunk
                 await onStream(chunk)
-            }
+            },
+            history
         )
 
         const raw = extractJSON(fullText)
