@@ -13,11 +13,19 @@ async function test(name: string) {
 }
 
 async function main() {
-    await test('gemini-3-flash-preview')
-    await test('gemini-3-pro')
-    await test('gemini-2.5-flash')
-    await test('gemini-2.5-pro')
-    await test('gemini-2.0-flash')
+    console.log('API Key present:', !!process.env.GEMINI_API_KEY)
+    if (process.env.GEMINI_API_KEY) {
+        console.log('API Key prefix:', process.env.GEMINI_API_KEY.slice(0, 8))
+    }
+
+    await test('models/gemini-1.5-flash')
+    await test('models/gemini-1.5-pro')
+    await test('models/gemini-2.0-flash')
+    await test('models/gemini-2.0-flash-exp')
+    await test('models/gemini-2.0-flash-thinking-exp')
+    await test('models/gemini-2.0-pro-exp')
+    await test('models/gemini-3-pro')
+    await test('models/gemini-3-flash-preview')
 }
 
 main()
