@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "vibe-security": {
+      "source": "raroque/vibe-security-skill",
+      "sourceType": "github",
+      "computedHash": "cc047d5ac9ba92065ce7464f4ea6ce48ec52fb907caacd564019915b2a847fa4"
+    }
+  }
+}
