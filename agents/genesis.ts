@@ -5,6 +5,7 @@ import {
     extractJSON,
     withTimeout,
     withRetry,
+    Content,
 } from '@/lib/gemini'
 
 // ── GenesisOutput Zod Schema ─────────────────────────────────────────────────
@@ -222,7 +223,8 @@ export async function runGenesisAgent(
     venture: { ventureId: string; name: string; globalIdea?: string; context: Record<string, unknown> },
     onStream: (line: string) => Promise<void>,
     onComplete: (result: GenesisOutput) => Promise<void>,
-    depth: 'brief' | 'medium' | 'detailed' = 'medium'
+    depth: 'brief' | 'medium' | 'detailed' = 'medium',
+    history: Content[] = []
 ): Promise<void> {
     const searchCountMap = {
         brief: 5,
@@ -230,7 +232,10 @@ export async function runGenesisAgent(
         detailed: 22
     }
 
-    const userMessage = `Research this venture concept thoroughly using Google Search.
+    const isContinuation = history.length > 0
+    const userMessage = isContinuation 
+        ? "Continue from where you left off. Do not repeat anything already outputted. Complete the GenesisOutput JSON object strictly."
+        : `Research this venture concept thoroughly using Google Search.
     Find real, current market data with citations.
     
     RESEARCH DEPTH REQUESTED: ${depth} (Intensity: ${searchCountMap[depth]} searches)
@@ -248,7 +253,7 @@ Then output your full GenesisOutput JSON.`
 
     const run = async () => {
         const model = getFlashModelWithSearch()
-        let fullText = ''
+        let fullText = (history.find(h => h.role === 'model')?.parts[0] as any)?.text || ''
 
         await streamPrompt(
             model,
@@ -258,7 +263,8 @@ Then output your full GenesisOutput JSON.`
                 fullText += chunk
                 // Stream word by word for smoother UX
                 await onStream(chunk)
-            }
+            },
+            history
         )
 
         const raw = extractJSON(fullText)
