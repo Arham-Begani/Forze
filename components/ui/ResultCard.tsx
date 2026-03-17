@@ -14,7 +14,9 @@ export type ModuleId =
   | "feasibility"
   | "full-launch"
   | "general"
-  | "shadow-board";
+  | "shadow-board"
+  | "launch-autopilot"
+  | "mvp-scalpel";
 
 interface ResultCardProps {
   moduleId: ModuleId;
@@ -32,6 +34,8 @@ const MODULE_ACCENTS: Record<ModuleId, string> = {
   feasibility: "#7A5A8C",
   general: "#6B8F71",
   "shadow-board": "#E04848",
+  "launch-autopilot": "#B8864E",
+  "mvp-scalpel": "#C45A5A",
 };
 
 const MODULE_LABELS: Record<ModuleId, string> = {
@@ -43,6 +47,8 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   feasibility: "Investment Assessment",
   general: "General Chat",
   "shadow-board": "Shadow Board Review",
+  "launch-autopilot": "Launch Autopilot",
+  "mvp-scalpel": "MVP Scalpel",
 };
 
 // ─── Action Button ──────────────────────────────────────────────────────────
@@ -219,6 +225,8 @@ export const ResultCard = React.memo(function ResultCard({ moduleId, result, dep
                   />
                 )}
                 {moduleId === "shadow-board" && <ShadowBoardDisplay result={result} />}
+                {moduleId === "launch-autopilot" && <LaunchAutopilotDisplay result={result} />}
+                {moduleId === "mvp-scalpel" && <MVPScalpelDisplay result={result} />}
               </div>
 
               {/* Action buttons */}
@@ -1048,6 +1056,774 @@ function VerdictBadge({ value }: { value: string }) {
     </span>
   );
 }
+
+// ─── Launch Autopilot Display ────────────────────────────────────────────────
+
+function LaunchAutopilotDisplay({ result }: { result: Record<string, any> }) {
+  const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const ACCENT = "#B8864E";
+
+  const days = Array.isArray(result.days) ? result.days : [];
+  const channels = Array.isArray(result.channels) ? result.channels : [];
+  const checklist = Array.isArray(result.launchDayChecklist) ? result.launchDayChecklist : [];
+
+  const handleCopy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const priorityColors: Record<string, { bg: string; color: string; label: string }> = {
+    critical: { bg: "#dc262618", color: "#dc2626", label: "CRITICAL" },
+    important: { bg: "#d9770618", color: "#d97706", label: "IMPORTANT" },
+    "nice-to-have": { bg: "#6b728018", color: "#6b7280", label: "NICE TO HAVE" },
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Summary */}
+      {result.summary && (
+        <div style={{
+          padding: "14px 16px",
+          background: `${ACCENT}08`,
+          border: `1px solid ${ACCENT}20`,
+          borderRadius: 12,
+          fontSize: 13,
+          color: "var(--text-soft)",
+          lineHeight: 1.6,
+        }}>
+          {result.launchName && (
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>
+              {result.launchName}
+            </div>
+          )}
+          {result.summary}
+        </div>
+      )}
+
+      {/* Channel Strip */}
+      {channels.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {channels.map((ch: any, i: number) => (
+            <div key={i} style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              background: "var(--glass-bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              fontSize: 11,
+            }}>
+              <span style={{ fontWeight: 700, color: "var(--text)" }}>{ch.name}</span>
+              <span style={{ color: "var(--muted)" }}>{ch.totalPosts} posts</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Weekly Goals */}
+      {(result.weekOneGoal || result.weekTwoGoal) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {result.weekOneGoal && (
+            <div style={{
+              padding: "10px 12px",
+              background: "#5A8C6E10",
+              border: "1px solid #5A8C6E20",
+              borderRadius: 10,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#5A8C6E", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Week 1 Goal</div>
+              <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.5 }}>{result.weekOneGoal}</div>
+            </div>
+          )}
+          {result.weekTwoGoal && (
+            <div style={{
+              padding: "10px 12px",
+              background: `${ACCENT}10`,
+              border: `1px solid ${ACCENT}20`,
+              borderRadius: 10,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Week 2 Goal</div>
+              <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.5 }}>{result.weekTwoGoal}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 14-Day Calendar */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <h4 style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: "var(--text)",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          marginBottom: 4,
+          opacity: 0.8,
+        }}>14-Day Execution Calendar</h4>
+
+        {days.map((day: any, i: number) => {
+          const isExpanded = expandedDay === day.day;
+          const tasks = Array.isArray(day.tasks) ? day.tasks : [];
+          const criticalCount = tasks.filter((t: any) => t.priority === "critical").length;
+
+          return (
+            <div key={i} style={{
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              overflow: "hidden",
+              background: isExpanded ? "var(--glass-bg)" : "transparent",
+              transition: "background 0.2s",
+            }}>
+              {/* Day Header */}
+              <button
+                onClick={() => setExpandedDay(isExpanded ? null : day.day)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  gap: 10,
+                }}
+              >
+                <span style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: `${ACCENT}18`,
+                  color: ACCENT,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  flexShrink: 0,
+                }}>
+                  {day.day}
+                </span>
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{day.theme}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)" }}>{day.date}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {criticalCount > 0 && (
+                    <span style={{
+                      padding: "2px 6px",
+                      background: "#dc262618",
+                      color: "#dc2626",
+                      borderRadius: 4,
+                      fontSize: 9,
+                      fontWeight: 700,
+                    }}>
+                      {criticalCount} CRITICAL
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: "var(--muted)" }}>
+                    {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+                  </span>
+                  <span style={{
+                    fontSize: 14,
+                    color: "var(--muted)",
+                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                  }}>
+                    &#9660;
+                  </span>
+                </div>
+              </button>
+
+              {/* Expanded Tasks */}
+              {isExpanded && (
+                <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ height: 1, background: "var(--border)" }} />
+
+                  {tasks.map((task: any, ti: number) => {
+                    const p = priorityColors[task.priority] || priorityColors["important"];
+                    const copyKey = `${day.day}-${ti}`;
+
+                    return (
+                      <div key={ti} style={{
+                        padding: "10px 12px",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        borderLeft: `3px solid ${p.color}`,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}>
+                        {/* Task Header */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-mono, monospace)", fontWeight: 600 }}>{task.time}</span>
+                            <span style={{
+                              padding: "2px 8px",
+                              background: `${ACCENT}14`,
+                              color: ACCENT,
+                              borderRadius: 4,
+                              fontSize: 10,
+                              fontWeight: 700,
+                            }}>
+                              {task.channel}
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{task.action}</span>
+                          </div>
+                          <span style={{
+                            padding: "2px 6px",
+                            background: p.bg,
+                            color: p.color,
+                            borderRadius: 4,
+                            fontSize: 9,
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                          }}>
+                            {p.label}
+                          </span>
+                        </div>
+
+                        {/* Exact Copy Block */}
+                        {task.exactCopy && (
+                          <div style={{ position: "relative" }}>
+                            <pre style={{
+                              padding: "10px 12px",
+                              background: "var(--sidebar)",
+                              borderRadius: 6,
+                              fontSize: 11,
+                              color: "var(--text-soft)",
+                              fontFamily: "var(--font-mono, monospace)",
+                              lineHeight: 1.6,
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              margin: 0,
+                              maxHeight: 200,
+                              overflowY: "auto",
+                            }}>
+                              {task.exactCopy}
+                            </pre>
+                            <button
+                              onClick={() => handleCopy(task.exactCopy, copyKey)}
+                              style={{
+                                position: "absolute",
+                                top: 6,
+                                right: 6,
+                                padding: "3px 8px",
+                                background: copiedKey === copyKey ? "#16a34a" : "var(--glass-bg)",
+                                border: "1px solid var(--border)",
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: copiedKey === copyKey ? "#fff" : "var(--muted)",
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                              }}
+                            >
+                              {copiedKey === copyKey ? "Copied!" : "Copy"}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Notes */}
+                        {task.notes && (
+                          <div style={{ fontSize: 10, color: "var(--muted)", fontStyle: "italic", lineHeight: 1.5 }}>
+                            {task.notes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Day Milestone */}
+                  {day.milestone && (
+                    <div style={{
+                      padding: "8px 12px",
+                      background: "#16a34a08",
+                      border: "1px solid #16a34a20",
+                      borderRadius: 8,
+                      fontSize: 11,
+                      color: "#16a34a",
+                      fontWeight: 600,
+                    }}>
+                      Milestone: {day.milestone}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Launch Day Checklist */}
+      {checklist.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <h4 style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "var(--text)",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            marginBottom: 4,
+            opacity: 0.8,
+          }}>Launch Day Checklist</h4>
+          {checklist.map((item: string, i: number) => (
+            <label key={i} style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 10px",
+              fontSize: 12,
+              color: "var(--text-soft)",
+              cursor: "pointer",
+            }}>
+              <input type="checkbox" style={{ accentColor: ACCENT }} />
+              {item}
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* Post-Launch Advice */}
+      {result.postLaunchAdvice && (
+        <div style={{
+          padding: "14px 16px",
+          background: "var(--glass-bg)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, opacity: 0.8 }}>
+            After the 14 Days
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+            {result.postLaunchAdvice}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MVP Scalpel Display ─────────────────────────────────────────────────
+
+function MVPScalpelDisplay({ result }: { result: Record<string, any> }) {
+  const [expandedKill, setExpandedKill] = useState<number | null>(null);
+  const [expandedRule, setExpandedRule] = useState<number | null>(null);
+  const ACCENT = "#C45A5A";
+
+  const killList = Array.isArray(result.killList) ? result.killList : [];
+  const skeleton = result.skeletonMVP || {};
+  const features = Array.isArray(skeleton.features) ? skeleton.features : [];
+  const excluded = Array.isArray(skeleton.explicitlyExcluded) ? skeleton.explicitlyExcluded : [];
+  const spec = result.weekendSpec || {};
+  const hourPlan = Array.isArray(spec.hourByHourPlan) ? spec.hourByHourPlan : [];
+  const techStack = Array.isArray(spec.techStack) ? spec.techStack : [];
+  const pages = Array.isArray(spec.pages) ? spec.pages : [];
+  const endpoints = Array.isArray(spec.endpoints) ? spec.endpoints : [];
+  const services = Array.isArray(spec.thirdPartyServices) ? spec.thirdPartyServices : [];
+  const ttfd = result.timeToFirstDollar || {};
+  const breakdown = Array.isArray(ttfd.breakdown) ? ttfd.breakdown : [];
+  const assumptions = Array.isArray(ttfd.assumptions) ? ttfd.assumptions : [];
+  const rules = Array.isArray(result.antiScopeCreepRules) ? result.antiScopeCreepRules : [];
+  const verdict = result.verdict || {};
+
+  const effortColor = (e: string) => e === 'days' ? '#16a34a' : e === 'weeks' ? '#d97706' : '#dc2626';
+  const effortBg = (e: string) => e === 'days' ? '#16a34a14' : e === 'weeks' ? '#d9770614' : '#dc262614';
+
+  const readinessConfig: Record<string, { color: string; bg: string; icon: string }> = {
+    'ship-now': { color: '#16a34a', bg: '#16a34a14', icon: '\u2713' },
+    'almost-ready': { color: '#d97706', bg: '#d9770614', icon: '\u25CB' },
+    'needs-rethink': { color: '#dc2626', bg: '#dc262614', icon: '\u2717' },
+  };
+  const rc = readinessConfig[verdict.readiness] || readinessConfig['almost-ready'];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* ── Verdict Badge ──────────────────────────────────────────── */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "16px 20px",
+        background: rc.bg,
+        border: `1px solid ${rc.color}20`,
+        borderRadius: 12,
+      }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>MVP Readiness</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: rc.color, marginTop: 4, textTransform: "uppercase" }}>{(verdict.readiness || 'almost-ready').replace(/-/g, ' ')}</div>
+          {verdict.summary && <div style={{ fontSize: 12, color: "var(--text-soft)", marginTop: 6, lineHeight: 1.5 }}>{verdict.summary}</div>}
+        </div>
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "5px 12px", background: rc.bg, color: rc.color,
+          borderRadius: 8, fontSize: 12, fontWeight: 700,
+          textTransform: "uppercase", letterSpacing: "0.04em",
+          border: `1px solid ${rc.color}20`,
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: rc.color, boxShadow: `0 0 6px ${rc.color}60` }} />
+          {verdict.readiness || 'almost-ready'}
+        </span>
+      </div>
+
+      {/* ── Kill List ──────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div style={{ width: 20, height: 20, borderRadius: "50%", background: `${ACCENT}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </div>
+          <h4 style={{ ...scalpelSubHeader, color: ACCENT }}>Features to Kill</h4>
+          <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>({killList.length})</span>
+        </div>
+        {killList.map((item: any, i: number) => {
+          const isOpen = expandedKill === i;
+          return (
+            <div key={i} style={{
+              border: "1px solid var(--border)", borderRadius: 10,
+              overflow: "hidden", background: isOpen ? `${ACCENT}06` : "transparent",
+              transition: "background 200ms",
+            }}>
+              <button onClick={() => setExpandedKill(isOpen ? null : i)} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                width: "100%", padding: "10px 14px", background: "transparent",
+                border: "none", cursor: "pointer", fontFamily: "inherit",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", textDecoration: "line-through", textDecorationColor: ACCENT }}>
+                    {item.feature}
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: "2px 8px",
+                    borderRadius: 6, textTransform: "uppercase",
+                    color: effortColor(item.effort), background: effortBg(item.effort),
+                  }}>{item.effort}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"
+                    style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform 200ms" }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
+              </button>
+              {isOpen && (
+                <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ height: 1, background: "var(--border)" }} />
+                  <div style={{ fontSize: 11, color: "var(--text-soft)" }}>
+                    <span style={{ fontWeight: 700, color: "#d97706" }}>Why it feels essential: </span>{item.whyItFeelsEssential}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-soft)" }}>
+                    <span style={{ fontWeight: 700, color: ACCENT }}>Why it kills you: </span>{item.whyItKills}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-soft)" }}>
+                    <span style={{ fontWeight: 700, color: "var(--muted)" }}>Build when: </span>{item.whenToBuild}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Skeleton MVP ───────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <h4 style={scalpelSubHeader}>Skeleton MVP</h4>
+
+        {/* One-liner */}
+        {skeleton.oneLiner && (
+          <div style={{
+            padding: "14px 16px", background: `${ACCENT}08`, border: `1px solid ${ACCENT}15`,
+            borderRadius: 10, fontSize: 14, fontWeight: 600, color: "var(--text)", lineHeight: 1.5,
+          }}>
+            {skeleton.oneLiner}
+          </div>
+        )}
+
+        {/* Core Hypothesis callout */}
+        {skeleton.coreHypothesis && (
+          <div style={{
+            padding: "10px 14px", background: "var(--glass-bg)", borderRadius: 8,
+            borderLeft: `3px solid #d97706`, fontSize: 12, color: "var(--text-soft)", lineHeight: 1.5,
+          }}>
+            <span style={{ fontWeight: 700, color: "#d97706", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>Core Hypothesis</span>
+            <div style={{ marginTop: 4 }}>{skeleton.coreHypothesis}</div>
+          </div>
+        )}
+
+        {/* Feature cards */}
+        {features.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: features.length > 2 ? "1fr 1fr" : "1fr", gap: 8 }}>
+            {features.map((f: any, i: number) => (
+              <div key={i} style={{
+                padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 10,
+                display: "flex", flexDirection: "column", gap: 4,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{f.name}</div>
+                <div style={{ fontSize: 11, color: "var(--text-soft)", lineHeight: 1.5 }}>{f.description}</div>
+                <div style={{ fontSize: 10, color: "#5A8C6E", fontWeight: 600, marginTop: 2 }}>{f.whyIncluded}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Excluded */}
+        {excluded.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "4px 0" }}>
+            {excluded.map((ex: string, i: number) => (
+              <span key={i} style={{
+                fontSize: 11, color: "var(--muted)", textDecoration: "line-through",
+                padding: "3px 10px", background: "var(--sidebar)", borderRadius: 6,
+                opacity: 0.7,
+              }}>{ex}</span>
+            ))}
+          </div>
+        )}
+
+        {/* Success criteria */}
+        {skeleton.successCriteria && (
+          <div style={{
+            padding: "8px 12px", background: "#16a34a0a", border: "1px solid #16a34a20",
+            borderRadius: 8, fontSize: 11, fontWeight: 600, color: "#16a34a",
+          }}>
+            Success: {skeleton.successCriteria}
+          </div>
+        )}
+      </div>
+
+      {/* ── Weekend Spec ───────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h4 style={scalpelSubHeader}>Build This Weekend</h4>
+          {spec.totalHours && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, color: ACCENT,
+              padding: "3px 10px", background: `${ACCENT}14`, borderRadius: 6,
+            }}>{spec.totalHours}h total</span>
+          )}
+        </div>
+
+        {/* Tech stack badges */}
+        {techStack.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {techStack.map((t: string, i: number) => (
+              <span key={i} style={{
+                fontSize: 10, fontWeight: 600, color: "var(--text-soft)",
+                padding: "3px 10px", background: "var(--sidebar)", borderRadius: 6,
+                border: "1px solid var(--border)",
+              }}>{t}</span>
+            ))}
+          </div>
+        )}
+
+        {/* Pages as mini wireframes */}
+        {pages.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: pages.length > 2 ? "1fr 1fr" : "1fr", gap: 8 }}>
+            {pages.map((p: any, i: number) => (
+              <div key={i} style={{
+                padding: "10px 12px", border: "1px dashed var(--border)", borderRadius: 8,
+                background: "var(--glass-bg)",
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{p.name}</div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>{p.purpose}</div>
+                {Array.isArray(p.components) && p.components.map((c: string, j: number) => (
+                  <div key={j} style={{
+                    fontSize: 9, color: "var(--text-soft)", padding: "2px 6px",
+                    background: "var(--sidebar)", borderRadius: 4, display: "inline-block",
+                    margin: "1px 3px 1px 0",
+                  }}>{c}</div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Endpoints */}
+        {endpoints.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {endpoints.map((ep: any, i: number) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
+                  color: ep.method === 'GET' ? '#5A8C6E' : ep.method === 'POST' ? '#5A6E8C' : '#d97706',
+                  padding: "1px 6px", background: "var(--sidebar)", borderRadius: 4,
+                  minWidth: 36, textAlign: "center",
+                }}>{ep.method}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--text-soft)" }}>{ep.path}</span>
+                <span style={{ fontSize: 10, color: "var(--muted)", marginLeft: "auto" }}>{ep.purpose}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Third-party services */}
+        {services.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {services.map((s: any, i: number) => (
+              <span key={i} style={{
+                fontSize: 10, color: "var(--text-soft)",
+                padding: "3px 10px", background: "var(--sidebar)", borderRadius: 6,
+                border: "1px solid var(--border)",
+              }}>{s.name} <span style={{ color: "var(--muted)" }}>({s.cost})</span></span>
+            ))}
+          </div>
+        )}
+
+        {/* Deploy target */}
+        {spec.deployTarget && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+            <span style={{ color: "var(--muted)", fontWeight: 600 }}>Deploy:</span>
+            <span style={{
+              padding: "2px 10px", background: "#5A8C6E14", color: "#5A8C6E",
+              borderRadius: 6, fontWeight: 700, fontSize: 10,
+            }}>{spec.deployTarget}</span>
+          </div>
+        )}
+
+        {/* Hour-by-hour timeline */}
+        {hourPlan.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 0, position: "relative", paddingLeft: 18 }}>
+            <div style={{
+              position: "absolute", left: 6, top: 8, bottom: 8,
+              width: 2, background: `${ACCENT}30`,
+            }} />
+            {hourPlan.map((h: any, i: number) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", gap: 12,
+                padding: "8px 0", position: "relative",
+              }}>
+                <div style={{
+                  position: "absolute", left: -14, top: 12,
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: ACCENT, border: "2px solid var(--card-solid, var(--card, #fff))",
+                  zIndex: 1,
+                }} />
+                <div style={{ minWidth: 50, fontSize: 10, fontWeight: 700, color: ACCENT, paddingTop: 2 }}>{h.hour}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{h.task}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{h.deliverable}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Launch ready */}
+        {spec.launchReady && (
+          <div style={{
+            padding: "8px 12px", background: "#16a34a0a", border: "1px solid #16a34a20",
+            borderRadius: 8, fontSize: 11, fontWeight: 600, color: "#16a34a",
+          }}>
+            Done = {spec.launchReady}
+          </div>
+        )}
+      </div>
+
+      {/* ── Time to First Dollar ────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <h4 style={scalpelSubHeader}>Time to First Dollar</h4>
+
+        {/* Total days hero */}
+        {ttfd.estimatedDays && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 16,
+            padding: "14px 18px", background: "#d9770608", border: "1px solid #d9770620",
+            borderRadius: 12,
+          }}>
+            <div style={{ fontSize: 36, fontWeight: 900, color: "#d97706", lineHeight: 1 }}>
+              {ttfd.estimatedDays}<span style={{ fontSize: 14, opacity: 0.6 }}> days</span>
+            </div>
+          </div>
+        )}
+
+        {/* Phase breakdown horizontal */}
+        {breakdown.length > 0 && (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {breakdown.map((b: any, i: number) => {
+              const totalDays = breakdown.reduce((s: number, x: any) => s + (x.days || 0), 0);
+              const pct = totalDays > 0 ? Math.max(((b.days / totalDays) * 100), 15) : 100 / breakdown.length;
+              return (
+                <div key={i} style={{
+                  flex: `${pct} 0 0`, minWidth: 80,
+                  padding: "8px 10px", background: "var(--glass-bg)", borderRadius: 8,
+                  borderTop: `3px solid ${ACCENT}`,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text)" }}>{b.phase}</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: ACCENT }}>{b.days}d</div>
+                  <div style={{ fontSize: 9, color: "var(--muted)", lineHeight: 1.4 }}>{b.description}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Fastest path callout */}
+        {ttfd.fastestPath && (
+          <div style={{
+            padding: "10px 14px", background: "#d9770610", borderRadius: 8,
+            borderLeft: `3px solid #d97706`, fontSize: 12, color: "var(--text-soft)", lineHeight: 1.5,
+          }}>
+            <span style={{ fontWeight: 700, color: "#d97706", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>Fastest Path to $1</span>
+            <div style={{ marginTop: 4 }}>{ttfd.fastestPath}</div>
+          </div>
+        )}
+
+        {/* Assumptions */}
+        {assumptions.length > 0 && (
+          <div style={{ fontSize: 10, color: "var(--muted)", lineHeight: 1.6 }}>
+            <span style={{ fontWeight: 700 }}>Assumptions: </span>
+            {assumptions.join(' · ')}
+          </div>
+        )}
+      </div>
+
+      {/* ── Anti-Scope Creep Rules ──────────────────────────────────── */}
+      <div style={{
+        padding: "14px 16px", border: "1px solid var(--border)", borderRadius: 12,
+        display: "flex", flexDirection: "column", gap: 6,
+      }}>
+        <h4 style={{ ...scalpelSubHeader, marginBottom: 4 }}>Anti-Scope Creep Rules</h4>
+        {rules.map((r: any, i: number) => {
+          const isOpen = expandedRule === i;
+          return (
+            <button key={i} onClick={() => setExpandedRule(isOpen ? null : i)} style={{
+              display: "flex", flexDirection: "column", gap: 4,
+              padding: "8px 10px", background: isOpen ? "var(--glass-bg)" : "transparent",
+              border: "none", borderRadius: 8, cursor: "pointer",
+              fontFamily: "inherit", textAlign: "left", width: "100%",
+              transition: "background 200ms",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 900, color: ACCENT,
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: `${ACCENT}14`, display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>{i + 1}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{r.rule}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"
+                  style={{ marginLeft: "auto", transform: isOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform 200ms", flexShrink: 0 }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+              {isOpen && (
+                <div style={{ fontSize: 11, color: "var(--muted)", paddingLeft: 28, lineHeight: 1.5 }}>{r.why}</div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const scalpelSubHeader: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "var(--text)",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  marginBottom: 4,
+  opacity: 0.8,
+};
 
 // ─── Shared Styles ──────────────────────────────────────────────────────────
 
