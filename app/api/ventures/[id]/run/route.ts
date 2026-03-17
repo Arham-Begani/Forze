@@ -12,6 +12,7 @@ import {
 import { NextRequest, NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { z } from 'zod'
+import { Content } from '@google/generative-ai'
 import { runGenesisAgent } from '@/agents/genesis'
 import { runIdentityAgent } from '@/agents/identity'
 import { runContentAgent } from '@/agents/content'
@@ -21,6 +22,8 @@ import { runFullLaunch } from '@/agents/orchestrator'
 import { runGeneralAgent } from '@/agents/general'
 import { runShadowBoard } from '@/agents/shadow'
 import { runInvestorKitAgent } from '@/agents/investor-kit'
+import { runLaunchAutopilotAgent } from '@/agents/launch-autopilot'
+import { runMVPScalpelAgent } from '@/agents/mvp-scalpel'
 
 const DecisionSchema = z.object({
     questionId: z.string(),
@@ -32,10 +35,12 @@ const DecisionSchema = z.object({
 })
 
 const bodySchema = z.object({
-    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch', 'general', 'shadow-board', 'investor-kit']),
+    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch', 'general', 'shadow-board', 'investor-kit', 'launch-autopilot', 'mvp-scalpel']),
     prompt: z.string().min(1).max(2000),
     depth: z.enum(['brief', 'medium', 'detailed']).optional(),
     decisions: z.array(DecisionSchema).optional(),
+    isContinuation: z.boolean().optional(),
+    partialOutput: z.string().optional(),
 })
 
 interface Decision {
@@ -65,7 +70,9 @@ async function runAgent(
     prompt: string,
     userId: string,
     depth: 'brief' | 'medium' | 'detailed' = 'medium',
-    decisions: Decision[] = []
+    decisions: Decision[] = [],
+    isContinuation: boolean = false,
+    partialOutput?: string
 ) {
     const venture = await getVenture(ventureId, userId)
     if (!venture) throw new Error('Venture not found')
@@ -74,9 +81,20 @@ async function runAgent(
 
     const decisionsContext = formatDecisionsForPrompt(decisions)
 
+    let finalPrompt = prompt
+    let history: Content[] = []
+
+    if (isContinuation && partialOutput) {
+        history = [
+            { role: 'user', parts: [{ text: `${prompt}${decisionsContext}` }] },
+            { role: 'model', parts: [{ text: partialOutput }] }
+        ]
+        finalPrompt = "Continue from where you left off. Do not repeat anything already outputted. Complete the JSON object strictly."
+    }
+
     const ventureInput = {
         ventureId: venture.id,
-        name: `${venture.name}: ${prompt}${decisionsContext}`,
+        name: isContinuation ? `${venture.name} (Continuing...)` : `${venture.name}: ${prompt}${decisionsContext}`,
         globalIdea: project?.global_idea ?? undefined,
         context: venture.context as unknown as Record<string, unknown>,
     }
@@ -103,35 +121,35 @@ async function runAgent(
                 await runGenesisAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'research', result)
                     await setConversationResult(conversationId, result)
-                }, depth)
+                }, depth, history)
                 break
 
             case 'branding':
                 await runIdentityAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'branding', result)
                     await setConversationResult(conversationId, result)
-                })
+                }, history)
                 break
 
             case 'marketing':
                 await runContentAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'marketing', result)
                     await setConversationResult(conversationId, result)
-                })
+                }, history)
                 break
 
             case 'landing':
                 await runPipelineAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'landing', result)
                     await setConversationResult(conversationId, result)
-                })
+                }, history)
                 break
 
             case 'feasibility':
                 await runFeasibilityAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'feasibility', result)
                     await setConversationResult(conversationId, result)
-                }, depth)
+                }, depth, history)
                 break
 
             case 'full-launch':
@@ -142,14 +160,14 @@ async function runAgent(
                     if (result.landing) await updateVentureContext(ventureId, 'landing', result.landing)
                     if (result.feasibility) await updateVentureContext(ventureId, 'feasibility', result.feasibility)
                     await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
-                }, depth)
+                }, depth, history)
                 break
 
             case 'general':
                 await runGeneralAgent(ventureInput, onStream, async (result) => {
                     // General chat does NOT write to venture context — it's conversational only
                     await setConversationResult(conversationId, result)
-                })
+                }, history)
                 break
 
             case 'shadow-board':
@@ -158,13 +176,25 @@ async function runAgent(
                     // unless we want to add a shadowBoard field to VentureContext later.
                     // For now, let's keep it in the conversation.
                     await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
-                })
+                }, history)
                 break
 
             case 'investor-kit':
                 await runInvestorKitAgent(ventureInput, onStream, async (result) => {
                     await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
+                }, history)
+                break
+
+            case 'launch-autopilot':
+                await runLaunchAutopilotAgent(ventureInput, onStream, async (result) => {
+                    await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
                 })
+                break
+
+            case 'mvp-scalpel':
+                await runMVPScalpelAgent(ventureInput, onStream, async (result) => {
+                    await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
+                }, history)
                 break
 
             default:
@@ -205,7 +235,7 @@ export async function POST(
             return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
         }
 
-        const { moduleId, prompt, depth, decisions } = result.data
+        const { moduleId, prompt, depth, decisions, isContinuation, partialOutput } = result.data
 
         const venture = await getVenture(id, session.userId)
         if (!venture) {
@@ -216,7 +246,7 @@ export async function POST(
 
         // Use after() to keep the serverless function alive while agent runs
         after(
-            runAgent(id, conversation.id, moduleId, prompt, session.userId, depth, decisions).catch(
+            runAgent(id, conversation.id, moduleId, prompt, session.userId, depth, decisions, isContinuation, partialOutput).catch(
                 err => console.error('Agent error:', err)
             )
         )
