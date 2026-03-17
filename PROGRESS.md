@@ -189,7 +189,8 @@ This file is the Agent's memory between sessions.
 **Goal:** Fix Shadow Board AI and improve agent robustness.
 **Built:**
 - **Shadow Board AI Fix**:
-    - Resolved `thinkingConfig` compatibility issues in `lib/gemini.ts` by adding both camelCase and snake_case properties to ensure the Gemini API correctly receives the `thinking_budget`.
+    - **Resolved Gemini 3 API Conflict**: Fixed a `400 Bad Request` error caused by duplicate `thinkingConfig` (camelCase) and `thinking_config` (snake_case) properties in the API request. Removed the redundancy to prevent `oneof` field conflicts in the Generative AI SDK.
+- [x] **Verified Architect Agent**: Architecture planning now works without API parameter conflicts.
     - Improved `agents/shadow.ts` robustness with a defensive `ShadowBoardSchema.parse(raw || {})` call to prevent UI crashes if the model fails to output valid JSON.
     - Optimized `shadow.ts` execution loop: refactored `withRetry` around `withTimeout` to guarantee each retry attempt has its own dedicated 120s window.
     - Hardened the `runShadowBoard` system prompt to better enforce the final JSON structure and persona consistency.
