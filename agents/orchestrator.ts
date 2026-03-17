@@ -3,7 +3,7 @@ import { runIdentityAgent, IdentityOutput } from './identity'
 import { runPipelineAgent, PipelineOutput } from './pipeline'
 import { runFeasibilityAgent, FeasibilityOutput } from './feasibility'
 import { runContentAgent, ContentOutput } from './content'
-import { getProModelWithThinking, streamPrompt } from '../lib/gemini'
+import { getProModelWithThinking, streamPrompt, Content } from '../lib/gemini'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,7 +22,8 @@ export async function runFullLaunch(
   onStream: (line: string) => Promise<void>,
   onAgentStatus: (agentId: string, status: 'waiting' | 'running' | 'complete' | 'failed') => Promise<void>,
   onComplete: (result: FullLaunchResult) => Promise<void>,
-  depth: 'brief' | 'medium' | 'detailed' = 'medium'
+  depth: 'brief' | 'medium' | 'detailed' = 'medium',
+  history: Content[] = []
 ): Promise<void> {
 
   // ── STEP 0 — Architect thinks ──────────────────────────────────────────────
@@ -44,7 +45,8 @@ export async function runFullLaunch(
 ${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}
      Briefly plan what each agent should focus on for this specific venture.
      Be concrete and specific to this idea — not generic instructions.`,
-    onStream
+    onStream,
+    history
   )
 
   await onStream('\n\n')
@@ -60,7 +62,7 @@ ${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}
   await runGenesisAgent(venture, onStream, async (result) => {
     genesisResult = result
     venture = { ...venture, context: { ...venture.context, research: result } }
-  }, depth)
+  }, depth, history)
 
   if (!genesisResult) throw new Error('Genesis agent failed to produce output')
   await onAgentStatus('genesis', 'complete')
@@ -76,7 +78,7 @@ ${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}
   await runIdentityAgent(venture, onStream, async (result) => {
     identityResult = result
     venture = { ...venture, context: { ...venture.context, branding: result } }
-  })
+  }, history)
 
   if (!identityResult) throw new Error('Identity agent failed to produce output')
   await onAgentStatus('identity', 'complete')
@@ -92,7 +94,7 @@ ${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}
   await runContentAgent(venture, onStream, async (result) => {
     marketingResult = result
     venture = { ...venture, context: { ...venture.context, marketing: result } }
-  })
+  }, history)
 
   if (!marketingResult) throw new Error('Marketing agent failed to produce output')
   await onAgentStatus('marketing', 'complete')
@@ -120,14 +122,17 @@ ${venture.globalIdea ? `Global Startup Vision: ${venture.globalIdea}\n` : ''}
       runPipelineAgent(
         enrichedVenture,
         async (chunk) => onStream('[Landing] ' + chunk),
-        async (result) => resolve(result)
+        async (result) => resolve(result),
+        history
       ).catch(reject)
     }),
     new Promise<FeasibilityOutput>((resolve, reject) => {
       runFeasibilityAgent(
         enrichedVenture,
         async (chunk) => onStream('[Feasibility] ' + chunk),
-        async (result) => resolve(result)
+        async (result) => resolve(result),
+        depth,
+        history
       ).catch(reject)
     }),
   ])
