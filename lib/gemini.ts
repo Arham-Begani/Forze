@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai'
+import { GoogleGenerativeAI, GenerativeModel, Content } from '@google/generative-ai'
+export type { Content }
 
 // ── Clients ──────────────────────────────────────────────────────────────────
 
@@ -37,8 +38,8 @@ export function getProModelWithThinking(thinkingBudget: number = 10000, modelId:
             temperature: 0.6,
             topP: 0.95,
             maxOutputTokens: 32768,
-            // @ts-expect-error — thinkingConfig not yet in type definitions
-            thinkingConfig: { thinkingBudget },
+            // @ts-ignore
+            thinkingConfig: { includeThoughts: true, thinkingBudget },
         },
     })
 }
@@ -52,8 +53,8 @@ export function getProModelWithSearchAndThinking(thinkingBudget: number = 12000)
             temperature: 0.5,
             topP: 0.95,
             maxOutputTokens: 32768,
-            // @ts-expect-error — thinkingConfig not yet in type definitions
-            thinkingConfig: { thinkingBudget },
+            // @ts-ignore
+            thinkingConfig: { includeThoughts: true, thinkingBudget },
         },
     })
 }
@@ -66,10 +67,11 @@ export async function streamPrompt(
     model: GenerativeModel,
     systemPrompt: string,
     userMessage: string,
-    onChunk: (text: string) => Promise<void>
+    onChunk: (text: string) => Promise<void>,
+    history: Content[] = []
 ): Promise<string> {
     const chat = model.startChat({
-        history: [],
+        history: history,
         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
     })
 
