@@ -11,7 +11,8 @@ export type ModuleId =
   | "landing"
   | "feasibility"
   | "general"
-  | "shadow-board";
+  | "shadow-board"
+  | "launch-autopilot";
 
 export interface ModuleDefinition {
   id: ModuleId;
@@ -20,6 +21,12 @@ export interface ModuleDefinition {
   accent: string;
   description: string;
 }
+
+const MODULE_GROUPS: { label: string; ids: ModuleId[] }[] = [
+  { label: "LAUNCH", ids: ["full-launch", "launch-autopilot"] },
+  { label: "AGENTS", ids: ["research", "branding", "marketing", "landing", "feasibility"] },
+  { label: "TOOLS", ids: ["general", "shadow-board"] },
+];
 
 export const MODULES: Record<ModuleId, ModuleDefinition> = {
   "full-launch": { id: "full-launch", icon: "⬡", label: "Full Launch", accent: "#C4975A", description: "All agents together" },
@@ -30,6 +37,7 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
   "feasibility": { id: "feasibility", icon: "◈", label: "Feasibility", accent: "#7A5A8C", description: "GO/NO-GO verdict" },
   "general": { id: "general", icon: "◉", label: "General", accent: "#6B8F71", description: "Ask anything" },
   "shadow-board": { id: "shadow-board", icon: "⚔", label: "Shadow Board", accent: "#E04848", description: "Silicon board review" },
+  "launch-autopilot": { id: "launch-autopilot", icon: "▶", label: "Launch Autopilot", accent: "#B8864E", description: "14-day launch calendar" },
 };
 
 export interface ModulePickerProps {
@@ -109,53 +117,71 @@ export function ModulePicker({ selectedModule, onChange }: ModulePickerProps) {
               gap: 2,
             }}
           >
-            {Object.values(MODULES).map((mod) => {
-            const isSelected = mod.id === selectedModule;
-            return (
-              <motion.button
-                key={mod.id}
-                whileHover={{ backgroundColor: isSelected ? undefined : "var(--nav-active)" }}
-                onClick={() => {
-                  onChange(mod.id);
-                  setIsOpen(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "9px 10px",
-                  borderRadius: 10,
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  width: "100%",
-                  fontFamily: "inherit",
-                  background: isSelected ? `${mod.accent}14` : "transparent",
-                  transition: "background 150ms",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{
-                    width: 28, height: 28,
-                    borderRadius: 8,
-                    background: `${mod.accent}20`,
-                    color: mod.accent,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 12,
-                    flexShrink: 0,
-                  }}>
-                    {mod.icon}
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? mod.accent : "var(--text)" }}>
-                    {mod.label}
-                  </span>
+            {MODULE_GROUPS.map((group, groupIndex) => (
+              <div key={group.label}>
+                {groupIndex > 0 && (
+                  <div style={{ height: 1, background: "var(--border)", margin: "4px 8px" }} />
+                )}
+                <div style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase" as const,
+                  letterSpacing: "0.06em",
+                  color: "var(--muted)",
+                  padding: "8px 10px 4px",
+                }}>
+                  {group.label}
                 </div>
-                <span style={{ fontSize: 11, color: "var(--muted)", maxWidth: 100, textAlign: "right", lineHeight: 1.3 }}>
-                  {mod.description}
-                </span>
-              </motion.button>
-            );
-          })}
+                {group.ids.map((id) => {
+                  const mod = MODULES[id];
+                  const isSelected = mod.id === selectedModule;
+                  return (
+                    <motion.button
+                      key={mod.id}
+                      whileHover={{ backgroundColor: isSelected ? undefined : "var(--nav-active)" }}
+                      onClick={() => {
+                        onChange(mod.id);
+                        setIsOpen(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "9px 10px",
+                        borderRadius: 10,
+                        border: "none",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        background: isSelected ? `${mod.accent}14` : "transparent",
+                        transition: "background 150ms",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{
+                          width: 28, height: 28,
+                          borderRadius: 8,
+                          background: `${mod.accent}20`,
+                          color: mod.accent,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12,
+                          flexShrink: 0,
+                        }}>
+                          {mod.icon}
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? mod.accent : "var(--text)" }}>
+                          {mod.label}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 11, color: "var(--muted)", maxWidth: 100, textAlign: "right", lineHeight: 1.3 }}>
+                        {mod.description}
+                      </span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
