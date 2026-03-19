@@ -64,6 +64,8 @@ export default function ManageProjectsPage() {
         ])
         if (projRes.ok) setProjects(await projRes.json())
         if (ventRes.ok) setVentures(await ventRes.json())
+      } catch (err) {
+        console.error('Failed to load manage page data:', err)
       } finally {
         setLoading(false)
       }
