@@ -24,7 +24,11 @@
       "Bash(find /c/Users/arham/Documents/Github/Forge -type f \\\\\\(-name *.log -o -name *error* -o -name *debug* \\\\\\))",
       "Bash(find /c/Users/arham/Documents/Github/Forge -type f -name .env*)",
       "Bash(npm ls:*)",
-      "Bash(vercel:*)"
+      "Bash(vercel:*)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(node:*)",
+      "Bash(git commit:*)",
+      "Bash(find /c/Users/arham/Documents/Github/Forge -name *TimelinePanel* -o -name *timeline*)"
     ]
   }
 }
