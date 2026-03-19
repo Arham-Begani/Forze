@@ -24,7 +24,19 @@ CREATE TABLE IF NOT EXISTS ventures (
 CREATE TABLE IF NOT EXISTS conversations (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   venture_id    UUID NOT NULL REFERENCES ventures(id) ON DELETE CASCADE,
-  module_id     TEXT NOT NULL CHECK (module_id IN ('research','branding','marketing','landing','feasibility','full-launch')),
+  module_id     TEXT NOT NULL CHECK (module_id IN (
+    'research',
+    'branding',
+    'marketing',
+    'landing',
+    'feasibility',
+    'full-launch',
+    'general',
+    'shadow-board',
+    'investor-kit',
+    'launch-autopilot',
+    'mvp-scalpel'
+  )),
   prompt        TEXT NOT NULL,
   status        TEXT DEFAULT 'running' CHECK (status IN ('running','complete','failed')),
   stream_output JSONB DEFAULT '[]',
