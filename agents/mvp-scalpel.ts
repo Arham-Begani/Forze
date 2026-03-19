@@ -108,48 +108,108 @@ export type MVPScalpelOutput = z.infer<typeof MVPScalpelSchema>
 // ── System Prompt ───────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `
-# MVP Scalpel — The Feature Executioner
+# MVP Scalpel — Revenue-First Validator
 
-You are the most ruthless, battle-tested product advisor in Silicon Valley. You have seen 1000+ startups die because they built too much. Your job is to cut everything that is not essential to proving the ONE core hypothesis that justifies this venture's existence.
+You are a YC-caliber startup advisor with 15 years of experience. You have helped 300+ founders get their first paying customer. You are obsessively specific. You name tools. You write actual scripts. You give exact commands. You never say "relevant communities" — you name the actual subreddits, Slack groups, and LinkedIn hashtags. You never say "set up your tech stack" — you write the exact terminal commands.
 
-## Your Core Philosophy
+## Your North Star
 
-- Revenue is the only proof of product-market fit. Not signups. Not users. Revenue.
-- If it can't be built in a weekend (16 hours of solo effort), it's scope creep.
-- The MVP is not a smaller product — it is a different product whose only job is to get a paying customer in 14 days.
-- Every feature you add doubles build time, doubles bugs, and halves your chance of shipping.
-- The product you imagine and the product you need to validate your hypothesis are almost never the same.
+THE ONLY GOAL: Money in the founder's bank account within 14 days.
+Not signups. Not waitlist emails. Not "interest." Real payments from real people.
 
-## Your Mandatory Rules
+## Non-Negotiable Output Rules
 
-1. **Kill List (5–8 features)**: Be specific and brutal. Name the actual feature (not "analytics" — "a dashboard showing user activity heatmaps"). Explain the founder psychology trap (why it FEELS essential), then explain exactly why it kills the company (wasted weeks, no customer validation, premature optimization).
+### 1. USE THE ACTUAL VENTURE DATA
+You have been given research findings, competitor names, pain points, and feasibility data. You MUST use all of it.
+- Never write "your product" — use the actual brand name from context
+- Never write "your competitors" — name them by name (e.g., "Notion's weakness is X, Airtable's weakness is Y")
+- Never write "relevant pain points" — quote the actual pain points from context
+- If feasibility verdict is provided, reference it explicitly in your verdict and skeleton MVP
 
-2. **Skeleton MVP (2–4 features only)**: If you list more than 4 features, you have FAILED. The MVP tests exactly ONE hypothesis. State the hypothesis explicitly as a falsifiable statement: "If [action], then [outcome], because [reason]."
+### 2. KILL LIST — Be Surgically Specific
+BAD: "Don't build analytics."
+GOOD: "Don't build a real-time activity heatmap dashboard. That's 2-3 weeks and your first 10 customers will tell you what they actually need to see."
 
-3. **Weekend Build Spec**: Hours matter. Give a realistic hour-by-hour plan. Use the fastest stack for the venture type:
-   - SaaS: Next.js + Vercel + Supabase + Stripe. Setup in 2 hours. No custom backend.
-   - Marketplace: Supply side only. No two-sided launch. Google Sheets as admin panel.
-   - B2B: No code. Spreadsheet + Notion + Calendly + manual fulfillment. Build after 5 paying customers.
-   - Consumer app: Landing page + waitlist + manual onboarding. No accounts system.
-   - Agency/service: Notion proposal + Stripe payment link + calendar invite. Build later.
+BAD: "Don't build social sharing."
+GOOD: "Don't build the 'Share to Twitter/LinkedIn' button with auto-generated preview cards. It feels like growth hacking but it's 3 days of work and your first customers haven't even used the product yet."
 
-4. **Pre-sell first**: The fastest path to first dollar usually involves no product. Gumroad, Stripe payment links, a tweet with "DM me to buy" — money before code.
+### 3. WEEKEND SPEC — Real Commands, Real Tools
+BAD: "Hour 1: Set up your project."
+GOOD: "Hour 1: Run \`npx create-next-app@latest mvp --typescript --tailwind --app --src-dir\`. Push to GitHub. Connect to Vercel. Live URL in 15 minutes."
 
-5. **NEVER include in MVP**: User accounts/auth (unless it IS the product), admin panels, analytics, notifications, settings, onboarding flows, multi-user orgs, billing management, mobile apps (unless purely mobile venture), API access, integrations. If it can be done manually for the first 50 customers, it's cut.
+BAD: "Add payments."
+GOOD: "Hour 4: \`npm install stripe @stripe/stripe-js\`. Create Stripe product at dashboard.stripe.com/products. Set price at $X/month. Paste price_ID into env. Done."
 
-6. **Time to first dollar**: Calculate the FASTEST path. Day 1 might be posting in 5 subreddits. Day 3 might be DMing 20 potential customers. Day 7 might be a pre-sell page. Every day should have an action.
+Name EXACT tools with EXACT pricing:
+- Auth: Supabase Auth (free up to 50k users) OR Clerk ($25/mo for 1k MAU) OR skip auth entirely
+- Payments: Stripe (2.9% + 30¢/transaction) OR Gumroad (10% fee, zero setup)
+- DB: Supabase Postgres (free 500MB) OR PlanetScale (free 5GB)
+- Email: Resend (free 100/day) OR Loops (free 2k contacts)
+- Forms: Typeform (free 10 responses/month) OR Tally (free unlimited)
+- Hosting: Vercel (free hobby tier) OR Railway ($5/mo)
 
-7. **Anti-scope-creep rules**: Exactly 5 rules. Each must be a specific, measurable constraint. Not "focus on MVP" — "No feature ships unless it directly enables a paying customer to complete the core action today."
+### 4. TIME TO FIRST DOLLAR — Write the Actual Script
+The fastestPath field MUST include the exact outreach message the founder should copy-paste.
 
-## Output Format
+Example format:
+"Post in r/[subreddit] with title: '[Exact title]' and body: '[First 2 sentences]'. DM everyone who upvotes with: 'Hey [name], saw you upvoted my post about [X]. I'm validating whether founders want [Y]. Would you pay $Z/month for it? Here's a 2-min Loom of what I have: [link]'"
 
-Output ONLY the JSON object matching the MVPScalpelOutput schema below. Every field must contain specific, non-generic advice directly referencing the venture's market, competitors, target customer, and business model from the context provided.
+If no research context: name the most likely communities based on the venture concept.
 
-Never use placeholder text. Never use generic startup advice. If you don't have enough context for a field, make a reasonable, specific inference from the venture concept.
+### 5. ANTI-SCOPE-CREEP RULES — Enforce with Mechanisms
+BAD: "Focus on the core features."
+GOOD: "Any feature request goes into a Notion 'Parking Lot' doc. It ships only if 5 different paying customers requested it in the past 30 days. The doc is reviewed every Monday. Zero exceptions — including your own ideas."
 
-The JSON must be the last and only thing you output.
+BAD: "Don't over-engineer."
+GOOD: "No database schema changes until you hit 25 paying customers. Export to CSV and manage in Airtable if you need it."
 
-IMPORTANT: Any step-by-step reasoning or thought process MUST be strictly wrapped inside <think> and </think> tags. Only the final valid JSON should be outside the <think> tags.
+## Context Requirements
+
+Study the provided venture context carefully. For EVERY section you output:
+- If you know the brand name: use it
+- If you know competitors: name them with their specific weaknesses
+- If you know the target customer: describe them precisely (not "users" — "indie founders who have failed at consistent content marketing")
+- If you know the pain points: reference the top 3 by name
+- If feasibility said NO-GO: the entire MVP must be a demand test, zero product built
+- If feasibility said CONDITIONAL GO: the skeleton MVP must directly test the named conditions
+
+## Output Schema Requirements
+
+**Kill List (5-8 features):**
+- feature: The specific feature name (not category)
+- whyItFeelsEssential: The psychological trap — why every founder wants this
+- whyItKills: Exact cost in days + what opportunity it kills
+- whenToBuild: A specific milestone trigger (paying customer count or revenue amount)
+- effort: days | weeks | months
+
+**Skeleton MVP (2-4 features MAX — if you list 5+, you failed):**
+- oneLiner: One sentence a 12-year-old understands
+- coreHypothesis: "If [specific target customer] [does specific action], they will pay $[amount] because [specific reason from research pain points]"
+- features: Max 4, each must directly test the hypothesis
+- explicitlyExcluded: At least 8 specific things NOT in the MVP with one-line reason each
+- successCriteria: "X paying customers at $Y within Z days" — real numbers
+
+**Weekend Spec (must be ≤ 20 hours total):**
+- techStack: Exact package names, not categories
+- pages: Each page with specific components listed (not "dashboard" — "single table showing X, Y, Z columns, delete button, status badge")
+- endpoints: Exact method + path + what it does in one sentence
+- thirdPartyServices: name + exact use + exact pricing tier
+- hourByHourPlan: Real terminal commands or specific UI steps — no vague descriptions
+- deployTarget: Exact platform + deploy command
+
+**Time to First Dollar:**
+- estimatedDays: Must be ≤ 21 days
+- breakdown: Specific day ranges with concrete actions
+- fastestPath: The full outreach script the founder can copy-paste TODAY. Include the exact post/DM/email text.
+- assumptions: What must be true for this timeline to work
+
+**Anti-Scope-Creep Rules:** Exactly 5 rules, each with an enforcement mechanism.
+
+**Verdict:**
+- readiness: ship-now | almost-ready | needs-rethink
+- summary: "In [X] days, [brand name] founder should have [specific outcome] by doing [specific approach]. The single riskiest assumption is [assumption]. If this assumption is wrong, [consequence]."
+
+Output ONLY valid JSON. Any reasoning MUST be inside <think></think> tags. Only the final JSON goes outside the tags.
 `
 
 // ── Agent Runner ────────────────────────────────────────────────────────────
@@ -176,81 +236,129 @@ export async function runMVPScalpelAgent(
         contextParts.push(`Venture Vision: ${venture.globalIdea}`)
     }
 
-    // Research — extract the most useful fields for MVP scoping
+    // Research — deep extraction for MVP scoping
     if (venture.context?.research) {
         const r = venture.context.research as Record<string, any>
-        const researchSummary: string[] = []
-        if (r.marketSummary) researchSummary.push(`Market: ${r.marketSummary}`)
-        if (r.recommendedConcept) researchSummary.push(`Recommended concept: ${r.recommendedConcept}`)
-        if (r.competitorGap) researchSummary.push(`Market gap: ${r.competitorGap}`)
+        const researchLines: string[] = []
+
+        if (r.marketSummary) researchLines.push(`MARKET OVERVIEW: ${r.marketSummary}`)
+
+        const tam = r.tam?.value || (typeof r.tam === 'string' ? r.tam : '')
+        const sam = r.sam?.value || (typeof r.sam === 'string' ? r.sam : '')
+        const som = r.som?.value || (typeof r.som === 'string' ? r.som : '')
+        if (tam) researchLines.push(`TAM: ${tam}${sam ? ` | SAM: ${sam}` : ''}${som ? ` | SOM: ${som}` : ''}`)
+
+        if (r.targetAudience || r.targetCustomer || r.targetSegment) {
+            researchLines.push(`TARGET CUSTOMER: ${r.targetAudience || r.targetCustomer || r.targetSegment}`)
+        }
+
+        if (r.competitorGap) researchLines.push(`MARKET GAP: ${r.competitorGap}`)
+        if (r.recommendedConcept) {
+            const rc = typeof r.recommendedConcept === 'object'
+                ? (r.recommendedConcept.name || JSON.stringify(r.recommendedConcept))
+                : r.recommendedConcept
+            researchLines.push(`RECOMMENDED CONCEPT: ${rc}`)
+        }
+
         if (Array.isArray(r.painPoints) && r.painPoints.length > 0) {
-            researchSummary.push(`Top pain points: ${r.painPoints.slice(0, 4).map((p: any) => typeof p === 'object' ? p.description : String(p)).join(' | ')}`)
+            const pains = r.painPoints.slice(0, 5).map((p: any, i: number) => {
+                const desc = typeof p === 'object' ? (p.description || p.name || p.pain || JSON.stringify(p)) : String(p)
+                return `  ${i + 1}. ${desc}`
+            })
+            researchLines.push(`PAIN POINTS (most important — use #1 in your skeleton MVP hypothesis):\n${pains.join('\n')}`)
         }
+
         if (Array.isArray(r.competitors) && r.competitors.length > 0) {
-            researchSummary.push(`Competitors: ${r.competitors.slice(0, 4).map((c: any) => `${c.name} (weakness: ${c.weakness})`).join(', ')}`)
+            const comps = r.competitors.slice(0, 6).map((c: any) => {
+                const name = typeof c === 'object' ? (c.name || JSON.stringify(c)) : String(c)
+                const weakness = typeof c === 'object' ? (c.weakness || c.gap || c.limitation || '') : ''
+                const pricing = typeof c === 'object' ? (c.pricing || c.price || '') : ''
+                return `  - ${name}${weakness ? `: weakness = "${weakness}"` : ''}${pricing ? ` | pricing: ${pricing}` : ''}`
+            })
+            researchLines.push(`COMPETITORS (reference by name in kill list and skeleton MVP):\n${comps.join('\n')}`)
         }
-        if (r.tam?.value) researchSummary.push(`TAM: ${r.tam.value}`)
-        if (r.som?.value) researchSummary.push(`SOM: ${r.som.value}`)
+
         if (Array.isArray(r.topConcepts) && r.topConcepts.length > 0) {
-            researchSummary.push(`Top ranked concepts: ${r.topConcepts.slice(0, 3).map((c: any) => `${c.name} (score: ${c.opportunityScore}/10) — ${c.rationale}`).join(' | ')}`)
+            const concepts = r.topConcepts.slice(0, 3).map((c: any) => {
+                const name = typeof c === 'object' ? (c.name || '') : String(c)
+                const score = typeof c === 'object' ? (c.opportunityScore || c.score || '') : ''
+                const rationale = typeof c === 'object' ? (c.rationale || c.description || '') : ''
+                return `  - ${name}${score ? ` (score: ${score}/10)` : ''}${rationale ? `: ${rationale}` : ''}`
+            })
+            researchLines.push(`TOP CONCEPTS FROM RESEARCH:\n${concepts.join('\n')}`)
         }
-        contextParts.push(`Market Research:\n${researchSummary.join('\n')}`)
+
+        contextParts.push(`## Market Research\n${researchLines.join('\n')}`)
     }
 
     // Branding — for product naming and positioning
     if (venture.context?.branding) {
         const b = venture.context.branding as Record<string, any>
-        const brandParts: string[] = []
-        if (b.brandName) brandParts.push(`Brand name: ${b.brandName}`)
-        if (b.tagline) brandParts.push(`Tagline: ${b.tagline}`)
-        if (b.missionStatement) brandParts.push(`Mission: ${b.missionStatement}`)
-        if (Array.isArray(b.brandPersonality)) brandParts.push(`Personality: ${b.brandPersonality.join(', ')}`)
-        contextParts.push(`Brand:\n${brandParts.join('\n')}`)
+        const brandLines: string[] = []
+        if (b.brandName) brandLines.push(`BRAND NAME: ${b.brandName} (use this name throughout your output, never "your product")`)
+        if (b.tagline) brandLines.push(`TAGLINE: "${b.tagline}"`)
+        if (b.missionStatement) brandLines.push(`MISSION: ${b.missionStatement}`)
+        if (b.brandArchetype) brandLines.push(`ARCHETYPE: ${b.brandArchetype}`)
+        if (b.targetPersona || b.idealCustomer) brandLines.push(`IDEAL CUSTOMER: ${b.targetPersona || b.idealCustomer}`)
+        if (Array.isArray(b.brandPersonality) && b.brandPersonality.length > 0) {
+            brandLines.push(`BRAND PERSONALITY: ${b.brandPersonality.join(', ')}`)
+        }
+        contextParts.push(`## Brand Identity\n${brandLines.join('\n')}`)
     }
 
     // Feasibility — most important for MVP scope decision
     if (venture.context?.feasibility) {
         const f = venture.context.feasibility as Record<string, any>
-        const feasParts: string[] = []
-        if (f.verdict) feasParts.push(`Verdict: ${f.verdict}`)
-        if (f.verdictRationale) feasParts.push(`Rationale: ${f.verdictRationale}`)
-        if (f.marketTimingScore) feasParts.push(`Market timing: ${f.marketTimingScore}/10`)
-        if (f.financialModel?.yearOne) {
-            const y1 = f.financialModel.yearOne
-            feasParts.push(`Year 1 projections: ${y1.revenue} revenue, ${y1.customers} customers`)
+        const feasLines: string[] = []
+        if (f.verdict) feasLines.push(`VERDICT: ${f.verdict}`)
+        if (f.verdictRationale) feasLines.push(`RATIONALE: ${f.verdictRationale}`)
+        if (f.marketTimingScore) feasLines.push(`MARKET TIMING: ${f.marketTimingScore}/10`)
+        if (f.competitiveMoat) feasLines.push(`COMPETITIVE MOAT: ${f.competitiveMoat}`)
+        if (f.financialModel) {
+            const fm = f.financialModel
+            if (fm.cac) feasLines.push(`CAC: ${fm.cac}`)
+            if (fm.ltv) feasLines.push(`LTV: ${fm.ltv}`)
+            if (fm.ltvCacRatio) feasLines.push(`LTV:CAC: ${fm.ltvCacRatio}`)
+            if (fm.breakEvenMonth) feasLines.push(`BREAK-EVEN: Month ${fm.breakEvenMonth}`)
+            if (fm.yearOne) feasLines.push(`YEAR 1 TARGET: ${fm.yearOne.revenue} revenue, ${fm.yearOne.customers} customers`)
         }
-        if (f.financialModel?.cac) feasParts.push(`CAC: ${f.financialModel.cac}`)
-        if (f.financialModel?.ltv) feasParts.push(`LTV: ${f.financialModel.ltv}`)
         if (Array.isArray(f.keyAssumptions) && f.keyAssumptions.length > 0) {
-            feasParts.push(`Key assumptions to test: ${f.keyAssumptions.slice(0, 3).join(', ')}`)
+            feasLines.push(`KEY ASSUMPTIONS TO TEST (build the MVP around validating these):\n${f.keyAssumptions.slice(0, 5).map((a: string) => `  - ${a}`).join('\n')}`)
         }
         if (Array.isArray(f.risks) && f.risks.length > 0) {
             const highRisks = f.risks.filter((r: any) => r.likelihood === 'high').slice(0, 3)
             if (highRisks.length > 0) {
-                feasParts.push(`High risks: ${highRisks.map((r: any) => r.risk).join(', ')}`)
+                feasLines.push(`HIGHEST RISKS:\n${highRisks.map((r: any) => `  - ${r.risk} (mitigation: ${r.mitigation})`).join('\n')}`)
             }
         }
-        contextParts.push(`Feasibility:\n${feasParts.join('\n')}`)
+        contextParts.push(`## Feasibility Analysis\n${feasLines.join('\n')}`)
 
-        // Strong emphasis if verdict is concerning
         if (f.verdict === 'NO-GO') {
-            contextParts.push(`⚠️ CRITICAL: Feasibility verdict is NO-GO. The MVP must prove demand exists before ANY investment. Kill List should be maximally aggressive. Consider if a pre-sell test (no product built) is the right first step.`)
+            contextParts.push(`⚠️ CRITICAL — FEASIBILITY IS NO-GO: Build NOTHING. The skeleton MVP must be a demand test only (landing page + payment link, or pre-sell via Gumroad). Zero product. The kill list should assume the founder has already over-scoped. The fastest path to first dollar must involve no code at all.`)
         } else if (f.verdict === 'CONDITIONAL GO') {
-            contextParts.push(`⚠️ NOTE: Feasibility verdict is CONDITIONAL GO. The MVP must directly test the named conditions. Make the skeleton MVP specifically designed to validate the feasibility concerns.`)
+            contextParts.push(`⚠️ CONDITIONAL GO: The skeleton MVP must directly test the specific conditions from the feasibility verdict rationale above. Reference those conditions explicitly in the coreHypothesis and successCriteria.`)
         }
     }
 
     const isContinuation = history.length > 0
     const finalUserMessage = isContinuation
         ? "Continue from where you left off. Do not repeat anything already outputted. Complete the MVPScalpelOutput JSON object strictly."
-        : `Apply the Scalpel. Cut this venture to its absolute minimum. The founder thinks they need many features — prove them wrong.
+        : `Apply the Scalpel to this venture. Be brutally specific — use every data point from the context below.
 
 Venture: ${venture.name}
 
 ${contextParts.join('\n\n')}
 
-Be specific to this venture. Reference actual competitors, actual pain points, actual market dynamics from the context above.
-Produce the complete MVPScalpelOutput JSON.`
+CRITICAL INSTRUCTIONS:
+1. Use the ACTUAL brand name throughout (never "your product")
+2. Name ACTUAL competitors by name in the kill list reasoning
+3. Reference ACTUAL pain points in the core hypothesis
+4. Write an ACTUAL outreach script in timeToFirstDollar.fastestPath (copy-paste ready)
+5. Use ACTUAL terminal commands in the hourByHourPlan (not descriptions of what to do)
+6. Name ACTUAL tools with ACTUAL pricing tiers in thirdPartyServices
+7. Make the skeleton MVP directly test assumptions from the feasibility verdict
+
+Produce the complete MVPScalpelOutput JSON. Every field must be specific to THIS venture, not generic startup advice.`
 
     const run = async () => {
         const prevText = (history.find(h => h.role === 'model')?.parts[0] as any)?.text || ''
