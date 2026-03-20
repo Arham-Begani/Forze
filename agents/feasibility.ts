@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+    getFlashModel,
     getProModelWithSearchAndThinking,
     streamPrompt,
     extractJSON,
@@ -84,6 +85,111 @@ const FeasibilityOutputSchema = z.object({
 })
 
 export type FeasibilityOutput = z.infer<typeof FeasibilityOutputSchema>
+
+// ── Edit Patch Schema (all fields optional — for surgical updates) ───────────
+
+const FeasibilityEditPatchSchema = z.object({
+    verdict: z.enum(['GO', 'NO-GO', 'CONDITIONAL GO']).optional(),
+    verdictRationale: z.string().optional(),
+    feasibilityReport: z.string().optional(),
+    marketTimingScore: z.number().min(1).max(10).optional(),
+    marketTimingRationale: z.string().optional(),
+    financialModel: z.object({
+        assumptions: z.record(z.string(), z.string()).optional(),
+        yearOne: z.object({
+            revenue: z.string().optional(),
+            costs: z.string().optional(),
+            netIncome: z.string().optional(),
+            customers: z.string().optional(),
+        }).optional(),
+        yearTwo: z.object({
+            revenue: z.string().optional(),
+            costs: z.string().optional(),
+            netIncome: z.string().optional(),
+            customers: z.string().optional(),
+        }).optional(),
+        yearThree: z.object({
+            revenue: z.string().optional(),
+            costs: z.string().optional(),
+            netIncome: z.string().optional(),
+            customers: z.string().optional(),
+        }).optional(),
+        breakEvenMonth: z.number().optional(),
+        cac: z.string().optional(),
+        ltv: z.string().optional(),
+        ltvCacRatio: z.string().optional(),
+    }).optional(),
+    risks: z.array(z.object({
+        category: z.string().default('General'),
+        risk: z.string(),
+        likelihood: z.enum(['high', 'medium', 'low']).default('medium'),
+        impact: z.enum(['high', 'medium', 'low']).default('medium'),
+        mitigation: z.string().default('Mitigation strategy pending.'),
+    })).optional(),
+    competitiveMoat: z.string().optional(),
+    regulatoryLandscape: z.string().optional(),
+    keyAssumptions: z.array(z.string()).optional(),
+    keyRisksToMonitor: z.array(z.string()).optional(),
+    reportSections: z.array(z.string()).optional(),
+})
+
+type FeasibilityEditPatch = z.infer<typeof FeasibilityEditPatchSchema>
+
+// ── Merge patch into existing result ─────────────────────────────────────────
+
+function mergePatch(existing: FeasibilityOutput, patch: FeasibilityEditPatch): FeasibilityOutput {
+    const merged = { ...existing }
+
+    if (patch.verdict !== undefined) merged.verdict = patch.verdict
+    if (patch.verdictRationale !== undefined) merged.verdictRationale = patch.verdictRationale
+    if (patch.feasibilityReport !== undefined) merged.feasibilityReport = patch.feasibilityReport
+    if (patch.marketTimingScore !== undefined) merged.marketTimingScore = patch.marketTimingScore
+    if (patch.marketTimingRationale !== undefined) merged.marketTimingRationale = patch.marketTimingRationale
+    if (patch.competitiveMoat !== undefined) merged.competitiveMoat = patch.competitiveMoat
+    if (patch.regulatoryLandscape !== undefined) merged.regulatoryLandscape = patch.regulatoryLandscape
+
+    if (patch.financialModel) {
+        merged.financialModel = { ...existing.financialModel }
+        if (patch.financialModel.assumptions) merged.financialModel.assumptions = { ...existing.financialModel.assumptions, ...patch.financialModel.assumptions }
+        if (patch.financialModel.yearOne) merged.financialModel.yearOne = { ...existing.financialModel.yearOne, ...patch.financialModel.yearOne }
+        if (patch.financialModel.yearTwo) merged.financialModel.yearTwo = { ...existing.financialModel.yearTwo, ...patch.financialModel.yearTwo }
+        if (patch.financialModel.yearThree) merged.financialModel.yearThree = { ...existing.financialModel.yearThree, ...patch.financialModel.yearThree }
+        if (patch.financialModel.breakEvenMonth !== undefined) merged.financialModel.breakEvenMonth = patch.financialModel.breakEvenMonth
+        if (patch.financialModel.cac !== undefined) merged.financialModel.cac = patch.financialModel.cac
+        if (patch.financialModel.ltv !== undefined) merged.financialModel.ltv = patch.financialModel.ltv
+        if (patch.financialModel.ltvCacRatio !== undefined) merged.financialModel.ltvCacRatio = patch.financialModel.ltvCacRatio
+    }
+
+    // Arrays replace entirely
+    if (patch.risks) merged.risks = patch.risks
+    if (patch.keyAssumptions) merged.keyAssumptions = patch.keyAssumptions
+    if (patch.keyRisksToMonitor) merged.keyRisksToMonitor = patch.keyRisksToMonitor
+    if (patch.reportSections) merged.reportSections = patch.reportSections
+
+    return merged
+}
+
+// ── Edit System Prompt ───────────────────────────────────────────────────────
+
+const EDIT_SYSTEM_PROMPT = `
+# Deep Validation — Surgical Edit Mode
+
+You are editing an EXISTING feasibility study. The user wants a specific change — do NOT regenerate everything.
+
+## Rules
+1. Read the existing feasibility data carefully
+2. Identify ONLY the fields that need to change based on the user's request
+3. Output a JSON patch containing ONLY the changed fields
+4. Unchanged fields must be OMITTED (not copied)
+5. For financialModel, include only changed sub-objects (yearOne, yearTwo, etc.) and within those only changed fields
+6. For arrays (risks, keyAssumptions, keyRisksToMonitor), if ANY item changes, include the entire array
+7. If changing unit economics (CAC, LTV, etc.), ensure internal consistency
+
+## Output Format
+Output ONLY a JSON object with the changed fields. No markdown fences, no explanation.
+Example: if the user asks to update unit economics, output:
+{"financialModel": {"cac": "$45", "ltv": "$540", "ltvCacRatio": "12:1"}}
+`
 
 // ── Depth-specific prompt sections ───────────────────────────────────────────
 
@@ -311,6 +417,44 @@ export async function runFeasibilityAgent(
 ): Promise<void> {
     const cfg = DEPTH_CONFIG[depth]
 
+    // ── Edit mode detection ──
+    const existingFeasibility = venture.context.feasibility as FeasibilityOutput | null | undefined
+    const isEditMode = !history.length && !!existingFeasibility?.verdict && existingFeasibility.verdictRationale.length > 20
+
+    if (isEditMode) {
+        await onStream('[Edit mode] Applying surgical changes to existing feasibility study...\n')
+
+        const existingForContext = {
+            verdict: existingFeasibility!.verdict,
+            verdictRationale: existingFeasibility!.verdictRationale,
+            marketTimingScore: existingFeasibility!.marketTimingScore,
+            marketTimingRationale: existingFeasibility!.marketTimingRationale,
+            financialModel: existingFeasibility!.financialModel,
+            competitiveMoat: existingFeasibility!.competitiveMoat,
+            regulatoryLandscape: existingFeasibility!.regulatoryLandscape,
+            keyAssumptions: existingFeasibility!.keyAssumptions,
+            risks: existingFeasibility!.risks?.slice(0, 8),
+            feasibilityReport: existingFeasibility!.feasibilityReport?.length > 500
+                ? existingFeasibility!.feasibilityReport.slice(0, 250) + '\n... [truncated] ...\n' + existingFeasibility!.feasibilityReport.slice(-250)
+                : existingFeasibility!.feasibilityReport,
+        }
+
+        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current Feasibility Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+
+        const editRun = async () => {
+            const model = getFlashModel()
+            const fullText = await streamPrompt(model, EDIT_SYSTEM_PROMPT, editUserMessage, onStream)
+            const rawPatch = extractJSON(fullText) as FeasibilityEditPatch
+            const validatedPatch = FeasibilityEditPatchSchema.parse(rawPatch)
+            const merged = mergePatch(existingFeasibility!, validatedPatch)
+            const validated = FeasibilityOutputSchema.parse(merged)
+            await onComplete(validated)
+        }
+
+        await withTimeout(editRun(), Number(process.env.FEASIBILITY_TIMEOUT_MS ?? 120000))
+        return
+    }
+
     // Build context block — research is ideal but not required anymore (web search fills gaps)
     const contextParts: string[] = []
 
@@ -321,10 +465,62 @@ export async function runFeasibilityAgent(
         contextParts.push(`Global Startup Vision: ${venture.globalIdea}`)
     }
     if (venture.context?.research) {
-        contextParts.push(`Market Research Data (from Genesis agent):\n${JSON.stringify(venture.context.research, null, 2)}`)
+        const r = venture.context.research as Record<string, any>
+        const lines: string[] = []
+        if (r.marketSummary) lines.push(`Market summary: ${r.marketSummary}`)
+        // TAM / SAM / SOM with source and methodology
+        if (r.tam) {
+            const tamVal = r.tam?.value || (typeof r.tam === 'string' ? r.tam : '')
+            const tamSrc = r.tam?.source ? ` (source: ${r.tam.source})` : ''
+            const tamMethod = r.tam?.methodology ? ` [${r.tam.methodology}]` : ''
+            if (tamVal) lines.push(`TAM: ${tamVal}${tamSrc}${tamMethod}`)
+        }
+        if (r.sam) {
+            const samVal = r.sam?.value || (typeof r.sam === 'string' ? r.sam : '')
+            const samSrc = r.sam?.source ? ` (source: ${r.sam.source})` : ''
+            if (samVal) lines.push(`SAM: ${samVal}${samSrc}`)
+        }
+        if (r.som) {
+            const somVal = r.som?.value || (typeof r.som === 'string' ? r.som : '')
+            const somRat = r.som?.rationale ? ` — ${r.som.rationale}` : ''
+            if (somVal) lines.push(`SOM: ${somVal}${somRat}`)
+        }
+        if (r.targetAudience || r.targetCustomer) lines.push(`Target customer: ${r.targetAudience || r.targetCustomer}`)
+        if (r.competitorGap) lines.push(`Competitor gap: ${r.competitorGap}`)
+        if (r.recommendedConcept) {
+            const concept = typeof r.recommendedConcept === 'object'
+                ? (r.recommendedConcept.name || r.recommendedConcept.title || JSON.stringify(r.recommendedConcept))
+                : String(r.recommendedConcept)
+            lines.push(`Recommended concept: ${concept}`)
+        }
+        if (Array.isArray(r.painPoints) && r.painPoints.length > 0) {
+            const pains = r.painPoints.slice(0, 5).map((p: any, i: number) => {
+                const desc = typeof p === 'object' ? (p.description || p.name || JSON.stringify(p)) : String(p)
+                const freq = typeof p === 'object' && p.frequency ? ` (frequency: ${p.frequency})` : ''
+                return `  ${i + 1}. ${desc}${freq}`
+            })
+            lines.push(`Pain points:\n${pains.join('\n')}`)
+        }
+        if (Array.isArray(r.competitors) && r.competitors.length > 0) {
+            const comps = r.competitors.slice(0, 5).map((c: any) => {
+                const name = typeof c === 'object' ? (c.name || JSON.stringify(c)) : String(c)
+                const pos = typeof c === 'object' && c.positioning ? ` | positioning: "${c.positioning}"` : ''
+                const weakness = typeof c === 'object' && (c.weakness || c.gap) ? ` | weakness: "${c.weakness || c.gap}"` : ''
+                return `  - ${name}${pos}${weakness}`
+            })
+            lines.push(`Competitors:\n${comps.join('\n')}`)
+        }
+        // SWOT and riskMatrix kept as-is — feasibility needs full detail
+        if (r.swot) lines.push(`SWOT:\n${JSON.stringify(r.swot, null, 2)}`)
+        if (r.riskMatrix) lines.push(`Risk Matrix:\n${JSON.stringify(r.riskMatrix, null, 2)}`)
+        contextParts.push(`Market Research Data (from Genesis agent):\n${lines.join('\n')}`)
     }
     if (venture.context?.branding) {
-        contextParts.push(`Brand Context:\n${JSON.stringify(venture.context.branding, null, 2)}`)
+        const b = venture.context.branding as Record<string, any>
+        const brandLines: string[] = []
+        if (b.brandName) brandLines.push(`Brand name: ${b.brandName}`)
+        if (b.tagline) brandLines.push(`Tagline: "${b.tagline}"`)
+        if (brandLines.length > 0) contextParts.push(`Brand Context:\n${brandLines.join('\n')}`)
     }
 
     const userMessage = `Produce a ${depth} feasibility study with GO/NO-GO verdict for this venture.
