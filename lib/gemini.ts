@@ -219,13 +219,13 @@ async function streamGrokPrompt(
 }
 
 // Flash model - used by direct utility routes and creative agents that rely on Gemini's chat API.
-export function getFlashModel(): GenerativeModel {
+export function getFlashModel(maxOutputTokens = 32768): GenerativeModel {
     return createGeminiModel({
         model: 'models/gemini-3-flash-preview',
         generationConfig: {
             temperature: 0.7,
             topP: 0.95,
-            maxOutputTokens: 32768,
+            maxOutputTokens,
         },
     })
 }
@@ -258,14 +258,15 @@ export function getFlashModelWithSearch(): SearchCapableModel {
 // Pro model with thinking - stays on Gemini because current direct callers depend on Gemini behavior.
 export function getProModelWithThinking(
     thinkingBudget: number = 10000,
-    modelId: string = 'models/gemini-3-pro-preview'
+    modelId: string = 'models/gemini-3-pro-preview',
+    maxOutputTokens: number = 32768
 ): GenerativeModel {
     return createGeminiModel({
         model: modelId,
         generationConfig: {
             temperature: 0.6,
             topP: 0.95,
-            maxOutputTokens: 32768,
+            maxOutputTokens,
             // @ts-ignore
             thinkingConfig: { thinkingBudget },
         },
