@@ -83,6 +83,110 @@ const GenesisOutputSchema = z.object({
 
 export type GenesisOutput = z.infer<typeof GenesisOutputSchema>
 
+// ── Edit Patch Schema (all fields optional — for surgical updates) ───────────
+
+const GenesisEditPatchSchema = z.object({
+    marketSummary: z.string().optional(),
+    researchPaper: z.string().optional(),
+    tam: z.object({
+        value: z.string().optional(),
+        source: z.string().optional(),
+        methodology: z.string().optional(),
+    }).optional(),
+    sam: z.object({
+        value: z.string().optional(),
+        source: z.string().optional(),
+    }).optional(),
+    som: z.object({
+        value: z.string().optional(),
+        rationale: z.string().optional(),
+    }).optional(),
+    painPoints: z.array(z.object({
+        description: z.string(),
+        source: z.string(),
+        frequency: z.enum(['high', 'medium', 'low']).default('medium'),
+    })).optional(),
+    competitors: z.array(z.object({
+        name: z.string(),
+        positioning: z.string(),
+        weakness: z.string(),
+    })).optional(),
+    competitorGap: z.string().optional(),
+    swot: z.object({
+        strengths: z.array(z.string()).optional(),
+        weaknesses: z.array(z.string()).optional(),
+        opportunities: z.array(z.string()).optional(),
+        threats: z.array(z.string()).optional(),
+    }).optional(),
+    riskMatrix: z.array(z.object({
+        risk: z.string(),
+        likelihood: z.enum(['high', 'medium', 'low']).default('medium'),
+        impact: z.enum(['high', 'medium', 'low']).default('medium'),
+        score: z.number().default(5),
+    })).optional(),
+    topConcepts: z.array(z.object({
+        name: z.string(),
+        description: z.string(),
+        opportunityScore: z.number().default(5),
+        rationale: z.string().default('No rationale provided.'),
+    })).optional(),
+    recommendedConcept: z.string().optional(),
+})
+
+type GenesisEditPatch = z.infer<typeof GenesisEditPatchSchema>
+
+// ── Merge patch into existing result ─────────────────────────────────────────
+
+function mergePatch(existing: GenesisOutput, patch: GenesisEditPatch): GenesisOutput {
+    const merged = { ...existing }
+
+    if (patch.marketSummary !== undefined) merged.marketSummary = patch.marketSummary
+    if (patch.researchPaper !== undefined) merged.researchPaper = patch.researchPaper
+    if (patch.competitorGap !== undefined) merged.competitorGap = patch.competitorGap
+    if (patch.recommendedConcept !== undefined) merged.recommendedConcept = patch.recommendedConcept
+
+    if (patch.tam) merged.tam = { ...existing.tam, ...patch.tam }
+    if (patch.sam) merged.sam = { ...existing.sam, ...patch.sam }
+    if (patch.som) merged.som = { ...existing.som, ...patch.som }
+
+    if (patch.swot) {
+        merged.swot = { ...existing.swot }
+        if (patch.swot.strengths) merged.swot.strengths = patch.swot.strengths
+        if (patch.swot.weaknesses) merged.swot.weaknesses = patch.swot.weaknesses
+        if (patch.swot.opportunities) merged.swot.opportunities = patch.swot.opportunities
+        if (patch.swot.threats) merged.swot.threats = patch.swot.threats
+    }
+
+    // Arrays replace entirely
+    if (patch.painPoints) merged.painPoints = patch.painPoints
+    if (patch.competitors) merged.competitors = patch.competitors
+    if (patch.riskMatrix) merged.riskMatrix = patch.riskMatrix
+    if (patch.topConcepts) merged.topConcepts = patch.topConcepts
+
+    return merged
+}
+
+// ── Edit System Prompt ───────────────────────────────────────────────────────
+
+const EDIT_SYSTEM_PROMPT = `
+# Genesis Engine — Surgical Edit Mode
+
+You are editing an EXISTING market research output. The user wants a specific change — do NOT regenerate everything.
+
+## Rules
+1. Read the existing research data carefully
+2. Identify ONLY the fields that need to change based on the user's request
+3. Output a JSON patch containing ONLY the changed fields
+4. Unchanged fields must be OMITTED (not copied)
+5. For nested objects (tam, sam, som, swot), include only changed sub-fields
+6. For arrays (painPoints, competitors, riskMatrix, topConcepts), if ANY item changes, include the entire array
+
+## Output Format
+Output ONLY a JSON object with the changed fields. No markdown fences, no explanation.
+Example: if the user asks to change the recommended concept, output:
+{"recommendedConcept": "New concept name"}
+`
+
 // ── System Prompt ─────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `
@@ -232,8 +336,48 @@ export async function runGenesisAgent(
         detailed: 22
     }
 
+    // ── Edit mode detection ──
+    const existingResearch = venture.context.research as GenesisOutput | null | undefined
+    const isEditMode = !history.length && !!existingResearch?.marketSummary && existingResearch.marketSummary.length > 20
+
+    if (isEditMode) {
+        await onStream('[Edit mode] Applying surgical changes to existing research...\n')
+
+        const existingForContext = {
+            marketSummary: existingResearch!.marketSummary,
+            tam: existingResearch!.tam,
+            sam: existingResearch!.sam,
+            som: existingResearch!.som,
+            competitorGap: existingResearch!.competitorGap,
+            recommendedConcept: existingResearch!.recommendedConcept,
+            painPoints: existingResearch!.painPoints?.slice(0, 5),
+            competitors: existingResearch!.competitors?.slice(0, 5),
+            swot: existingResearch!.swot,
+            riskMatrix: existingResearch!.riskMatrix?.slice(0, 5),
+            topConcepts: existingResearch!.topConcepts?.slice(0, 5),
+            researchPaper: existingResearch!.researchPaper?.length > 500
+                ? existingResearch!.researchPaper.slice(0, 250) + '\n... [truncated] ...\n' + existingResearch!.researchPaper.slice(-250)
+                : existingResearch!.researchPaper,
+        }
+
+        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current Research Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+
+        const editRun = async () => {
+            const model = getFlashModelWithSearch()
+            const fullText = await streamPrompt(model, EDIT_SYSTEM_PROMPT, editUserMessage, onStream)
+            const rawPatch = extractJSON(fullText) as GenesisEditPatch
+            const validatedPatch = GenesisEditPatchSchema.parse(rawPatch)
+            const merged = mergePatch(existingResearch!, validatedPatch)
+            const validated = GenesisOutputSchema.parse(merged)
+            await onComplete(validated)
+        }
+
+        await withTimeout(withRetry(editRun), Number(process.env.AGENT_TIMEOUT_MS ?? 120000))
+        return
+    }
+
     const isContinuation = history.length > 0
-    const userMessage = isContinuation 
+    const userMessage = isContinuation
         ? "Continue from where you left off. Do not repeat anything already outputted. Complete the GenesisOutput JSON object strictly."
         : `Research this venture concept thoroughly using Google Search.
     Find real, current market data with citations.
