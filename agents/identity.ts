@@ -64,6 +64,96 @@ const IdentityOutputSchema = z.object({
 
 export type IdentityOutput = z.infer<typeof IdentityOutputSchema>
 
+// ── Edit Patch Schema (all fields optional — for surgical updates) ───────────
+
+const IdentityEditPatchSchema = z.object({
+    brandName: z.string().optional(),
+    brandNameRationale: z.string().optional(),
+    brandBible: z.string().optional(),
+    nameCandidates: z.array(z.string()).optional(),
+    tagline: z.string().optional(),
+    missionStatement: z.string().optional(),
+    brandArchetype: z.string().optional(),
+    brandPersonality: z.array(z.string()).optional(),
+    toneOfVoice: z.object({
+        description: z.string().optional(),
+        doExamples: z.array(z.string()).optional(),
+        dontExamples: z.array(z.string()).optional(),
+    }).optional(),
+    colorPalette: z.array(z.object({
+        name: z.string(),
+        hex: z.string(),
+        role: z.string(),
+        psychology: z.string(),
+    })).optional(),
+    typography: z.object({
+        displayFont: z.string().optional(),
+        bodyFont: z.string().optional(),
+        usageRules: z.string().optional(),
+    }).optional(),
+    logoConceptDescriptions: z.array(z.string()).optional(),
+    uiKitSpec: z.object({
+        borderRadius: z.string().optional(),
+        spacing: z.string().optional(),
+        buttonStyle: z.string().optional(),
+        cardStyle: z.string().optional(),
+    }).optional(),
+})
+
+type IdentityEditPatch = z.infer<typeof IdentityEditPatchSchema>
+
+// ── Merge patch into existing result ─────────────────────────────────────────
+
+function mergePatch(existing: IdentityOutput, patch: IdentityEditPatch): IdentityOutput {
+    const merged = { ...existing }
+
+    if (patch.brandName !== undefined) merged.brandName = patch.brandName
+    if (patch.brandNameRationale !== undefined) merged.brandNameRationale = patch.brandNameRationale
+    if (patch.brandBible !== undefined) merged.brandBible = patch.brandBible
+    if (patch.tagline !== undefined) merged.tagline = patch.tagline
+    if (patch.missionStatement !== undefined) merged.missionStatement = patch.missionStatement
+    if (patch.brandArchetype !== undefined) merged.brandArchetype = patch.brandArchetype
+
+    // Arrays replace entirely
+    if (patch.nameCandidates) merged.nameCandidates = patch.nameCandidates
+    if (patch.brandPersonality) merged.brandPersonality = patch.brandPersonality
+    if (patch.colorPalette) merged.colorPalette = patch.colorPalette
+    if (patch.logoConceptDescriptions) merged.logoConceptDescriptions = patch.logoConceptDescriptions
+
+    // Nested objects merge at sub-field level
+    if (patch.toneOfVoice) {
+        merged.toneOfVoice = { ...existing.toneOfVoice }
+        if (patch.toneOfVoice.description !== undefined) merged.toneOfVoice.description = patch.toneOfVoice.description
+        if (patch.toneOfVoice.doExamples) merged.toneOfVoice.doExamples = patch.toneOfVoice.doExamples
+        if (patch.toneOfVoice.dontExamples) merged.toneOfVoice.dontExamples = patch.toneOfVoice.dontExamples
+    }
+    if (patch.typography) merged.typography = { ...existing.typography, ...patch.typography }
+    if (patch.uiKitSpec) merged.uiKitSpec = { ...existing.uiKitSpec, ...patch.uiKitSpec }
+
+    return merged
+}
+
+// ── Edit System Prompt ───────────────────────────────────────────────────────
+
+const EDIT_SYSTEM_PROMPT = `
+# Identity Architect — Surgical Edit Mode
+
+You are editing an EXISTING brand identity output. The user wants a specific change — do NOT regenerate everything.
+
+## Rules
+1. Read the existing brand data carefully
+2. Identify ONLY the fields that need to change based on the user's request
+3. Output a JSON patch containing ONLY the changed fields
+4. Unchanged fields must be OMITTED (not copied)
+5. For nested objects (toneOfVoice, typography, uiKitSpec), include only changed sub-fields
+6. For arrays (colorPalette, nameCandidates, brandPersonality, logoConceptDescriptions), if ANY item changes, include the entire array
+
+## Output Format
+Output ONLY a JSON object with the changed fields. No markdown fences, no explanation.
+Example: if the user asks to change the tagline, output:
+{"tagline": "New tagline here"}
+`
+
 // ── System Prompt ─────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `
@@ -207,7 +297,81 @@ export async function runIdentityAgent(
     const contextParts: string[] = []
     if (venture.context?.architectPlan) contextParts.push(`Architect's Plan:\n${venture.context.architectPlan}`)
     if (venture.globalIdea) contextParts.push(`Global Startup Vision: ${venture.globalIdea}`)
-    if (hasResearch) contextParts.push(`Market research (use this to ground every brand decision):\n${JSON.stringify(venture.context.research, null, 2)}`)
+    if (hasResearch) {
+        const r = venture.context.research as Record<string, any>
+        const lines: string[] = []
+        if (r.marketSummary) lines.push(`Market: ${r.marketSummary}`)
+        const tam = r.tam?.value || (typeof r.tam === 'string' ? r.tam : '')
+        if (tam) lines.push(`TAM: ${tam}`)
+        const sam = r.sam?.value || (typeof r.sam === 'string' ? r.sam : '')
+        if (sam) lines.push(`SAM: ${sam}`)
+        const som = r.som?.value || (typeof r.som === 'string' ? r.som : '')
+        if (som) lines.push(`SOM: ${som}`)
+        if (r.targetAudience || r.targetCustomer) lines.push(`Target customer: ${r.targetAudience || r.targetCustomer}`)
+        if (r.competitorGap) lines.push(`Market gap: ${r.competitorGap}`)
+        if (r.recommendedConcept) {
+            const concept = typeof r.recommendedConcept === 'object'
+                ? (r.recommendedConcept.name || r.recommendedConcept.title || JSON.stringify(r.recommendedConcept))
+                : String(r.recommendedConcept)
+            lines.push(`Recommended concept: ${concept}`)
+        }
+        if (Array.isArray(r.painPoints) && r.painPoints.length > 0) {
+            const pains = r.painPoints.slice(0, 5).map((p: any, i: number) => {
+                const desc = typeof p === 'object' ? (p.description || p.name || JSON.stringify(p)) : String(p)
+                return `  ${i + 1}. ${desc}`
+            })
+            lines.push(`Pain points (brand voice must address these):\n${pains.join('\n')}`)
+        }
+        if (Array.isArray(r.competitors) && r.competitors.length > 0) {
+            const comps = r.competitors.slice(0, 5).map((c: any) => {
+                const name = typeof c === 'object' ? (c.name || JSON.stringify(c)) : String(c)
+                const weakness = typeof c === 'object' ? (c.weakness || c.gap || '') : ''
+                return `  - ${name}${weakness ? `: weakness = "${weakness}"` : ''}`
+            })
+            lines.push(`Competitors:\n${comps.join('\n')}`)
+        }
+        contextParts.push(`Market research (use this to ground every brand decision):\n${lines.join('\n')}`)
+    }
+
+    // ── Edit mode detection ──
+    const existingBranding = venture.context.branding as IdentityOutput | null | undefined
+    const isEditMode = !history.length && !!existingBranding?.brandName && existingBranding.brandName !== 'Untitled Venture'
+
+    if (isEditMode) {
+        await onStream('[Edit mode] Applying surgical changes to existing brand identity...\n')
+
+        const existingForContext = {
+            brandName: existingBranding!.brandName,
+            tagline: existingBranding!.tagline,
+            missionStatement: existingBranding!.missionStatement,
+            brandArchetype: existingBranding!.brandArchetype,
+            brandPersonality: existingBranding!.brandPersonality,
+            toneOfVoice: existingBranding!.toneOfVoice,
+            colorPalette: existingBranding!.colorPalette,
+            typography: existingBranding!.typography,
+            logoConceptDescriptions: existingBranding!.logoConceptDescriptions,
+            uiKitSpec: existingBranding!.uiKitSpec,
+            nameCandidates: existingBranding!.nameCandidates,
+            brandBible: existingBranding!.brandBible?.length > 500
+                ? existingBranding!.brandBible.slice(0, 250) + '\n... [truncated] ...\n' + existingBranding!.brandBible.slice(-250)
+                : existingBranding!.brandBible,
+        }
+
+        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current Brand Identity\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+
+        const editRun = async () => {
+            const model = getFlashModel()
+            const fullText = await streamPrompt(model, EDIT_SYSTEM_PROMPT, editUserMessage, onStream)
+            const rawPatch = extractJSON(fullText) as IdentityEditPatch
+            const validatedPatch = IdentityEditPatchSchema.parse(rawPatch)
+            const merged = mergePatch(existingBranding!, validatedPatch)
+            const validated = IdentityOutputSchema.parse(merged)
+            await onComplete(validated)
+        }
+
+        await withTimeout(withRetry(editRun), Number(process.env.AGENT_TIMEOUT_MS ?? 120000))
+        return
+    }
 
     const isContinuation = history.length > 0
     const userMessage = isContinuation
