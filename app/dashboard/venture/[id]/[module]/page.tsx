@@ -1020,72 +1020,80 @@ export default function ModulePage() {
         </motion.div>
       )}
 
-      {/* ── Content area (chat + reading panel) ── */}
-      {(billingLoaded || runError) && (
-        <div
-          style={{
-            padding: '12px 20px',
-            borderBottom: '1px solid var(--border)',
-            background: moduleLocked || !hasEnoughCredits || runError ? 'rgba(224, 72, 72, 0.05)' : 'var(--glass-bg)',
-            zIndex: 4,
-            flexShrink: 0,
-          }}
-        >
-          <div
+      {/* ── Credits exhausted / module locked toast ── */}
+      <AnimatePresence>
+        {runError && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
             style={{
+              position: 'fixed',
+              top: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 9999,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 16,
-              maxWidth: 1180,
-              margin: '0 auto',
-              flexWrap: 'wrap',
+              gap: 12,
+              padding: '14px 20px',
+              borderRadius: 16,
+              border: '1px solid rgba(224, 72, 72, 0.3)',
+              background: 'var(--card-solid, #1a1a19)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(224,72,72,0.1)',
+              maxWidth: 520,
+              width: 'calc(100% - 40px)',
             }}
           >
-            <div style={{ display: 'grid', gap: 4 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: moduleLocked || !hasEnoughCredits || runError ? '#d85b5b' : mod.accent }}>
-                {billing
-                  ? `${billing.planLabel} plan • ${billing.creditsRemaining} credits left • ${moduleCreditCost} credits per new run`
-                  : 'Checking billing access for this module...'}
-              </div>
-              <div style={{ fontSize: 12, color: runError ? '#d85b5b' : 'var(--muted)', lineHeight: 1.5 }}>
-                {runError
-                  ? runError
-                  : moduleLocked
-                    ? `${mod.label} is viewable here, but new runs require a higher plan.`
-                    : billing && !hasEnoughCredits
-                      ? `You are ${creditsShortfall} credit${creditsShortfall === 1 ? '' : 's'} short for the next run.`
-                      : 'Billing is enforced server-side. Continuing an existing failed run does not consume new credits.'}
+            <div style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: 'rgba(224, 72, 72, 0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d85b5b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#d85b5b', lineHeight: 1.4 }}>
+                {runError}
               </div>
             </div>
-            {(moduleLocked || (billing && !hasEnoughCredits) || runError) && (
-              <motion.button
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              {(moduleLocked || !hasEnoughCredits) && (
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard/settings')}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'var(--glass-bg-strong)',
+                    color: 'var(--text)', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Upgrade
+                </button>
+              )}
+              <button
                 type="button"
-                onClick={() => router.push('/dashboard/settings')}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                onClick={() => setRunError(null)}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  padding: '10px 14px',
-                  borderRadius: 12,
+                  padding: '6px 10px', borderRadius: 8,
                   border: '1px solid var(--border)',
-                  background: 'var(--glass-bg-strong)',
-                  color: 'var(--text)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
+                  background: 'transparent',
+                  color: 'var(--muted)', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                Open Billing
-              </motion.button>
-            )}
-          </div>
-        </div>
-      )}
+                Dismiss
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
