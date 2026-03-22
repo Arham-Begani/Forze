@@ -63,3 +63,18 @@ export async function requireAuth(): Promise<Session> {
 
   return session
 }
+
+// Check if the current user is an admin (set ADMIN_USER_IDS=id1,id2 in env)
+export function isAdmin(session: Session): boolean {
+  const adminIds = process.env.ADMIN_USER_IDS?.split(',').map(s => s.trim()) ?? []
+  return adminIds.includes(session.userId)
+}
+
+// Use in admin API routes — returns session or throws AuthError if not admin
+export async function requireAdmin(): Promise<Session> {
+  const session = await requireAuth()
+  if (!isAdmin(session)) {
+    throw new AuthError()
+  }
+  return session
+}

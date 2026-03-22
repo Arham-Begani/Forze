@@ -1,5 +1,5 @@
 // app/api/auth/session/route.ts
-import { getSession } from '@/lib/auth'
+import { getSession, isAdmin } from '@/lib/auth'
 import { getBillingSnapshot } from '@/lib/billing-queries'
 import { NextResponse } from 'next/server'
 
@@ -24,5 +24,6 @@ export async function GET() {
         activeVentureCount: billing.activeVentureCount,
         nextRenewalAt: billing.nextRenewalAt,
         hasUnlimitedAccess: billing.hasUnlimitedAccess,
+        isAdmin: isAdmin(session),
     })
 }

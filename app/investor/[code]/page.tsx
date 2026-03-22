@@ -102,11 +102,13 @@ export default function InvestorKitPage() {
         <div style={pageStyle}>
             {/* Header */}
             <header style={{
-                padding: '24px 32px',
+                padding: '16px clamp(16px, 4vw, 32px)',
                 borderBottom: '1px solid #e8e4dc',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
                 background: '#fff',
                 position: 'sticky',
                 top: 0,
@@ -132,11 +134,13 @@ export default function InvestorKitPage() {
 
             {/* Navigation tabs */}
             <nav style={{
-                padding: '0 32px',
+                padding: '0 clamp(16px, 4vw, 32px)',
                 borderBottom: '1px solid #e8e4dc',
                 background: '#faf9f6',
                 display: 'flex',
                 gap: 0,
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
             }}>
                 {([
                     ['summary', 'Executive Summary'],
@@ -166,7 +170,7 @@ export default function InvestorKitPage() {
             </nav>
 
             {/* Content */}
-            <main style={{ maxWidth: 800, margin: '0 auto', padding: '40px 32px 80px' }}>
+            <main style={{ maxWidth: 800, margin: '0 auto', padding: 'clamp(20px, 4vw, 40px) clamp(16px, 4vw, 32px) 80px' }}>
                 {activeSection === 'summary' && (
                     <section>
                         <h2 style={sectionTitleStyle}>Executive Summary</h2>
@@ -264,7 +268,7 @@ export default function InvestorKitPage() {
                 {activeSection === 'memo' && (
                     <section>
                         <h2 style={sectionTitleStyle}>One-Page Investment Memo</h2>
-                        <div style={{ ...proseStyle, background: '#fff', padding: '32px', borderRadius: 12, border: '1px solid #e8e4dc' }}>
+                        <div style={{ ...proseStyle, background: '#fff', padding: 'clamp(16px, 4vw, 32px)', borderRadius: 12, border: '1px solid #e8e4dc' }}>
                             <ReactMarkdown>{kitData.onePageMemo}</ReactMarkdown>
                         </div>
                     </section>
@@ -348,7 +352,7 @@ export default function InvestorKitPage() {
 
             {/* Footer */}
             <footer style={{
-                padding: '20px 32px',
+                padding: '20px clamp(16px, 4vw, 32px)',
                 borderTop: '1px solid #e8e4dc',
                 textAlign: 'center',
                 background: '#faf9f6',
