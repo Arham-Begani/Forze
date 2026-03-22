@@ -1,326 +1,74 @@
 "use client";
 
-import React, { useState, useEffect, type FormEvent } from "react";
+import React, { useEffect, useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
 
-type Step = "email" | "otp";
-
 export default function SignUpPage() {
-  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendCooldown]);
-
-  async function handleSendOtp(e: FormEvent) {
+  async function handleSignUp(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setInfo("");
 
-    if (!email.trim()) {
-      setError("Email is required.");
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError("Email and password are required.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
     setLoading(true);
     try {
       const supabase = createClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
         options: {
           data: { name: name.trim() || undefined },
-          shouldCreateUser: true,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
-      if (otpError) throw otpError;
-      setStep("otp");
-      setResendCooldown(60);
-    } catch {
-      setError("Could not send verification code. Please try again.");
+      if (authError) throw authError;
+
+      if (data.session) {
+        window.location.href = "/dashboard";
+      } else {
+        setInfo("Account created. If email confirmation is enabled, check your inbox and click the verification link.");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not create your account. Please try again.";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleVerifyOtp(code: string) {
-    setError("");
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: code,
-        type: "email",
-      });
-      if (verifyError) throw verifyError;
-      window.location.href = "/dashboard";
-    } catch {
-      setError("Invalid or expired code. Please try again.");
-      setOtp(["", "", "", "", "", ""]);
-      // Focus first input
-      const firstInput = document.querySelector<HTMLInputElement>('[data-otp="0"]');
-      firstInput?.focus();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleResend() {
-    if (resendCooldown > 0) return;
-    setError("");
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          data: { name: name.trim() || undefined },
-          shouldCreateUser: true,
-        },
-      });
-      if (otpError) throw otpError;
-      setResendCooldown(60);
-    } catch {
-      setError("Could not resend code. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleOtpChange(index: number, value: string) {
-    if (value.length > 1) {
-      // Handle paste
-      const digits = value.replace(/\D/g, "").slice(0, 6).split("");
-      const newOtp = [...otp];
-      digits.forEach((d, i) => {
-        if (index + i < 6) newOtp[index + i] = d;
-      });
-      setOtp(newOtp);
-      const nextIndex = Math.min(index + digits.length, 5);
-      const nextInput = document.querySelector<HTMLInputElement>(`[data-otp="${nextIndex}"]`);
-      nextInput?.focus();
-      const fullCode = newOtp.join("");
-      if (fullCode.length === 6) handleVerifyOtp(fullCode);
-      return;
-    }
-
-    const digit = value.replace(/\D/g, "");
-    const newOtp = [...otp];
-    newOtp[index] = digit;
-    setOtp(newOtp);
-
-    if (digit && index < 5) {
-      const nextInput = document.querySelector<HTMLInputElement>(`[data-otp="${index + 1}"]`);
-      nextInput?.focus();
-    }
-
-    const fullCode = newOtp.join("");
-    if (fullCode.length === 6) handleVerifyOtp(fullCode);
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      const prevInput = document.querySelector<HTMLInputElement>(`[data-otp="${index - 1}"]`);
-      prevInput?.focus();
-      const newOtp = [...otp];
-      newOtp[index - 1] = "";
-      setOtp(newOtp);
-    }
-  }
-
-  const cardContent = step === "email" ? (
-    <>
-      <motion.h1
-        style={titleStyle}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.18, duration: 0.4 }}
-      >
-        Create your account
-      </motion.h1>
-      <motion.p
-        style={subtitleStyle}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.24, duration: 0.4 }}
-      >
-        We&apos;ll send a verification code to your email
-      </motion.p>
-
-      <motion.form
-        onSubmit={handleSendOtp}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.45 }}
-      >
-        <label className="auth-label" htmlFor="email">Email address</label>
-        <input
-          id="email"
-          type="email"
-          className="auth-input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          autoComplete="email"
-          required
-        />
-
-        <label className="auth-label" htmlFor="name">Name</label>
-        <input
-          id="name"
-          type="text"
-          className="auth-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your name (optional)"
-          autoComplete="name"
-        />
-
-        {error && (
-          <motion.p
-            className="auth-error"
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {error}
-          </motion.p>
-        )}
-
-        <motion.button
-          type="submit"
-          className="auth-btn"
-          disabled={loading}
-          whileHover={!loading ? { scale: 1.015, translateY: -1 } : {}}
-          whileTap={!loading ? { scale: 0.985 } : {}}
-          style={{ marginTop: 4 }}
-        >
-          {loading ? (
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              <motion.span
-                style={spinnerStyle}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
-              />
-              Sending code…
-            </span>
-          ) : (
-            "Continue"
-          )}
-        </motion.button>
-      </motion.form>
-
-      <motion.p
-        style={footerTextStyle}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-      >
-        Already have an account?{" "}
-        <a href="/signin" style={linkStyle}>Sign in</a>
-      </motion.p>
-    </>
-  ) : (
-    <>
-      <motion.h1
-        style={titleStyle}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        Enter verification code
-      </motion.h1>
-      <motion.p
-        style={subtitleStyle}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.1 }}
-      >
-        Sent to <span style={{ color: "var(--accent)", fontWeight: 600 }}>{email}</span>
-      </motion.p>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-      >
-        <div style={otpContainerStyle}>
-          {otp.map((digit, i) => (
-            <input
-              key={i}
-              data-otp={i}
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={digit}
-              onChange={(e) => handleOtpChange(i, e.target.value)}
-              onKeyDown={(e) => handleOtpKeyDown(i, e)}
-              onFocus={(e) => e.target.select()}
-              style={otpInputStyle}
-              className="auth-input otp-digit"
-              autoFocus={i === 0}
-              autoComplete="one-time-code"
-            />
-          ))}
-        </div>
-
-        {error && (
-          <motion.p
-            className="auth-error"
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ textAlign: "center" }}
-          >
-            {error}
-          </motion.p>
-        )}
-
-        {loading && (
-          <div style={{ display: "flex", justifyContent: "center", margin: "16px 0" }}>
-            <motion.span
-              style={{ ...spinnerStyle, borderTopColor: "var(--accent)" }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
-            />
-          </div>
-        )}
-
-        <div style={{ textAlign: "center", marginTop: 20 }}>
-          <button
-            onClick={handleResend}
-            disabled={resendCooldown > 0 || loading}
-            style={{
-              ...resendBtnStyle,
-              opacity: resendCooldown > 0 ? 0.5 : 1,
-              cursor: resendCooldown > 0 ? "default" : "pointer",
-            }}
-          >
-            {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
-          </button>
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: 12 }}>
-          <button
-            onClick={() => { setStep("email"); setOtp(["", "", "", "", "", ""]); setError(""); }}
-            style={backBtnStyle}
-          >
-            Change email
-          </button>
-        </div>
-      </motion.div>
-    </>
-  );
+  const strength = getPasswordStrength(password);
+  const strengthLabel = strengthLabels[Math.min(strength.score, strengthLabels.length - 1)];
 
   return (
     <div style={pageStyle}>
@@ -338,7 +86,6 @@ export default function SignUpPage() {
           transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
         >
           <div style={accentLineStyle} />
-
           <motion.div
             style={logoStyle}
             initial={{ opacity: 0, y: 12 }}
@@ -353,7 +100,178 @@ export default function SignUpPage() {
             <span style={wordmarkStyle}>Forge</span>
           </motion.div>
 
-          {cardContent}
+          <motion.h1
+            style={titleStyle}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18, duration: 0.4 }}
+          >
+            Create your account
+          </motion.h1>
+          <motion.p
+            style={subtitleStyle}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.24, duration: 0.4 }}
+          >
+            Sign up with your email, password, and name.
+          </motion.p>
+
+          <motion.form
+            onSubmit={handleSignUp}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.45 }}
+          >
+            <label className="auth-label" htmlFor="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              className="auth-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
+
+            <label className="auth-label" htmlFor="name">Name</label>
+            <input
+              id="name"
+              type="text"
+              className="auth-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name (optional)"
+              autoComplete="name"
+            />
+
+            <label className="auth-label" htmlFor="password">Password</label>
+            <div style={passwordFieldWrapStyle}>
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                className="auth-input"
+                style={passwordInputStyle}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a password"
+                autoComplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                style={passwordToggleStyle}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+            <div style={strengthWrapStyle}>
+              <div style={strengthBarTrackStyle}>
+                <motion.div
+                  style={{
+                    ...strengthBarFillStyle,
+                    width: `${(strength.score / 4) * 100}%`,
+                    background: strength.color,
+                  }}
+                  initial={false}
+                  animate={{ width: `${(strength.score / 4) * 100}%` }}
+                  transition={{ duration: 0.25 }}
+                />
+              </div>
+              <div style={{ ...strengthMetaStyle, color: strength.color }}>
+                {strengthLabel}
+              </div>
+            </div>
+            <ul style={criteriaListStyle}>
+              {strength.criteria.map((item) => (
+                <li key={item.key} style={{ ...criteriaItemStyle, color: item.met ? "var(--text)" : "var(--muted)" }}>
+                  <span style={{
+                    ...criteriaDotStyle,
+                    background: item.met ? strength.color : "var(--border-strong)",
+                  }} />
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+
+            <label className="auth-label" htmlFor="confirmPassword">Confirm password</label>
+            <div style={passwordFieldWrapStyle}>
+              <input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                className="auth-input"
+                style={passwordInputStyle}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repeat your password"
+                autoComplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(v => !v)}
+                style={passwordToggleStyle}
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+
+            {error && (
+              <motion.p
+                className="auth-error"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                {error}
+              </motion.p>
+            )}
+
+            {info && !error && (
+              <motion.p
+                className="auth-success"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                {info}
+              </motion.p>
+            )}
+
+            <motion.button
+              type="submit"
+              className="auth-btn"
+              disabled={loading}
+              whileHover={!loading ? { scale: 1.015, translateY: -1 } : {}}
+              whileTap={!loading ? { scale: 0.985 } : {}}
+              style={{ marginTop: 4 }}
+            >
+              {loading ? (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <motion.span
+                    style={spinnerStyle}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+                  />
+                  Creating account...
+                </span>
+              ) : (
+                "Create account"
+              )}
+            </motion.button>
+          </motion.form>
+
+          <motion.p
+            style={footerTextStyle}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.45 }}
+          >
+            Already have an account?{" "}
+            <a href="/signin" style={linkStyle}>Sign in</a>
+          </motion.p>
         </motion.div>
       ) : (
         <div style={cardStyle} className="glass-auth-card">
@@ -363,14 +281,12 @@ export default function SignUpPage() {
             <span style={wordmarkStyle}>Forge</span>
           </div>
           <h1 style={titleStyle}>Create your account</h1>
-          <p style={subtitleStyle}>We&apos;ll send a verification code to your email</p>
+          <p style={subtitleStyle}>Sign up with your email, password, and name.</p>
         </div>
       )}
     </div>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
@@ -516,40 +432,88 @@ const spinnerStyle: React.CSSProperties = {
   display: "inline-block",
 };
 
-const otpContainerStyle: React.CSSProperties = {
+const strengthLabels = ["Very weak", "Weak", "Fair", "Strong", "Very strong"] as const;
+
+function getPasswordStrength(password: string) {
+  const criteria = [
+    { key: "length", label: "At least 8 characters", met: password.length >= 8 },
+    { key: "lower", label: "A lowercase letter", met: /[a-z]/.test(password) },
+    { key: "upper", label: "An uppercase letter", met: /[A-Z]/.test(password) },
+    { key: "digit", label: "A number", met: /\d/.test(password) },
+    { key: "symbol", label: "A symbol", met: /[^A-Za-z0-9]/.test(password) },
+  ];
+
+  const score = criteria.reduce((total, item) => total + (item.met ? 1 : 0), 0);
+  const color = score <= 1 ? "#d97706" : score <= 3 ? "#16a34a" : "#0f766e";
+
+  return { score, color, criteria };
+}
+
+const passwordFieldWrapStyle: React.CSSProperties = {
+  position: "relative",
   display: "flex",
-  justifyContent: "center",
-  gap: 8,
-  marginBottom: 16,
+  alignItems: "center",
 };
 
-const otpInputStyle: React.CSSProperties = {
-  width: 48,
-  height: 56,
-  textAlign: "center",
-  fontSize: "1.5rem",
-  fontWeight: 700,
-  letterSpacing: 0,
-  padding: 0,
-  fontFamily: "'JetBrains Mono', monospace",
+const passwordInputStyle: React.CSSProperties = {
+  paddingRight: 72,
 };
 
-const resendBtnStyle: React.CSSProperties = {
-  background: "none",
+const passwordToggleStyle: React.CSSProperties = {
+  position: "absolute",
+  right: 12,
+  top: "50%",
+  transform: "translateY(-50%)",
   border: "none",
+  background: "transparent",
   color: "var(--accent)",
-  fontSize: 13,
-  fontWeight: 600,
-  padding: "4px 8px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
 };
 
-const backBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--muted)",
-  fontSize: 13,
-  cursor: "pointer",
-  padding: "4px 8px",
-  textDecoration: "underline",
-  textUnderlineOffset: 2,
+const strengthWrapStyle: React.CSSProperties = {
+  marginTop: 8,
+};
+
+const strengthBarTrackStyle: React.CSSProperties = {
+  width: "100%",
+  height: 8,
+  borderRadius: 999,
+  background: "var(--nav-active)",
+  overflow: "hidden",
+};
+
+const strengthBarFillStyle: React.CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+};
+
+const strengthMetaStyle: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const criteriaListStyle: React.CSSProperties = {
+  listStyle: "none",
+  padding: 0,
+  margin: "10px 0 0",
+  display: "grid",
+  gap: 6,
+};
+
+const criteriaItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  lineHeight: 1.4,
+};
+
+const criteriaDotStyle: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: "50%",
+  flexShrink: 0,
 };
