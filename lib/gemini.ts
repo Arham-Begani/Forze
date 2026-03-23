@@ -28,7 +28,7 @@ function hasXaiApiKey(): boolean {
 }
 
 function shouldUseGrokForSearch(): boolean {
-    return hasXaiApiKey() && process.env.FORGE_USE_GROK_FOR_SEARCH !== 'false'
+    return hasXaiApiKey() && process.env.FORZE_USE_GROK_FOR_SEARCH !== 'false'
 }
 
 function createGeminiModel(config: Parameters<GoogleGenerativeAI['getGenerativeModel']>[0]): GenerativeModel {

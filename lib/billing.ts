@@ -190,7 +190,7 @@ export function hasUnlimitedBillingOverride(email: string | null | undefined): b
   if (!email) return false
 
   const normalizedEmail = email.trim().toLowerCase()
-  const configuredEmails = (process.env.FORGE_UNLIMITED_BILLING_EMAILS ?? '')
+  const configuredEmails = (process.env.FORZE_UNLIMITED_BILLING_EMAILS ?? '')
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)

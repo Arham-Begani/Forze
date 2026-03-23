@@ -88,7 +88,7 @@ const CONVERSATION_MODULE_FALLBACK: Record<Conversation['module_id'], Conversati
   'mvp-scalpel': 'feasibility',
 }
 
-const CONVERSATION_MODULE_PREFIX = '__FORGE_MODULE__:'
+const CONVERSATION_MODULE_PREFIX = '__FORZE_MODULE__:'
 
 function encodeConversationPrompt(moduleId: Conversation['module_id'], prompt: string): string {
   if (LEGACY_CONVERSATION_MODULE_IDS.has(moduleId)) return prompt

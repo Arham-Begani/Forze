@@ -130,6 +130,19 @@ function parseSubscriptionStatus(raw: string | null | undefined): SubscriptionSt
   }
 }
 
+function isSubscriptionEntitled(subscription: BillingSubscription, now = new Date()): boolean {
+  const status = parseSubscriptionStatus(subscription.status)
+  if (status === 'active' || status === 'trialing' || status === 'past_due') {
+    return true
+  }
+
+  if (status !== 'canceled' || !subscription.current_period_end) {
+    return false
+  }
+
+  return new Date(subscription.current_period_end) > now
+}
+
 export async function syncUserPlan(userId: string, planSlug: PlanSlug, db?: DbClient): Promise<void> {
   const client = await resolveDb(db)
   const { error } = await client.from('users').update({ plan: planSlug }).eq('id', userId)
@@ -161,19 +174,12 @@ export async function getCurrentSubscription(userId: string, db?: DbClient): Pro
   const now = new Date()
   const subscriptions = (data ?? []) as BillingSubscription[]
   for (const subscription of subscriptions) {
-    const status = parseSubscriptionStatus(subscription.status)
-    const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end) : null
-    if (
-      status === 'active' ||
-      status === 'trialing' ||
-      status === 'past_due' ||
-      (status === 'canceled' && periodEnd && periodEnd > now)
-    ) {
-      return { ...subscription, status }
+    if (isSubscriptionEntitled(subscription, now)) {
+      return { ...subscription, status: parseSubscriptionStatus(subscription.status) }
     }
   }
 
-  return subscriptions[0] ? { ...subscriptions[0], status: parseSubscriptionStatus(subscriptions[0].status) } : null
+  return null
 }
 
 export async function getCreditBalance(userId: string, db?: DbClient): Promise<number> {

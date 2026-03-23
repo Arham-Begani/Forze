@@ -345,17 +345,17 @@ function buildFallbackLandingComponent(input: {
     '      <footer className="border-t border-white/10 bg-slate-950 px-4 py-10 text-sm text-white/60 sm:px-6 lg:px-8">',
     '        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">',
     '          <div>{meta.title}</div>',
-    '          <div>(c) {year} {meta.title}. Preview served by Forge.</div>',
+    '          <div>(c) {year} {meta.title}. Preview served by Forze.</div>',
     '        </div>',
     '      </footer>',
     '',
     '      <a',
-    '        href="https://tryforge.ai"',
+    '        href="https://tryForze.ai"',
     '        target="_blank"',
     '        rel="noreferrer"',
     '        style={{ position: "fixed", bottom: "20px", right: "20px", zIndex: 9999, display: "flex", alignItems: "center", gap: "6px", background: "rgba(0,0,0,0.85)", color: "white", fontSize: "11px", fontWeight: 500, padding: "7px 14px", borderRadius: "20px", textDecoration: "none", backdropFilter: "blur(10px)", boxShadow: "0 2px 12px rgba(0,0,0,0.3)" }}',
     '      >',
-    '        Built with Forge',
+    '        Built with Forze',
     '      </a>',
     '    </div>',
     '  );',
@@ -408,7 +408,7 @@ function normalizeFeatures(features: LandingFeature[] | undefined): Array<{ titl
     },
     {
       title: 'Retry-friendly pipeline',
-      description: 'When the AI returns incomplete component code, Forge can recover without taking your launch page down.',
+      description: 'When the AI returns incomplete component code, Forze can recover without taking your launch page down.',
       icon: '^',
     },
   ].slice(0, 3)
@@ -502,7 +502,7 @@ function normalizeFaq(faq: LandingFaq[] | undefined): Array<{ question: string; 
           question: stringOrFallback(item?.question, ''),
           answer: stringOrFallback(
             item?.answer,
-            'Forge keeps a polished fallback live so visitors still see a complete page while the full generated component is retried.'
+            'Forze keeps a polished fallback live so visitors still see a complete page while the full generated component is retried.'
           ),
         }))
         .filter((item) => item.question)
