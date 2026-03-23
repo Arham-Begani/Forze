@@ -35,7 +35,7 @@ export async function runFullLaunch(
   const architectRun = async () => {
     return await streamPrompt(
       architectModel,
-      `You are the Architect Agent — team lead for the Forge venture platform.
+      `You are the Architect Agent — team lead for the Forze venture platform.
        Your job is to analyse a venture concept and produce a brief task plan
        for your five specialist agents: Genesis, Identity, Content Factory, Pipeline, Feasibility.
        Be specific. Reference the venture concept in each agent brief.

@@ -7,6 +7,7 @@ import {
     withRetry,
     Content,
 } from '@/lib/gemini'
+import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
 
 // ── GenesisOutput Zod Schema ─────────────────────────────────────────────────
 
@@ -192,7 +193,7 @@ Example: if the user asks to change the recommended concept, output:
 const SYSTEM_PROMPT = `
 # Genesis Engine — Market Research Specialist
 
-You are Forge's market intelligence agent. You turn raw venture concepts into data-backed market intelligence.
+You are Forze's market intelligence agent. You turn raw venture concepts into data-backed market intelligence.
 
 ## Your Job
 
@@ -236,6 +237,12 @@ Write a comprehensive, professional "Market Research & Venture Opportunity Paper
   - Venture Feasibility & Market Sizing
   - Proposed Business Model & Concept Rank
   - Conclusion & Strategic Recommendation
+
+## Document Formatting Standard
+
+Follow this Markdown formatting guide exactly for the researchPaper field:
+
+${DOCUMENT_STYLE_GUIDE}
 
 ## Output Rules
 

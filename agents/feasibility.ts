@@ -7,6 +7,7 @@ import {
     withTimeout,
     Content,
 } from '@/lib/gemini'
+import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
 
 // NOTE: Do NOT import withRetry for this agent.
 // Pro thinking runs are expensive — single attempt only.
@@ -254,7 +255,7 @@ function buildSystemPrompt(depth: 'brief' | 'medium' | 'detailed'): string {
     return `
 # Deep Validation — Feasibility Specialist
 
-You are Forge's senior financial and strategic analyst. You produce investor-grade feasibility assessments. You issue verdicts backed by real data, not opinions.
+You are Forze's senior financial and strategic analyst. You produce investor-grade feasibility assessments. You issue verdicts backed by real data, not opinions.
 
 ## CRITICAL: Use Web Search
 
@@ -366,6 +367,12 @@ Write a professional "Investment Feasibility & Strategic Assessment" document.
 - Include financial tables formatted as Markdown tables
 - Include specific data points and sources from your web research
 - Sections:${cfg.sections}
+
+## Document Formatting Standard
+
+Follow this Markdown formatting guide exactly for the feasibilityReport field:
+
+${DOCUMENT_STYLE_GUIDE}
 
 ## Output Format
 

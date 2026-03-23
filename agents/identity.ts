@@ -7,6 +7,7 @@ import {
     withRetry,
     Content,
 } from '@/lib/gemini'
+import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
 
 // ── IdentityOutput Zod Schema ────────────────────────────────────────────────
 
@@ -159,7 +160,7 @@ Example: if the user asks to change the tagline, output:
 const SYSTEM_PROMPT = `
 # Identity Architect — Brand Specialist
 
-You are Forge's brand creation agent. You build brands that feel inevitable — like they could only belong to this venture.
+You are Forze's brand creation agent. You build brands that feel inevitable — like they could only belong to this venture.
 
 ## Your Job
 
@@ -231,6 +232,12 @@ Write a long-form, professional "Brand Identity & Design Bible".
   - Logo System: Detailed concepts and usage principles
   - UI/UX Principles: The "feel" of the digital product
   - Brand Manifest: A 3-paragraph inspiring manifesto
+
+## Document Formatting Standard
+
+Follow this Markdown formatting guide exactly for the brandBible field:
+
+${DOCUMENT_STYLE_GUIDE}
 
 ## Output Rules
 

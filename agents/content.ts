@@ -9,6 +9,7 @@ import {
     withRetry,
     Content,
 } from '@/lib/gemini'
+import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
 
 // ── ContentOutput Zod Schema ────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ Example: if the user asks to change the email sequence, output:
 const SYSTEM_PROMPT = `
 # Content Factory — Marketing Specialist
 
-You are Forge's marketing agent. You build go-to-market systems that compound.
+You are Forze's marketing agent. You build go-to-market systems that compound.
 
 ## What You Build
 
@@ -240,6 +241,12 @@ Write a long-form, professional "30-Day Growth & GTM Strategy".
   - Paid vs. Organic Acquisition Plan
   - Conversion Funnel Optimization
   - Success Metrics & KPIs for Month 1
+
+## Document Formatting Standard
+
+Follow this Markdown formatting guide exactly for the marketingPlan field:
+
+${DOCUMENT_STYLE_GUIDE}
 
 ## Output Rules
 

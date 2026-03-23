@@ -66,12 +66,12 @@ const PipelineOutputSchema = z.object({
     leadCaptureActive: z.boolean().default(false),
     analyticsActive: z.boolean().default(false),
     seoMetadata: z.object({
-        title: z.string().default('Forge Startup'),
-        description: z.string().default('Built with Forge AI.'),
+        title: z.string().default('Forze Startup'),
+        description: z.string().default('Built with Forze AI.'),
         keywords: z.array(z.string()).default([]),
     }).default({
-        title: 'Forge Startup',
-        description: 'Built with Forge AI.',
+        title: 'Forze Startup',
+        description: 'Built with Forze AI.',
         keywords: []
     }),
 })
@@ -172,7 +172,7 @@ async function deployLandingPage(ventureId: string, result: PipelineOutput): Pro
 const SYSTEM_PROMPT = `
 # Production Pipeline — Deployment Specialist
 
-You are Forge's elite build-and-ship agent. You transform venture context into a stunning, fully-functional landing page that is ready to capture leads from day one.
+You are Forze's elite build-and-ship agent. You transform venture context into a stunning, fully-functional landing page that is ready to capture leads from day one.
 
 ## Context Required
 
@@ -264,8 +264,8 @@ Generate a COMPLETE, production-quality landing page as a single React functiona
 - Form submits to "#" with preventDefault (demo mode)
 - Store submissions in component state with success feedback
 
-**Forge Watermark (Required — always include this):**
-Include a fixed-position "Built with Forge" badge in the bottom-right corner. Place it as the LAST element inside the returned JSX, before the final closing tag. Use these exact inline styles: position fixed, bottom 20px, right 20px, zIndex 9999, display flex, alignItems center, gap 6px, background rgba(0,0,0,0.85), color white, fontSize 11px, fontWeight 500, padding 7px 14px, borderRadius 20px, textDecoration none, backdropFilter blur(10px), boxShadow 0 2px 12px rgba(0,0,0,0.3). The link should open https://tryforge.ai in a new tab. The label should be "⚡ Built with Forge".
+**Forze Watermark (Required — always include this):**
+Include a fixed-position "Built with Forze" badge in the bottom-right corner. Place it as the LAST element inside the returned JSX, before the final closing tag. Use these exact inline styles: position fixed, bottom 20px, right 20px, zIndex 9999, display flex, alignItems center, gap 6px, background rgba(0,0,0,0.85), color white, fontSize 11px, fontWeight 500, padding 7px 14px, borderRadius 20px, textDecoration none, backdropFilter blur(10px), boxShadow 0 2px 12px rgba(0,0,0,0.3). The link should open https://tryForze.ai in a new tab. The label should be "⚡ Built with Forze".
 
 **The fullComponent string must be the COMPLETE component code, starting with "function LandingPage()" or "const LandingPage = () =>" and ending with the closing brace. Include ALL sections: nav, hero, features, social proof, pricing, FAQ, CTA, footer, and watermark badge.**
 

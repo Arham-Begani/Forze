@@ -7,6 +7,7 @@ import {
     withRetry,
     Content,
 } from '@/lib/gemini'
+import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
 
 // ── Investor Kit Output Schema ──────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ Example: if the user asks to change the suggested raise amount, output:
 // ── System Prompt ───────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `
-# Investor Kit Generator — Forge AI
+# Investor Kit Generator — Forze AI
 
 You are a senior startup advisor and pitch deck strategist. You produce investor-ready materials from venture data. Your output must be polished, professional, and data-driven.
 
@@ -126,6 +127,12 @@ A professional memo an investor could forward internally:
 - Risk factors (top 3)
 - Why now? (market timing)
 - Investment terms / the ask
+
+## Document Formatting Standard
+
+Follow this Markdown formatting guide exactly for the onePageMemo field:
+
+${DOCUMENT_STYLE_GUIDE}
 
 ### 4. Ask Details
 - Suggested raise amount based on financial model
