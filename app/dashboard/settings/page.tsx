@@ -17,7 +17,7 @@ interface SessionData {
   hasUnlimitedAccess?: boolean
 }
 
-interface ForgeSettings {
+interface ForzeSettings {
   showThoughtProcess: boolean
   streamAutoScroll: boolean
   compactMode: boolean
@@ -27,7 +27,7 @@ interface ForgeSettings {
   maxStreamLines: number
 }
 
-const DEFAULT_SETTINGS: ForgeSettings = {
+const DEFAULT_SETTINGS: ForzeSettings = {
   showThoughtProcess: true,
   streamAutoScroll: true,
   compactMode: false,
@@ -37,10 +37,10 @@ const DEFAULT_SETTINGS: ForgeSettings = {
   maxStreamLines: 500,
 }
 
-function loadSettings(): ForgeSettings {
+function loadSettings(): ForzeSettings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS
   try {
-    const raw = localStorage.getItem('forge-settings')
+    const raw = localStorage.getItem('Forze-settings')
     if (!raw) return DEFAULT_SETTINGS
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
   } catch {
@@ -48,9 +48,9 @@ function loadSettings(): ForgeSettings {
   }
 }
 
-function saveSettings(settings: ForgeSettings) {
-  localStorage.setItem('forge-settings', JSON.stringify(settings))
-  window.dispatchEvent(new CustomEvent('forge:settings-changed', { detail: settings }))
+function saveSettings(settings: ForzeSettings) {
+  localStorage.setItem('Forze-settings', JSON.stringify(settings))
+  window.dispatchEvent(new CustomEvent('Forze:settings-changed', { detail: settings }))
 }
 
 // ─── Themes ─────────────────────────────────────────────────────────────────────
@@ -411,7 +411,7 @@ export default function SettingsPage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [session, setSession] = useState<SessionData | null>(null)
-  const [settings, setSettings] = useState<ForgeSettings>(DEFAULT_SETTINGS)
+  const [settings, setSettings] = useState<ForzeSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentTheme, setCurrentTheme] = useState<ThemeId>('amber')
@@ -423,8 +423,8 @@ export default function SettingsPage() {
     THEME_IDS.forEach(t => root.classList.remove(`theme-${t}`))
     if (id !== 'amber') root.classList.add(`theme-${id}`)
     setCurrentTheme(id)
-    localStorage.setItem('forge-theme', id)
-    window.dispatchEvent(new CustomEvent('forge:theme-changed', { detail: { themeId: id } }))
+    localStorage.setItem('Forze-theme', id)
+    window.dispatchEvent(new CustomEvent('Forze:theme-changed', { detail: { themeId: id } }))
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -432,7 +432,7 @@ export default function SettingsPage() {
   useEffect(() => {
     setMounted(true)
     setSettings(loadSettings())
-    const stored = (localStorage.getItem('forge-theme') || 'amber') as ThemeId
+    const stored = (localStorage.getItem('Forze-theme') || 'amber') as ThemeId
     setCurrentTheme(stored)
     fetch('/api/auth/session')
       .then(r => r.ok ? r.json() : null)
@@ -440,7 +440,7 @@ export default function SettingsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const update = useCallback((key: keyof ForgeSettings, value: ForgeSettings[keyof ForgeSettings]) => {
+  const update = useCallback((key: keyof ForzeSettings, value: ForzeSettings[keyof ForzeSettings]) => {
     setSettings(prev => {
       const next = { ...prev, [key]: value }
       saveSettings(next)
@@ -531,7 +531,7 @@ export default function SettingsPage() {
               Settings
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              Customize your Forge experience
+              Customize your Forze experience
             </div>
           </div>
 
@@ -792,7 +792,7 @@ export default function SettingsPage() {
           <SectionHeader
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" /></svg>}
             title="Appearance"
-            description="Choose a theme to personalize the look and feel of Forge"
+            description="Choose a theme to personalize the look and feel of Forze"
             delay={0.3}
           />
 
@@ -965,7 +965,7 @@ export default function SettingsPage() {
               clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
             }} />
             <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>
-              Forge v2 — Silicon Workforce
+              Forze v2 — Silicon Workforce
             </span>
           </motion.div>
         </div>

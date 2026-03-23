@@ -170,7 +170,7 @@ export default function VenturePreviewPage() {
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
       />
       <a
-        href="https://tryforge.ai"
+        href="https://tryforze.ai"
         target="_blank"
         rel="noopener noreferrer"
         style={{
@@ -192,7 +192,7 @@ export default function VenturePreviewPage() {
           boxShadow: "0 6px 24px rgba(0,0,0,0.28)",
         }}
       >
-        Made with Forge
+        Made with Forze
       </a>
     </div>
   );

@@ -109,7 +109,7 @@ export function LoadingScreen({ onComplete, minimumDuration = 800 }: LoadingScre
             }}
             className="gradient-text"
           >
-            Forge
+            Forze
           </motion.div>
 
           {/* Progress bar */}

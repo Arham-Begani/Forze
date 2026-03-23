@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Venture Dashboard | Forge',
+    title: 'Venture Dashboard | Forze',
 }
 
 export default async function Page({

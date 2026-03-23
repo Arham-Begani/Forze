@@ -16,6 +16,11 @@ export default function SignInPage() {
 
   useEffect(() => {
     setMounted(true);
+    // Check for error query param from failed auth callback
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error") === "auth-code-error") {
+      setError("The confirmation link is invalid or expired. Please try signing up again.");
+    }
   }, []);
 
   async function handleSignIn(e: FormEvent) {
@@ -40,7 +45,15 @@ export default function SignInPage() {
 
       window.location.href = "/dashboard";
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not sign in. Please try again.";
+      const raw = err instanceof Error ? err.message : "";
+      let message: string;
+      if (/invalid.*credential|invalid.*password|invalid.*login/i.test(raw)) {
+        message = "Incorrect email or password. Please try again.";
+      } else if (/email.*not.*confirmed/i.test(raw)) {
+        message = "Your email hasn't been confirmed yet. Check your inbox for the verification link.";
+      } else {
+        message = raw || "Could not sign in. Please try again.";
+      }
       setError(message);
     } finally {
       setLoading(false);
@@ -100,7 +113,7 @@ export default function SignInPage() {
               animate={{ rotate: 360 }}
               transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
             />
-            <span style={wordmarkStyle}>Forge</span>
+            <span style={wordmarkStyle}>Forze</span>
           </motion.div>
 
           <motion.h1
@@ -230,7 +243,7 @@ export default function SignInPage() {
           <div style={accentLineStyle} />
           <div style={logoStyle}>
             <div style={hexLogoStyle} />
-            <span style={wordmarkStyle}>Forge</span>
+            <span style={wordmarkStyle}>Forze</span>
           </div>
           <h1 style={titleStyle}>Welcome back</h1>
           <p style={subtitleStyle}>Sign in with your email and password.</p>

@@ -35,10 +35,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/signin', request.url))
   }
 
-  // Redirect logged-in users away from auth pages
+  // Redirect logged-in users away from auth pages (but not auth callback/confirm routes)
   if ((pathname === '/signin' || pathname === '/signup') && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
+
+  // Allow auth confirmation and callback routes to pass through without auth
+  // (they handle their own verification logic)
 
   return supabaseResponse
 }

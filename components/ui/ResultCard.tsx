@@ -15,6 +15,7 @@ export type ModuleId =
   | "full-launch"
   | "general"
   | "shadow-board"
+  | "investor-kit"
   | "launch-autopilot"
   | "mvp-scalpel";
 
@@ -34,6 +35,7 @@ const MODULE_ACCENTS: Record<ModuleId, string> = {
   feasibility: "#7A5A8C",
   general: "#6B8F71",
   "shadow-board": "#E04848",
+  "investor-kit": "#7A8C5A",
   "launch-autopilot": "#B8864E",
   "mvp-scalpel": "#C45A5A",
 };
@@ -47,6 +49,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   feasibility: "Investment Assessment",
   general: "General Chat",
   "shadow-board": "Shadow Board Review",
+  "investor-kit": "Investor Kit",
   "launch-autopilot": "Launch Autopilot",
   "mvp-scalpel": "MVP Scalpel",
 };
@@ -225,6 +228,7 @@ export const ResultCard = React.memo(function ResultCard({ moduleId, result, dep
                   />
                 )}
                 {moduleId === "shadow-board" && <ShadowBoardDisplay result={result} />}
+                {moduleId === "investor-kit" && <InvestorKitDisplay result={result} onOpenReport={(c) => openReport("Investor Memo", c)} />}
                 {moduleId === "launch-autopilot" && <LaunchAutopilotDisplay result={result} />}
                 {moduleId === "mvp-scalpel" && <MVPScalpelDisplay result={result} />}
               </div>
@@ -623,7 +627,7 @@ function LandingDisplay({ result, externalUrl }: { result: Record<string, any>; 
       <Row label="FAQ" value={faq.length > 0 ? `${faq.length} questions covered` : undefined} />
       <Row label="SEO Title" value={seo.title} />
       <Row label="Tech Stack" value="Next.js 15 · Tailwind CSS · React · Vercel" />
-      <Row label="Production" value={url ? "Live on Forge Pipeline" : "Generating components..."} />
+      <Row label="Production" value={url ? "Live on Forze Pipeline" : "Generating components..."} />
       <Row label="Conversion" value={result.leadCaptureActive ? "Lead capture active" : "Lead capture hooks active"} />
     </>
   );
@@ -1086,6 +1090,111 @@ function VerdictBadge({ value }: { value: string }) {
 }
 
 // ─── Launch Autopilot Display ────────────────────────────────────────────────
+
+function MetricTile({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div
+      style={{
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: "1px solid var(--border)",
+        background: "var(--glass-bg)",
+      }}
+    >
+      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: accent, marginTop: 6 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function InvestorKitDisplay({ result, onOpenReport }: { result: Record<string, any>; onOpenReport: (content: string) => void }) {
+  const ACCENT = "#7A8C5A";
+  const slides = Array.isArray(result.pitchDeckOutline) ? result.pitchDeckOutline : [];
+  const ask = result.askDetails || {};
+  const milestones = Array.isArray(ask.keyMilestones) ? ask.keyMilestones : [];
+  const dataRoomSections = Array.isArray(result.dataRoomSections) ? result.dataRoomSections : [];
+  const summary = typeof result.executiveSummary === "string" ? result.executiveSummary : "";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+        <MetricTile label="Deck Slides" value={slides.length ? String(slides.length) : "Drafting"} accent={ACCENT} />
+        <MetricTile label="Suggested Raise" value={ask.suggestedRaise || "Pending"} accent={ACCENT} />
+        <MetricTile label="Data Room" value={dataRoomSections.length ? `${dataRoomSections.length} sections` : "Pending"} accent={ACCENT} />
+      </div>
+
+      {summary && (
+        <div style={{
+          padding: "12px 14px",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          background: "var(--glass-bg)",
+          color: "var(--text-soft)",
+          fontSize: 13,
+          lineHeight: 1.65,
+        }}>
+          {summary.slice(0, 280)}
+          {summary.length > 280 ? "..." : ""}
+        </div>
+      )}
+
+      {slides.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <h4 style={subHeaderStyle}>Pitch Deck Outline</h4>
+          {slides.slice(0, 4).map((slide: any, index: number) => (
+            <div
+              key={index}
+              style={{
+                padding: "10px 12px",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                background: "var(--sidebar)",
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
+                {slide.slide || `Slide ${index + 1}`}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.55, marginTop: 4 }}>
+                {slide.content || "Content pending."}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(milestones.length > 0 || dataRoomSections.length > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <h4 style={subHeaderStyle}>Milestones</h4>
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--text-soft)", fontSize: 12, lineHeight: 1.7 }}>
+              {milestones.slice(0, 4).map((item: string, index: number) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h4 style={subHeaderStyle}>Data Room</h4>
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--text-soft)", fontSize: 12, lineHeight: 1.7 }}>
+              {dataRoomSections.slice(0, 4).map((item: string, index: number) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {result.onePageMemo && (
+        <button onClick={() => onOpenReport(result.onePageMemo)} style={smallLinkStyle}>
+          <FileText size={10} /> Open Investor Memo
+        </button>
+      )}
+    </div>
+  );
+}
 
 function LaunchAutopilotDisplay({ result }: { result: Record<string, any> }) {
   const [expandedDay, setExpandedDay] = useState<number | null>(null);

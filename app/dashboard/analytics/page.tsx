@@ -161,7 +161,7 @@ export default function AnalyticsPage() {
           Analytics
         </h1>
         <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-          Your Forge usage at a glance
+          Your Forze usage at a glance
         </p>
       </div>
 

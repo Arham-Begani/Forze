@@ -103,7 +103,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   // ─── Dark mode ────────────────────────────────────────────────────────────
   useEffect(() => {
-    const stored = localStorage.getItem('forge-dark-mode')
+    const stored = localStorage.getItem('Forze-dark-mode')
     if (stored === 'true') {
       setDark(true)
       document.documentElement.classList.add('dark')
@@ -115,7 +115,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   function toggleDark() {
     const next = !dark
     setDark(next)
-    localStorage.setItem('forge-dark-mode', String(next))
+    localStorage.setItem('Forze-dark-mode', String(next))
     if (next) document.documentElement.classList.add('dark')
     else document.documentElement.classList.remove('dark')
   }
@@ -128,11 +128,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     THEME_IDS.forEach(t => root.classList.remove(`theme-${t}`))
     if (id !== 'amber') root.classList.add(`theme-${id}`)
     setTheme(id)
-    localStorage.setItem('forge-theme', id)
+    localStorage.setItem('Forze-theme', id)
   }
 
   useEffect(() => {
-    const stored = localStorage.getItem('forge-theme') || 'amber'
+    const stored = localStorage.getItem('Forze-theme') || 'amber'
     applyTheme(stored)
   }, [])
 
@@ -141,8 +141,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       const { themeId } = (e as CustomEvent).detail
       applyTheme(themeId)
     }
-    window.addEventListener('forge:theme-changed', handleThemeChange)
-    return () => window.removeEventListener('forge:theme-changed', handleThemeChange)
+    window.addEventListener('Forze:theme-changed', handleThemeChange)
+    return () => window.removeEventListener('Forze:theme-changed', handleThemeChange)
   }, [])
 
   // ─── Data loading ─────────────────────────────────────────────────────────
@@ -215,15 +215,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }).catch(() => {})
     }
 
-    window.addEventListener('forge:new-project', handleNewProject)
-    window.addEventListener('forge:project-updated', handleProjectUpdated)
-    window.addEventListener('forge:venture-added', handleVentureAdded)
-    window.addEventListener('forge:refresh-projects', handleRefreshProjects)
+    window.addEventListener('Forze:new-project', handleNewProject)
+    window.addEventListener('Forze:project-updated', handleProjectUpdated)
+    window.addEventListener('Forze:venture-added', handleVentureAdded)
+    window.addEventListener('Forze:refresh-projects', handleRefreshProjects)
     return () => {
-      window.removeEventListener('forge:new-project', handleNewProject)
-      window.removeEventListener('forge:project-updated', handleProjectUpdated)
-      window.removeEventListener('forge:venture-added', handleVentureAdded)
-      window.removeEventListener('forge:refresh-projects', handleRefreshProjects)
+      window.removeEventListener('Forze:new-project', handleNewProject)
+      window.removeEventListener('Forze:project-updated', handleProjectUpdated)
+      window.removeEventListener('Forze:venture-added', handleVentureAdded)
+      window.removeEventListener('Forze:refresh-projects', handleRefreshProjects)
     }
   }, [router])
 
@@ -437,7 +437,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                         color: 'var(--text)',
                         letterSpacing: '-0.03em',
                         whiteSpace: 'nowrap',
-                      }}>Forge</span>
+                      }}>Forze</span>
                       <span style={{
                         fontSize: 9,
                         fontWeight: 700,
@@ -1175,7 +1175,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               background: 'var(--accent)',
               clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
             }} />
-            {!sidebarCollapsed && <span style={{ fontWeight: 700, color: 'var(--text)' }}>Forge</span>}
+            {!sidebarCollapsed && <span style={{ fontWeight: 700, color: 'var(--text)' }}>Forze</span>}
           </div>
         </aside>
       )}

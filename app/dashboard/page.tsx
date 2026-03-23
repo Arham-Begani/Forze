@@ -227,7 +227,7 @@ export default function DashboardPage() {
             animate={{ rotate: 360 }}
             transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
           />
-          <span style={intakeWordmarkStyle}>Forge</span>
+          <span style={intakeWordmarkStyle}>Forze</span>
         </motion.div>
 
         {/* Heading */}
@@ -482,7 +482,7 @@ export default function DashboardPage() {
             style={{ fontSize: 28, fontWeight: 800, margin: '0 0 10px', letterSpacing: '-0.04em' }}
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           >
-            Welcome to Forge
+            Welcome to Forze
           </motion.h1>
           <motion.p
             style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 36px', textAlign: 'center', maxWidth: 360, lineHeight: 1.75 }}
@@ -714,7 +714,7 @@ export default function DashboardPage() {
             animate={{ opacity: 0.3 }}
             transition={{ delay: 0.6 }}
           >
-            Forge Autonomous Venture Orchestrator · v2.0.0
+            Forze Autonomous Venture Orchestrator · v2.0.0
           </motion.p>
         </div>
       </div>

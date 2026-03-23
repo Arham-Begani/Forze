@@ -30,6 +30,8 @@ import { runShadowBoard } from '@/agents/shadow'
 import { runInvestorKitAgent } from '@/agents/investor-kit'
 import { runLaunchAutopilotAgent } from '@/agents/launch-autopilot'
 import { runMVPScalpelAgent } from '@/agents/mvp-scalpel'
+import { evaluateModuleScope } from '@/lib/module-scope'
+import type { ScopeRefusalResult } from '@/lib/module-scope.shared'
 
 const DecisionSchema = z.object({
     questionId: z.string(),
@@ -67,6 +69,11 @@ function formatDecisionsForPrompt(decisions: Decision[]): string {
         return `- ${d.category}: ${d.question}\n  → User chose: ${answer}`
     })
     return `\n\n--- FOUNDER DECISIONS ---\nThe founder answered these strategic questions before this run. Incorporate their preferences:\n${lines.join('\n')}\n--- END DECISIONS ---\n`
+}
+
+async function completeScopeRefusal(conversationId: string, refusal: ScopeRefusalResult) {
+    await appendStreamLine(conversationId, refusal.message)
+    await setConversationResult(conversationId, refusal as unknown as Record<string, unknown>)
 }
 
 async function runAgent(
@@ -285,7 +292,24 @@ export async function POST(
             await assertHourlyRateLimit(session.userId, billingCheck.snapshot)
         }
 
+        const scopeDecision = await evaluateModuleScope({
+            moduleId,
+            prompt,
+            context: venture.context as unknown as Record<string, unknown>,
+            isContinuation,
+            mode: 'run',
+        })
+
         const conversation = await createConversation(id, moduleId, prompt)
+        if (!scopeDecision.allowed) {
+            await completeScopeRefusal(conversation.id, scopeDecision.refusal)
+
+            return NextResponse.json(
+                { conversationId: conversation.id, status: 'complete', blocked: scopeDecision.refusal },
+                { status: 202 }
+            )
+        }
+
         if (billingCheck) {
             await recordUsageCharge({
                 userId: session.userId,

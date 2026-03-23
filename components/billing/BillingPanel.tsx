@@ -92,7 +92,7 @@ export function BillingPanel() {
       await openRazorpayCheckout({
         key: createData.keyId,
         subscription_id: createData.subscriptionId,
-        name: 'Forge',
+        name: 'Forze',
         description: `${BILLING_PLANS[planSlug].label} plan`,
         prefill: createData.prefill,
         handler: async (response) => {
@@ -138,7 +138,7 @@ export function BillingPanel() {
         key: createData.keyId,
         order_id: createData.orderId,
         amount: createData.amountInr * 100,
-        name: 'Forge',
+        name: 'Forze',
         description: `${TOPUP_PRODUCTS[topupSlug].label} top-up`,
         prefill: createData.prefill,
         handler: async (response) => {

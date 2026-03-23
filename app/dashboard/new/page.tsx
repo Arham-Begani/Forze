@@ -101,14 +101,14 @@ export default function NewProjectPage() {
         })
         if (ventureRes.ok) {
           const newVenture = await ventureRes.json()
-          window.dispatchEvent(new CustomEvent('forge:venture-added', { detail: newVenture }))
+          window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
         }
       } catch {
         // Non-critical — venture can be created later
       }
 
       // Notify sidebar to refresh project list
-      window.dispatchEvent(new CustomEvent('forge:refresh-projects'))
+      window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
 
       // Step 5: Also save as user idea if first time
       try {
@@ -142,7 +142,7 @@ export default function NewProjectPage() {
     <div style={pageStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 52 }}>
         <div style={hexStyle} />
-        <span style={wordmarkStyle}>Forge</span>
+        <span style={wordmarkStyle}>Forze</span>
       </div>
     </div>
   )
@@ -169,7 +169,7 @@ export default function NewProjectPage() {
           animate={{ rotate: 360 }}
           transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
         />
-        <span style={wordmarkStyle}>Forge</span>
+        <span style={wordmarkStyle}>Forze</span>
       </motion.div>
 
       {/* Heading */}

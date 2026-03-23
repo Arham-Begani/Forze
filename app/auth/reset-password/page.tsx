@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
       const { error: updateError } = await supabase.auth.updateUser({ password })
       if (updateError) throw updateError
 
-      setMessage('Your password has been updated. Redirecting you back into Forge...')
+      setMessage('Your password has been updated. Redirecting you back into Forze...')
       router.replace('/dashboard')
       router.refresh()
     } catch (err) {
@@ -104,7 +104,7 @@ export default function ResetPasswordPage() {
               animate={{ rotate: 360 }}
               transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
             />
-            <span style={wordmarkStyle}>Forge</span>
+            <span style={wordmarkStyle}>Forze</span>
           </motion.div>
 
           <motion.h1
@@ -121,7 +121,7 @@ export default function ResetPasswordPage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.24, duration: 0.4 }}
           >
-            Set a new password for your Forge account.
+            Set a new password for your Forze account.
           </motion.p>
 
           {checkingSession && (
@@ -226,10 +226,10 @@ export default function ResetPasswordPage() {
           <div style={accentLineStyle} />
           <div style={logoStyle}>
             <div style={hexLogoStyle} />
-            <span style={wordmarkStyle}>Forge</span>
+            <span style={wordmarkStyle}>Forze</span>
           </div>
           <h1 style={titleStyle}>Reset password</h1>
-          <p style={subtitleStyle}>Set a new password for your Forge account.</p>
+          <p style={subtitleStyle}>Set a new password for your Forze account.</p>
         </div>
       )}
     </div>

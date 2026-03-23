@@ -1,4 +1,4 @@
-/* app/globals.css — Forge Premium Design System */
+/* app/globals.css — Forze Premium Design System */
 
 @tailwind base;
 @tailwind components;
@@ -1265,22 +1265,10 @@ button, a {
 /* Mobile */
 @media (max-width: 768px) {
   .reading-panel {
-    width: 100%;
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 20;
-    box-shadow: none;
+    display: none !important;
   }
   .landing-preview-panel {
-    width: 100%;
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 20;
-    box-shadow: none;
+    display: none !important;
   }
 
   .report-modal-overlay {
@@ -1313,10 +1301,6 @@ button, a {
 
 /* Small mobile */
 @media (max-width: 480px) {
-  .reading-panel {
-    width: 100%;
-  }
-
   .report-modal-content {
     padding: 20px 16px !important;
   }

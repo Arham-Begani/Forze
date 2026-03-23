@@ -51,7 +51,7 @@ function AuthCallbackContent() {
 
         if (active) {
           setStatus('success')
-          setMessage('You are signed in. Taking you to Forge...')
+          setMessage('You are signed in. Taking you to Forze...')
           router.replace('/dashboard')
           router.refresh()
         }

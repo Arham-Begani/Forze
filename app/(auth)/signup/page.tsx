@@ -49,15 +49,22 @@ export default function SignUpPage() {
         password,
         options: {
           data: { name: name.trim() || undefined },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
         },
       });
       if (authError) throw authError;
 
+      // Supabase returns a fake user with no identities when the email already exists
+      // (to prevent email enumeration). Detect this and show a helpful message.
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setError("An account with this email already exists. Please sign in instead.");
+        return;
+      }
+
       if (data.session) {
         window.location.href = "/dashboard";
       } else {
-        setInfo("Account created. If email confirmation is enabled, check your inbox and click the verification link.");
+        setInfo("Account created! Check your inbox and click the verification link to get started.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create your account. Please try again.";
@@ -97,7 +104,7 @@ export default function SignUpPage() {
               animate={{ rotate: 360 }}
               transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
             />
-            <span style={wordmarkStyle}>Forge</span>
+            <span style={wordmarkStyle}>Forze</span>
           </motion.div>
 
           <motion.h1
@@ -278,7 +285,7 @@ export default function SignUpPage() {
           <div style={accentLineStyle} />
           <div style={logoStyle}>
             <div style={hexLogoStyle} />
-            <span style={wordmarkStyle}>Forge</span>
+            <span style={wordmarkStyle}>Forze</span>
           </div>
           <h1 style={titleStyle}>Create your account</h1>
           <p style={subtitleStyle}>Sign up with your email, password, and name.</p>

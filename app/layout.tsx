@@ -15,10 +15,10 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-    title: 'Forge — Autonomous Venture Orchestrator',
+    title: 'Forze - Autonomous Venture Orchestrator',
     description: 'Transform a raw business concept into a production-ready, market-validated venture in minutes with AI-powered agents.',
     keywords: ['startup', 'AI', 'venture', 'business', 'automation'],
-    authors: [{ name: 'Forge' }],
+    authors: [{ name: 'Forze' }],
 }
 
 export const viewport: Viewport = {
@@ -32,8 +32,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en" suppressHydrationWarning className={`${dmSans.variable} ${jetbrainsMono.variable}`}>
-            <body className="antialiased">{children}</body>
+        <html lang='en' suppressHydrationWarning className={`${dmSans.variable} ${jetbrainsMono.variable}`}>
+            <body className='antialiased'>{children}</body>
         </html>
     )
 }

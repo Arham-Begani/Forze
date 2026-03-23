@@ -41,7 +41,7 @@ export default function PricingPage() {
                 color: 'var(--accent)',
               }}
             >
-              Forge Pricing
+              Forze Pricing
             </div>
             <h1
               style={{
@@ -54,7 +54,7 @@ export default function PricingPage() {
               India-first pricing for founder velocity
             </h1>
             <p style={{ maxWidth: 720, margin: 0, fontSize: 16, color: 'var(--text-soft)', lineHeight: 1.7 }}>
-              Buy a plan, get monthly credits, and unlock the high-value Forge agents only when they actually matter.
+              Buy a plan, get monthly credits, and unlock the high-value Forze agents only when they actually matter.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

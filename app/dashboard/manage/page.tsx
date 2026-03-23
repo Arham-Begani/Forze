@@ -540,7 +540,7 @@ export default function ManageProjectsPage() {
                 </div>
                 <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>No projects yet</p>
                 <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, textAlign: 'center', maxWidth: 300 }}>
-                  Create your first project from the sidebar to get started with Forge.
+                  Create your first project from the sidebar to get started with Forze.
                 </p>
               </motion.div>
             )}

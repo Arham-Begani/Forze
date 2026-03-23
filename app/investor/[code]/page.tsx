@@ -358,7 +358,7 @@ export default function InvestorKitPage() {
                 background: '#faf9f6',
             }}>
                 <p style={{ fontSize: 11, color: '#999', margin: 0 }}>
-                    Powered by <span style={{ fontWeight: 700, color: '#C4975A' }}>Forge</span> — Autonomous Venture Orchestrator
+                    Powered by <span style={{ fontWeight: 700, color: '#C4975A' }}>Forze</span> — Autonomous Venture Orchestrator
                 </p>
             </footer>
         </div>

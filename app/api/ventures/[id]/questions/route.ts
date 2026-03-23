@@ -4,6 +4,7 @@ import { getVenture, getProject } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getFlashModel, extractJSON } from '@/lib/gemini'
+import { evaluateModuleScope } from '@/lib/module-scope'
 
 const bodySchema = z.object({
     moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch']),
@@ -52,6 +53,16 @@ export async function POST(
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
+        const scopeDecision = await evaluateModuleScope({
+            moduleId,
+            prompt,
+            context: venture.context as unknown as Record<string, unknown>,
+            mode: 'preflight',
+        })
+        if (!scopeDecision.allowed) {
+            return NextResponse.json({ questions: [], blocked: scopeDecision.refusal })
+        }
+
         const project = venture.project_id ? await getProject(venture.project_id, session.userId) : null
         const context = venture.context as unknown as Record<string, unknown>
         const moduleDesc = MODULE_CONTEXT[moduleId] || 'venture building'
@@ -66,7 +77,7 @@ export async function POST(
         if (context?.landing) contextParts.push(`Landing page data exists: yes`)
         if (context?.feasibility) contextParts.push(`Feasibility data exists: yes`)
 
-        const systemPrompt = `You are Forge, an AI venture orchestrator. You MUST decide whether the user's prompt requires strategic questions before running the ${moduleId} agent.
+        const systemPrompt = `You are Forze, an AI venture orchestrator. You MUST decide whether the user's prompt requires strategic questions before running the ${moduleId} agent.
 
 The ${moduleId} module handles: ${moduleDesc}
 

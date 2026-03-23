@@ -73,7 +73,7 @@ function GreetingContent() {
       })
 
       if (res.ok) {
-        window.dispatchEvent(new CustomEvent('forge:project-updated', {
+        window.dispatchEvent(new CustomEvent('Forze:project-updated', {
           detail: { projectId, global_idea: idea.trim() }
         }))
 
@@ -86,7 +86,7 @@ function GreetingContent() {
 
           if (ventureRes.ok) {
             const newVenture = await ventureRes.json()
-            window.dispatchEvent(new CustomEvent('forge:venture-added', { detail: newVenture }))
+            window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
           }
         } catch (err) {
           console.error('Failed to create initial venture:', err)

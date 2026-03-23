@@ -16,6 +16,7 @@ import ReactMarkdown from 'react-markdown'
 import { getModuleCost } from '@/lib/billing'
 import { downloadPDFFromResult, downloadPDFFromElement } from '@/lib/client-pdf'
 import { resolveLandingComponent, stripGeneratedCodeFences } from '@/lib/landing-page'
+import { isScopeRefusalResult, type ScopeRefusalResult } from '@/lib/module-scope.shared'
 
 // ─── Module metadata (mirrors ModulePicker) ──────────────────────────────────
 
@@ -30,6 +31,7 @@ const MODULES = [
   { id: 'shadow-board', label: 'Shadow Board', accent: '#E04848', description: 'Silicon board of directors — stress-test your venture from every angle', agentName: 'Shadow Board' },
   { id: 'launch-autopilot', label: 'Launch Autopilot', accent: '#B8864E', description: '14-day launch calendar with exact copy to paste — just execute', agentName: 'Autopilot' },
   { id: 'mvp-scalpel', label: 'MVP Scalpel', accent: '#C45A5A', description: 'Cut features ruthlessly — kill list, skeleton MVP, weekend build spec', agentName: 'Scalpel' },
+  { id: 'investor-kit', label: 'Investor Kit', accent: '#7A8C5A', description: 'Pitch deck, memo, raise narrative, and data room structure', agentName: 'Investor Kit' },
 ] as const
 
 type ModuleId = typeof MODULES[number]['id']
@@ -66,6 +68,7 @@ const SUGGESTIONS: Record<string, [string, string]> = {
   'shadow-board': ['Run a full board review of my venture strategy', 'Challenge my assumptions from investor and operator perspectives'],
   'launch-autopilot': ['Generate my 14-day launch execution plan', 'Build a paste-ready launch calendar for all channels'],
   'mvp-scalpel': ['Cut my feature list down to a shippable weekend MVP', 'Tell me what NOT to build and how to get first dollar fast'],
+  'investor-kit': ['Turn this venture into a pitchable investor narrative', 'Build the deck outline, memo, and fundraise ask'],
 }
 
 // ─── Full Launch agent rows ───────────────────────────────────────────────────
@@ -286,6 +289,94 @@ function StreamPanel({ lines, accent }: { lines: string[]; accent: string }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+function ScopeRefusalCard({
+  result,
+  onSwitch,
+  originalPrompt,
+}: {
+  result: ScopeRefusalResult
+  onSwitch: (moduleId: ModuleId, prompt: string) => void
+  originalPrompt: string
+}) {
+  const moduleMeta = getModule(result.moduleId)
+  const suggestedModules = result.suggestedModules.filter((moduleId): moduleId is ModuleId => moduleId !== 'general')
+
+  return (
+    <motion.div
+      style={{
+        marginTop: 4,
+        borderRadius: 16,
+        border: '1px solid var(--border)',
+        background: 'var(--glass-bg-strong)',
+        padding: '16px 18px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: `${moduleMeta.accent}16`,
+            color: moduleMeta.accent,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <ModuleIconSvg id={result.moduleId} size={14} />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+            Better Fit Needed
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+            {moduleMeta.label} stayed focused instead of generating the wrong deliverable.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-soft)' }}>
+        {result.message}
+      </div>
+
+      {suggestedModules.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {suggestedModules.map((moduleId) => {
+            const suggested = getModule(moduleId)
+            return (
+              <button
+                key={moduleId}
+                type="button"
+                onClick={() => onSwitch(moduleId, originalPrompt)}
+                style={{
+                  border: `1px solid ${suggested.accent}40`,
+                  background: `${suggested.accent}12`,
+                  color: suggested.accent,
+                  borderRadius: 999,
+                  padding: '8px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Open {suggested.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 export default function ModulePage() {
   const params = useParams()
   const router = useRouter()
@@ -346,7 +437,7 @@ export default function ModulePage() {
   const [depth, setDepth] = useState<'brief' | 'medium' | 'detailed'>(() => {
     if (typeof window === 'undefined') return 'medium'
     try {
-      const s = localStorage.getItem('forge-settings')
+      const s = localStorage.getItem('forze-settings')
       if (s) { const p = JSON.parse(s); if (p.defaultDepth) return p.defaultDepth }
     } catch { /* ignore */ }
     return 'medium'
@@ -355,7 +446,7 @@ export default function ModulePage() {
   const [showThoughtProcess, setShowThoughtProcess] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true
     try {
-      const s = localStorage.getItem('forge-settings')
+      const s = localStorage.getItem('forze-settings')
       if (s) { const p = JSON.parse(s); if (typeof p.showThoughtProcess === 'boolean') return p.showThoughtProcess }
     } catch { /* ignore */ }
     return true
@@ -368,8 +459,8 @@ export default function ModulePage() {
       if (typeof detail?.showThoughtProcess === 'boolean') setShowThoughtProcess(detail.showThoughtProcess)
       if (detail?.defaultDepth) setDepth(detail.defaultDepth)
     }
-    window.addEventListener('forge:settings-changed', onSettingsChanged)
-    return () => window.removeEventListener('forge:settings-changed', onSettingsChanged)
+    window.addEventListener('forze:settings-changed', onSettingsChanged)
+    return () => window.removeEventListener('forze:settings-changed', onSettingsChanged)
   }, [])
 
   const [prompt, setPrompt] = useState('')
@@ -571,6 +662,11 @@ export default function ModulePage() {
         })
         if (res.ok) {
           const data = await res.json()
+          if (data.blocked) {
+            setIsLoadingQuestions(false)
+            executeRun(text)
+            return
+          }
           if (data.questions && data.questions.length > 0) {
             setPendingQuestions(data.questions)
             setSelectedAnswers({})
@@ -752,6 +848,13 @@ export default function ModulePage() {
     textareaRef.current?.focus()
   }
 
+  function switchToModule(moduleId: ModuleId, nextPrompt: string) {
+    setActiveModule(moduleId)
+    setPrompt(nextPrompt)
+    setRunError(null)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
   function handleContinue(entry: ConversationEntry) {
     // Strip internal status markers before sending as model history
     const partialOutput = entry.lines
@@ -815,7 +918,10 @@ export default function ModulePage() {
   const canSubmit = !!prompt.trim() && !isSubmitting && !isLoadingQuestions && !moduleLocked && hasEnoughCredits
 
   // Compute latest result for reading panel
-  const latestResult = [...conversations].reverse().find(c => c.result && Object.keys(c.result).length > 0)?.result as Record<string, any> | null
+  const latestResult = [...conversations]
+    .reverse()
+    .find(c => c.result && Object.keys(c.result).length > 0 && !isScopeRefusalResult(c.result))
+    ?.result as Record<string, any> | null
   const latestLandingResult = latestResult ? (latestResult.landing || latestResult) as Record<string, any> : null
   const landingFullComponent = activeModule === 'landing' && latestResult
     ? resolveLandingComponent({
@@ -1387,8 +1493,16 @@ export default function ModulePage() {
                       </motion.div>
                     )}
 
+                    {activeModule !== 'general' && entry.result && !entry.isRunning && isScopeRefusalResult(entry.result) && (
+                      <ScopeRefusalCard
+                        result={entry.result}
+                        onSwitch={switchToModule}
+                        originalPrompt={entry.prompt}
+                      />
+                    )}
+
                     {/* Specialized module results */}
-                    {activeModule !== 'general' && entry.result && !entry.isRunning && (
+                    {activeModule !== 'general' && entry.result && !entry.isRunning && !isScopeRefusalResult(entry.result) && (
                       <motion.div
                         style={{ marginTop: 4 }}
                         initial={{ opacity: 0, y: 8 }}
