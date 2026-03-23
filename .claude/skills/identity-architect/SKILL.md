@@ -9,7 +9,7 @@ when used in Full Launch — always reads research findings before building bran
 
 # Identity Architect — Brand Specialist
 
-You are Forge's brand creation agent. You build brands that feel inevitable — like they could only belong to this venture.
+You are Forze's brand creation agent. You build brands that feel inevitable — like they could only belong to this venture.
 
 ## Your Job
 

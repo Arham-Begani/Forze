@@ -1,4 +1,4 @@
-# Forge — Progress Log
+# Forze — Progress Log
 
 ## How to Use This File
 Update this at the end of every session.
@@ -17,7 +17,7 @@ This file is the Agent's memory between sessions.
 
 ### Phase 0 — Environment Setup
 - [x] Gemini Code installed (`npm install -g @anthropic-ai/claude-code`)
-- [x] Next.js project created (`npx create-next-app@latest forge --typescript --tailwind --app`)
+- [x] Next.js project created (`npx create-next-app@latest Forze --typescript --tailwind --app`)
 - [x] Dependencies installed (`@google/generative-ai`, `@anthropic-ai/sdk`, `zod`, `@antigravity/sdk`)
 - [x] `.env.local` created with API keys
 - [x] `.claude/settings.json` created with Agent Teams enabled
@@ -39,7 +39,7 @@ This file is the Agent's memory between sessions.
 - [x] Auth flow tested end-to-end
 
 ### Phase 3 — UI Shell
-- [ ] `ForgeUI.jsx` dropped into `src/components/`
+- [ ] `ForzeUI.jsx` dropped into `src/components/`
 - [x] `app/(dashboard)/layout.tsx` — Sidebar with Project/Venture hierarchy
 - [x] `app/(dashboard)/page.tsx` — Global Dashboard (Greeting + Project List)
 - [x] `app/(dashboard)/venture/[id]/[module]/page.tsx` — workspace
@@ -87,7 +87,7 @@ This file is the Agent's memory between sessions.
 - [x] `app/globals.css` — Robust design system with HSL tokens
 - [x] `app/dashboard/` — Refined greeting and project dashboard UI
 - [x] web-design-guidelines audit run on all components (Manual Pass)
-- [x] UI matches ForgeUI.jsx standards
+- [x] UI matches ForzeUI.jsx standards
 
 ---
 
@@ -111,7 +111,7 @@ This file is the Agent's memory between sessions.
 - `db/migrations/003_user_ideas.sql` — `user_ideas` table (one row per user, UNIQUE on user_id, upsert-safe)
 - `app/api/user/idea/route.ts` — GET (returns idea or null) + POST (saves/updates idea via upsert)
 - `lib/queries.ts` — `getUserIdea()` and `setUserIdea()` helpers appended (no existing code touched)
-- `app/dashboard/page.tsx` — Idea state + intake screen injected before main dashboard render. Shows Grok-style pill input with Forge branding. On submit → idea saved to DB → normal dashboard renders. Returning users skip intake automatically (idea already in DB).
+- `app/dashboard/page.tsx` — Idea state + intake screen injected before main dashboard render. Shows Grok-style pill input with Forze branding. On submit → idea saved to DB → normal dashboard renders. Returning users skip intake automatically (idea already in DB).
 **Broken:** None. All pre-existing pages and API routes unchanged.
 **Next:** Run `003_user_ideas.sql` migration in Antigravity DB console.
 
@@ -147,7 +147,7 @@ This file is the Agent's memory between sessions.
 - **Global CSS:** `app/globals.css` — Switched from Inter to DM Sans, added new CSS variables (--sidebar, --card-solid, --nav-active, --shadow-card, --shadow-premium, --radius-*, --transition-*), new animations (fade-in, scale-in, slide-down, progress-bar, ripple), new utility classes (.spinner, .spinner-lg, .hover-lift, .truncate-2, .page-enter, stagger delays).
 - **Dashboard Layout:** `app/dashboard/layout.tsx` — Collapsible sidebar with animation, collapsed state shows project icons, mobile hamburger menu with overlay, page transitions via AnimatePresence, better accessibility (aria labels, keyboard navigation, tabIndex), loading screen integration.
 - **Dashboard Page:** `app/dashboard/page.tsx` — Added venture count to hero subtitle, 4-column stats bar (Projects, Ventures, Modules, Agents), improved skeleton loading states, better intake flow with heading/description.
-- **Greeting Page:** `app/dashboard/greeting/page.tsx` — Complete redesign: suggestion chips for quick start, character counter, animated gradient accent bar on focus, feature pills at bottom showing what Forge does, Ctrl+Enter keyboard shortcut, improved accessibility.
+- **Greeting Page:** `app/dashboard/greeting/page.tsx` — Complete redesign: suggestion chips for quick start, character counter, animated gradient accent bar on focus, feature pills at bottom showing what Forze does, Ctrl+Enter keyboard shortcut, improved accessibility.
 - **Module Workspace:** `app/dashboard/venture/[id]/[module]/page.tsx` — Auto-resize textarea, scroll-to-bottom button during streaming, improved stream output with monospace panel and line numbers, better empty state with gradient glow, smoother chat bubble animations.
 - **ResultCard:** `components/ui/ResultCard.tsx` — Collapsible result sections, improved verdict badges with glow dots, better color palette display with hover effects, Copy/Export buttons, cleaner row layout.
 - **AgentStatusRow:** `components/ui/AgentStatusRow.tsx` — Added agent descriptions, SVG icons per agent, animated progress bar during running state, spring animations on status badge changes.

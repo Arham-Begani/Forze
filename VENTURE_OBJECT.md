@@ -1,4 +1,4 @@
-# Forge — Venture Object Schema
+# Forze — Venture Object Schema
 
 This is the single source of truth shared across all agents.
 Every agent reads from and writes to this object.
@@ -69,7 +69,7 @@ interface GenesisOutput {
     positioning: string;
     weakness: string;
   }>;
-  competitorGap: string;       // The main gap Forge's venture can fill
+  competitorGap: string;       // The main gap Forze's venture can fill
   swot: {
     strengths: string[];
     weaknesses: string[];

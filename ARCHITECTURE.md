@@ -1,4 +1,4 @@
-# Forge — Architecture
+# Forze — Architecture
 
 ## Stack
 
@@ -39,7 +39,7 @@ All models use prompt caching on system prompts.
 ## Project Structure
 
 ```
-forge/
+Forze/
   .claude/
     CLAUDE.md                        ← Claude Code global rules
     settings.json                    ← Agent Teams enabled, model config

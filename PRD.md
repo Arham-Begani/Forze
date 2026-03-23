@@ -1,10 +1,10 @@
-# Forge — Product Requirements Document
+# Forze — Product Requirements Document
 
 ## Vision
 
-Forge is an Autonomous Venture Orchestrator that bridges the Execution Gap for non-technical founders. It replaces the traditional 3-month startup launch cycle with a 5-minute Agentic Loop — a coordinated swarm of specialized AI agents that collaborate to transform a raw concept into a production-ready, market-validated business.
+Forze is an Autonomous Venture Orchestrator that bridges the Execution Gap for non-technical founders. It replaces the traditional 3-month startup launch cycle with a 5-minute Agentic Loop — a coordinated swarm of specialized AI agents that collaborate to transform a raw concept into a production-ready, market-validated business.
 
-Forge is not a chatbot. It is not a wrapper. It is a Silicon Workforce.
+Forze is not a chatbot. It is not a wrapper. It is a Silicon Workforce.
 
 ---
 
@@ -120,7 +120,7 @@ Produces a 20-page interactive feasibility study including financial projections
 ---
 
 ### 7. Shadow Board (The "Moat" Feature)
-The Shadow Board is Forge’s unique defense mechanism. It simulates a high-stakes board meeting with three AI personas: The Silicon Skeptic, The UX Evangelist, and The Growth Alchemist. They provide brutal, unfiltered feedback, synthetic user interviews, and a Venture Survival Score.
+The Shadow Board is Forze’s unique defense mechanism. It simulates a high-stakes board meeting with three AI personas: The Silicon Skeptic, The UX Evangelist, and The Growth Alchemist. They provide brutal, unfiltered feedback, synthetic user interviews, and a Venture Survival Score.
 
 **Agent:** Shadow Board (gemini-3-pro + extended thinking)
 
@@ -134,7 +134,7 @@ The Shadow Board is Forge’s unique defense mechanism. It simulates a high-stak
 
 ## Competitive Moat
 
-The Contextual Glue. While tools like Notion AI, Canva, and Copy.ai provide fragmented pieces, Forge provides a unified closed-loop ecosystem where:
+The Contextual Glue. While tools like Notion AI, Canva, and Copy.ai provide fragmented pieces, Forze provides a unified closed-loop ecosystem where:
 
 - The Brand Agent knows what the Research Agent found
 - The Content Factory writes in the brand voice the Identity Architect defined
@@ -176,7 +176,7 @@ User
 - Every agent run streams output in real time
 - All agent outputs are saved to the venture context for cross-agent access
 - Auth is required for all dashboard routes
-- The UI matches ForgeUI.jsx exactly — warm paper tones, DM Sans, JetBrains Mono
+- The UI matches ForzeUI.jsx exactly — warm paper tones, DM Sans, JetBrains Mono
 
 ---
 

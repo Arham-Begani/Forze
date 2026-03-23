@@ -52,4 +52,4 @@ A simple boolean success check from biometric auth (`isAuthenticated = true`) ca
 2. App signs the challenge with a hardware-backed key (Secure Enclave / Strongbox)
 3. Server verifies the signature
 
-This way, even if the biometric check is bypassed, the attacker can't forge the cryptographic signature.
+This way, even if the biometric check is bypassed, the attacker can't Forze the cryptographic signature.

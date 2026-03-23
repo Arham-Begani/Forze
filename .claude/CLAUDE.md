@@ -1,6 +1,6 @@
-# Forge — Claude Code Rules
+# Forze — Claude Code Rules
 
-## What Forge Is
+## What Forze Is
 An Autonomous Venture Orchestrator. A coordinated swarm of AI agents that transforms a raw business concept into a production-ready, market-validated venture in minutes. Not a chatbot. Not a wrapper. A Silicon Workforce.
 
 Read PRD.md for the full product vision before starting any task.
@@ -89,7 +89,7 @@ All agents: prompt caching enabled on system prompts.
 
 ## Design System (Never Override)
 
-The UI is defined by ForgeUI.jsx — treat it as read-only source of truth.
+The UI is defined by ForzeUI.jsx — treat it as read-only source of truth.
 
 ```
 Light mode:  bg #faf9f6 | sidebar #f4f2ed | border #e8e4dc | accent #c07a3a
