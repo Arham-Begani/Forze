@@ -49,7 +49,7 @@ export default function SignUpPage() {
         password,
         options: {
           data: { name: name.trim() || undefined },
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm`,
+          emailRedirectTo: `${(process.env.NEXT_PUBLIC_APP_URL || '').trim()}/auth/confirm`,
         },
       });
       if (authError) throw authError;

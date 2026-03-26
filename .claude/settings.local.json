@@ -33,7 +33,10 @@
       "Bash(find /c/Users/arham/Documents/Github/Forze -type d -name *agent*)",
       "WebSearch",
       "Bash(\"C:/Users/arham/Documents/Github/Forge/.env.local\")",
-      "Bash(find C:/Users/arham/Documents/Github/Forge -name *ForzeUI* -o -name *forze-ui*)"
+      "Bash(find C:/Users/arham/Documents/Github/Forge -name *ForzeUI* -o -name *forze-ui*)",
+      "Bash(find C:UsersarhamDocumentsGithubForge -type f -name *.ts -path */agents/*)",
+      "Bash(xxd \"C:\\\\Users\\\\arham\\\\Documents\\\\Github\\\\Forge\\\\.env.local\")",
+      "Bash(wc -l \"C:\\\\Users\\\\arham\\\\Documents\\\\Github\\\\Forge\\\\agents\"/*.ts)"
     ]
   }
 }

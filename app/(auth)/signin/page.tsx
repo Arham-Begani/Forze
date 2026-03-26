@@ -80,7 +80,7 @@ export default function SignInPage() {
     try {
       const supabase = createClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password`,
+        redirectTo: `${(process.env.NEXT_PUBLIC_APP_URL || '').trim()}/auth/reset-password`,
       });
       if (resetError) throw resetError;
       setResetMessage("Password reset link sent. Check your inbox.");

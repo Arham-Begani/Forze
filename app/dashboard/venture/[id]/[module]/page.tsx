@@ -1107,7 +1107,7 @@ export default function ModulePage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               onClick={() => {
-                const url = `${process.env.NEXT_PUBLIC_APP_URL}/investor/${investorKit.access_code}`
+                const url = `${(process.env.NEXT_PUBLIC_APP_URL || '').trim()}/investor/${investorKit.access_code}`
                 navigator.clipboard.writeText(url)
               }}
               style={{
