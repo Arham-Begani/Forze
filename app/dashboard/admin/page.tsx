@@ -22,6 +22,7 @@ interface AdminAnalytics {
     totalInvestorKitViews: number
     timezone?: string
     todayDate?: string
+    accessMode?: 'service_role' | 'session_fallback'
   }
   revenue: {
     totalRevenue: number
@@ -66,6 +67,7 @@ interface AdminAnalytics {
     userEmail: string
     createdAt: string
   }[]
+  warnings?: string[]
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
@@ -153,6 +155,21 @@ export default function AdminAnalyticsPage() {
           Refresh
         </motion.button>
       </div>
+
+      {data.warnings && data.warnings.length > 0 && (
+        <div style={{
+          marginBottom: 18,
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: '1px solid rgba(245, 158, 11, 0.35)',
+          background: 'rgba(245, 158, 11, 0.08)',
+          color: '#b45309',
+          fontSize: 12,
+          fontWeight: 600,
+        }}>
+          {data.warnings.join(' ')}
+        </div>
+      )}
 
       {/* ── Platform Overview ─────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10, marginBottom: 20 }}>

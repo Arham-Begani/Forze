@@ -3,11 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 
 import { requireAdmin, isAuthError } from '@/lib/auth'
 import { hasUnlimitedBillingOverride } from '@/lib/billing'
+import { createDb } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const REPORT_TIMEZONE = 'Asia/Kolkata'
+
+type AnalyticsAccessMode = 'service_role' | 'session_fallback'
 
 type QueryResult<T> = {
   data: T[] | null
@@ -101,16 +104,32 @@ type InvestorKitRow = {
   created_at: string | null
 }
 
-function getAdminDb() {
+function getServiceRoleKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY
+    ?? process.env.SUPABASE_SERVICE_ROLE
+    ?? process.env.SUPABASE_SERVICE_KEY
+    ?? null
+}
+
+async function getAnalyticsDb(): Promise<{ db: any; accessMode: AnalyticsAccessMode }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const serviceRole = getServiceRoleKey()
 
   if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is required')
-  if (!serviceRole) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin analytics')
 
-  return createClient(url, serviceRole, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+  if (!serviceRole) {
+    return {
+      db: await createDb(),
+      accessMode: 'session_fallback',
+    }
+  }
+
+  return {
+    db: createClient(url, serviceRole, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }),
+    accessMode: 'service_role',
+  }
 }
 
 function unwrapRows<T>(label: string, result: QueryResult<T>): T[] {
@@ -194,7 +213,12 @@ function getEffectivePlan(user: UserRow, currentSubscription: SubscriptionRow | 
 export async function GET() {
   try {
     await requireAdmin()
-    const db = getAdminDb()
+    const { db, accessMode } = await getAnalyticsDb()
+    const warnings: string[] = []
+
+    if (accessMode === 'session_fallback') {
+      warnings.push('Platform-wide billing analytics are limited until SUPABASE_SERVICE_ROLE_KEY is configured in Vercel.')
+    }
 
     const [
       usersRes,
@@ -213,10 +237,18 @@ export async function GET() {
       db.from('ventures').select('id, user_id, project_id, name, created_at'),
       db.from('conversations').select('id, venture_id, module_id, status, created_at'),
       db.from('cohorts').select('id, user_id, status, created_at'),
-      db.from('subscriptions').select('id, user_id, plan_slug, billing_period, status, credits_per_cycle, current_period_end, created_at'),
-      db.from('payments').select('id, user_id, kind, plan_slug, topup_slug, amount_inr, status, created_at'),
-      db.from('usage_ledger').select('id, user_id, module_id, credits, plan_slug, created_at'),
-      db.from('credit_ledger').select('id, user_id, kind, credits, created_at'),
+      accessMode === 'service_role'
+        ? db.from('subscriptions').select('id, user_id, plan_slug, billing_period, status, credits_per_cycle, current_period_end, created_at')
+        : Promise.resolve({ data: [], error: null }),
+      accessMode === 'service_role'
+        ? db.from('payments').select('id, user_id, kind, plan_slug, topup_slug, amount_inr, status, created_at')
+        : Promise.resolve({ data: [], error: null }),
+      accessMode === 'service_role'
+        ? db.from('usage_ledger').select('id, user_id, module_id, credits, plan_slug, created_at')
+        : Promise.resolve({ data: [], error: null }),
+      accessMode === 'service_role'
+        ? db.from('credit_ledger').select('id, user_id, kind, credits, created_at')
+        : Promise.resolve({ data: [], error: null }),
       db.from('investor_kits').select('id, venture_id, user_id, views, is_active, created_at'),
     ])
 
@@ -446,6 +478,7 @@ export async function GET() {
           totalInvestorKitViews: investorKits.reduce((sum, kit) => sum + (kit.views ?? 0), 0),
           timezone: REPORT_TIMEZONE,
           todayDate: todayDateKey,
+          accessMode,
         },
         revenue: {
           totalRevenue,
@@ -473,6 +506,7 @@ export async function GET() {
           signupsDelta: thisWeekSignups - lastWeekSignups,
         },
         recentPayments,
+        warnings,
       },
       {
         headers: {
