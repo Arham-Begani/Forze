@@ -53,6 +53,15 @@ const CohortComparisonSchema = z.object({
     runnerUpCase: RunnerUpCaseSchema,
     hybridPossibility: HybridPossibilitySchema,
     analysisNotes: z.string(),
+    // ── Decision Layer ──
+    winnerBecause: z.string().default('Winner rationale pending.'),
+    loserStrengthsToMerge: z.array(z.string()).default([]),
+    dimensionScores: z.object({
+        clarity: z.number().min(1).max(10).default(5),
+        distributionEase: z.number().min(1).max(10).default(5),
+        monetizationSpeed: z.number().min(1).max(10).default(5),
+        founderAdvantage: z.number().min(1).max(10).default(5),
+    }).default({ clarity: 5, distributionEase: 5, monetizationSpeed: 5, founderAdvantage: 5 }),
 })
 
 export type CohortComparisonOutput = z.infer<typeof CohortComparisonSchema>
@@ -118,7 +127,15 @@ Output strict JSON matching this structure:
     "possible": true,
     "description": "string"
   },
-  "analysisNotes": "500-800 word strategic analysis"
+  "analysisNotes": "500-800 word strategic analysis",
+  "winnerBecause": "string (one-paragraph founder-readable explanation of why this variant wins — cite specific data)",
+  "loserStrengthsToMerge": ["string (specific strengths from losing variants that the winner should adopt)"],
+  "dimensionScores": {
+    "clarity": 1-10,
+    "distributionEase": 1-10,
+    "monetizationSpeed": 1-10,
+    "founderAdvantage": 1-10
+  }
 }
 
 IMPORTANT: Use <think> tags for your internal reasoning. Output ONLY the JSON after your thinking. No markdown fences.
