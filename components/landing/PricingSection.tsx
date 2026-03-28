@@ -15,7 +15,7 @@ const PLAN_DESCRIPTIONS: Record<PlanSlug, string> = {
 }
 
 const PLAN_HIGHLIGHTS: Record<PlanSlug, string[]> = {
-  free: ['1 venture', '30 credits / month', 'All modules included', 'Community support'],
+  free: ['1 venture', '25 credits / month', 'All modules included', 'Community support'],
   starter: ['2 ventures', '40 credits / month', 'All modules included', 'Email support'],
   builder: ['5 ventures', '120 credits / month', 'All modules included', 'Priority support'],
   pro: ['15 ventures', '400 credits / month', 'All modules included', 'Dedicated support'],
@@ -114,7 +114,7 @@ export function PricingSection() {
         {/* Plan cards */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(190px, 100%), 1fr))',
           gap: '16px',
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(24px)',
@@ -289,7 +289,7 @@ export function PricingSection() {
           opacity: visible ? 1 : 0,
           transition: 'opacity 0.6s 0.4s ease',
         }}>
-          Start free with 30 monthly credits. No credit card required.
+          Start free with 25 monthly credits. No credit card required.
         </p>
       </div>
     </section>
