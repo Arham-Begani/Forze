@@ -142,11 +142,11 @@ export function AgentGrid() {
           borderRadius: 'var(--radius-xl)',
           background: `linear-gradient(135deg, ${FEATURED.accent}12, ${FEATURED.accent}06)`,
           border: `1px solid ${FEATURED.accent}30`,
-          padding: '36px',
+          padding: 'clamp(20px, 4vw, 36px)',
           marginBottom: '24px',
           display: 'grid',
-          gridTemplateColumns: '1fr auto',
-          gap: '32px',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          gap: 'clamp(16px, 3vw, 32px)',
           alignItems: 'center',
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(24px)',
@@ -259,7 +259,7 @@ export function AgentGrid() {
       </div>
 
       {/* Agent grid */}
-      <div style={{
+      <div className="agent-grid-cards" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
         gap: '16px',
@@ -351,6 +351,17 @@ export function AgentGrid() {
           </div>
         ))}
       </div>
+
+      <style>{`
+        @media (max-width: 640px) {
+          #agents > div:nth-child(2) {
+            grid-template-columns: 1fr !important;
+          }
+          .agent-grid-cards {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </section>
   )
 }
