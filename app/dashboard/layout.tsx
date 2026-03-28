@@ -215,15 +215,22 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }).catch(() => {})
     }
 
+    function handleCreditsChanged(e: Event) {
+      const { creditsRemaining } = (e as CustomEvent).detail
+      setSession(prev => prev ? { ...prev, creditsRemaining } : prev)
+    }
+
     window.addEventListener('Forze:new-project', handleNewProject)
     window.addEventListener('Forze:project-updated', handleProjectUpdated)
     window.addEventListener('Forze:venture-added', handleVentureAdded)
     window.addEventListener('Forze:refresh-projects', handleRefreshProjects)
+    window.addEventListener('Forze:credits-changed', handleCreditsChanged)
     return () => {
       window.removeEventListener('Forze:new-project', handleNewProject)
       window.removeEventListener('Forze:project-updated', handleProjectUpdated)
       window.removeEventListener('Forze:venture-added', handleVentureAdded)
       window.removeEventListener('Forze:refresh-projects', handleRefreshProjects)
+      window.removeEventListener('Forze:credits-changed', handleCreditsChanged)
     }
   }, [router])
 
