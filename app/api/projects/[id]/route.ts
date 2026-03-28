@@ -6,8 +6,15 @@ import {
   deleteProject,
   getVenturesByProject,
 } from '@/lib/queries'
+import { getBillingSnapshot } from '@/lib/billing-queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+
+const SourceDocumentSchema = z.object({
+  name: z.string().max(255),
+  content: z.string().max(50000), // ~50k chars per doc
+  type: z.string().max(50),
+})
 
 const UpdateProjectSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -15,6 +22,7 @@ const UpdateProjectSchema = z.object({
   icon: z.string().max(10).optional(),
   status: z.enum(['active', 'archived']).optional(),
   global_idea: z.string().optional(),
+  source_documents: z.array(SourceDocumentSchema).max(5).optional(),
 })
 
 export async function GET(
@@ -54,6 +62,18 @@ export async function PATCH(
     const result = UpdateProjectSchema.safeParse(body)
     if (!result.success) {
       return NextResponse.json({ error: 'Invalid input', details: result.error.flatten() }, { status: 400 })
+    }
+
+    // Gate source_documents to Builder+ plans
+    if (result.data.source_documents && result.data.source_documents.length > 0) {
+      const billing = await getBillingSnapshot(session.userId)
+      const builderPlus = ['builder', 'pro', 'studio']
+      if (!billing.hasUnlimitedAccess && !builderPlus.includes(billing.planSlug)) {
+        return NextResponse.json(
+          { error: 'Document upload is available on Builder, Pro, and Studio plans' },
+          { status: 403 }
+        )
+      }
     }
 
     await updateProject(id, result.data)
