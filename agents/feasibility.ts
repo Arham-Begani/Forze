@@ -83,6 +83,12 @@ const FeasibilityOutputSchema = z.object({
     keyAssumptions: z.array(z.string()).default([]),
     keyRisksToMonitor: z.array(z.string()).default([]),
     reportSections: z.array(z.string()).default([]),
+    // ── Decision Layer ──
+    realBlockers: z.array(z.string()).default([]),
+    manageableRisks: z.array(z.string()).default([]),
+    mostDangerousAssumption: z.string().default('Most dangerous assumption pending.'),
+    evidenceNeededToFlipVerdict: z.string().default('Evidence needed pending.'),
+    recommendedGoForwardMotion: z.string().default('Go-forward motion pending.'),
 })
 
 export type FeasibilityOutput = z.infer<typeof FeasibilityOutputSchema>
@@ -132,6 +138,12 @@ const FeasibilityEditPatchSchema = z.object({
     keyAssumptions: z.array(z.string()).optional(),
     keyRisksToMonitor: z.array(z.string()).optional(),
     reportSections: z.array(z.string()).optional(),
+    // ── Decision Layer ──
+    realBlockers: z.array(z.string()).optional(),
+    manageableRisks: z.array(z.string()).optional(),
+    mostDangerousAssumption: z.string().optional(),
+    evidenceNeededToFlipVerdict: z.string().optional(),
+    recommendedGoForwardMotion: z.string().optional(),
 })
 
 type FeasibilityEditPatch = z.infer<typeof FeasibilityEditPatchSchema>
@@ -166,6 +178,13 @@ function mergePatch(existing: FeasibilityOutput, patch: FeasibilityEditPatch): F
     if (patch.keyAssumptions) merged.keyAssumptions = patch.keyAssumptions
     if (patch.keyRisksToMonitor) merged.keyRisksToMonitor = patch.keyRisksToMonitor
     if (patch.reportSections) merged.reportSections = patch.reportSections
+
+    // Decision layer
+    if (patch.realBlockers) merged.realBlockers = patch.realBlockers
+    if (patch.manageableRisks) merged.manageableRisks = patch.manageableRisks
+    if (patch.mostDangerousAssumption !== undefined) merged.mostDangerousAssumption = patch.mostDangerousAssumption
+    if (patch.evidenceNeededToFlipVerdict !== undefined) merged.evidenceNeededToFlipVerdict = patch.evidenceNeededToFlipVerdict
+    if (patch.recommendedGoForwardMotion !== undefined) merged.recommendedGoForwardMotion = patch.recommendedGoForwardMotion
 
     return merged
 }
@@ -360,6 +379,14 @@ What could change in the next 2 years?
 Top 5-8 assumptions the entire model depends on.
 For each: what would invalidate it and how to test it within 30 days.
 
+### 7.5. Decision Layer (REQUIRED)
+Produce these sharp, founder-actionable fields:
+- **realBlockers**: True blockers that would stop this venture dead — regulatory barriers, capital requirements, technical impossibilities. Not "competition exists" but "requires FDA approval, 18-month minimum timeline".
+- **manageableRisks**: Risks that sound scary but are manageable with the right approach. For each, name the specific mitigation.
+- **mostDangerousAssumption**: The single assumption that, if wrong, collapses the entire thesis. Be specific — "assumes 3% conversion rate, but industry average is 0.8% for this category".
+- **evidenceNeededToFlipVerdict**: If the verdict is CONDITIONAL GO or NO-GO, what specific evidence would change it? If GO, what evidence would downgrade it?
+- **recommendedGoForwardMotion**: The exact next move — not "validate the market" but "run a $200 Google Ads campaign targeting [keyword] in [geo] for 14 days to test conversion at $X CAC".
+
 ### 8. Comprehensive Feasibility Report
 Write a professional "Investment Feasibility & Strategic Assessment" document.
 - Target length: ${cfg.reportLength}
@@ -401,7 +428,12 @@ Output strict JSON matching this schema:
   "regulatoryLandscape": "string",
   "keyAssumptions": ["string"],
   "keyRisksToMonitor": ["string"],
-  "reportSections": ["section titles used in the report"]
+  "reportSections": ["section titles used in the report"],
+  "realBlockers": ["string (true show-stoppers only)"],
+  "manageableRisks": ["string (scary but manageable)"],
+  "mostDangerousAssumption": "string (the one assumption that breaks everything)",
+  "evidenceNeededToFlipVerdict": "string (what data would change the verdict)",
+  "recommendedGoForwardMotion": "string (exact next move, be specific)"
 }
 
 Use your full thinking budget before producing numbers.
