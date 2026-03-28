@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ReportModal } from "./ReportModal";
-import { MoveUpRight, FileText } from "lucide-react";
+import { MoveUpRight, FileText, Pencil } from "lucide-react";
+import { useParams } from "next/navigation";
 import { downloadPDFFromResult } from "@/lib/client-pdf";
 
 export type ModuleId =
@@ -436,6 +437,16 @@ function ResearchDisplay({ result, onOpenReport }: { result: Record<string, any>
 
   return (
     <>
+      <DecisionLayer
+        accent={ACCENT}
+        items={[
+          { label: "Best Customer Segment", value: result.bestCustomerSegment },
+          { label: "Best Wedge", value: result.bestWedge },
+          { label: "Best Channels", value: result.bestChannels },
+          { label: "Biggest Trap", value: result.biggestTrap },
+          { label: "Recommended Next Step", value: result.recommendedNextStep },
+        ]}
+      />
       <Row label="Market Summary" value={result.marketSummary} />
       <Row label="TAM" value={stringTam} />
       <Row label="Recommended Concept" value={result.recommendedConcept} />
@@ -545,6 +556,15 @@ function BrandingDisplay({ result, onOpenReport }: { result: Record<string, any>
   const brandBible = result.branding?.brandBible || result.brandBible;
   return (
     <>
+      <DecisionLayer
+        accent="#5A6E8C"
+        items={[
+          { label: "Buyer Fit", value: result.buyerFitRationale },
+          { label: "Conversion Risks", value: result.conversionRisks },
+          { label: "Recommended Direction", value: result.recommendedBrandDirection },
+        ]}
+      />
+      <AlignmentWarnings warnings={result.alignmentWarnings} />
       <Row label="Brand Name" value={result.brandName} highlight />
       <Row label="Tagline" value={result.tagline} />
       <Row label="Archetype" value={result.brandArchetype} />
@@ -593,6 +613,14 @@ function MarketingDisplay({ result, onOpenReport }: { result: Record<string, any
   const marketingPlan = result.marketingPlan || result.gtmStrategy?.marketingPlan;
   return (
     <>
+      <DecisionLayer
+        accent="#8C5A7A"
+        items={[
+          { label: "Recommended First Motion", value: result.recommendedFirstMotion },
+          { label: "Priority Channels", value: Array.isArray(result.priorityChannels) ? result.priorityChannels.map((c: any) => c.channel).join(" · ") : undefined },
+        ]}
+      />
+      <AlignmentWarnings warnings={result.alignmentWarnings} />
       <Row label="Strategy" value={result.gtmStrategy?.overview ?? result.theme} />
       <Row label="Assets" value={`${socialCount} posts, ${blogCount} SEO articles`} />
       {marketingPlan && (
@@ -619,6 +647,16 @@ function LandingDisplay({ result, externalUrl }: { result: Record<string, any>; 
 
   return (
     <>
+      <DecisionLayer
+        accent="#8C7A5A"
+        items={[
+          { label: "Recommended Page Direction", value: result.recommendedPageDirection },
+          { label: "Positioning Angles", value: result.positioningAngles },
+          { label: "Headline Weaknesses", value: result.headlineWeaknesses },
+          { label: "CTA Weaknesses", value: result.ctaWeaknesses },
+        ]}
+      />
+      <AlignmentWarnings warnings={result.alignmentWarnings} />
       <Row label="Hero Hook" value={hero.headline || result.heroHeadline} highlight />
       {hero.subheadline && <Row label="Subheadline" value={hero.subheadline} />}
       {hero.ctaPrimary && <Row label="Primary CTA" value={hero.ctaPrimary} />}
@@ -678,6 +716,17 @@ function FeasibilityDisplay({ result, onOpenReport }: { result: Record<string, a
           </div>
         )}
       </div>
+
+      {/* Decision Layer */}
+      <DecisionLayer
+        accent={ACCENT}
+        items={[
+          { label: "Most Dangerous Assumption", value: result.mostDangerousAssumption },
+          { label: "Real Blockers", value: result.realBlockers },
+          { label: "Evidence to Flip Verdict", value: result.evidenceNeededToFlipVerdict },
+          { label: "Go-Forward Motion", value: result.recommendedGoForwardMotion },
+        ]}
+      />
 
       {/* Verdict Rationale */}
       {verdictRationale && (
@@ -893,6 +942,15 @@ function ShadowBoardDisplay({ result }: { result: Record<string, any> }) {
              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{d.role}</div>
              <p style={{ fontSize: 12, color: "var(--text-soft)", fontStyle: "italic", marginBottom: 6 }}>&ldquo;{d.thought}&rdquo;</p>
              <p style={{ fontSize: 12, color: "#E04848", fontWeight: 600 }}>Honesty: {d.brutalHonesty}</p>
+             {d.moduleEvidence && d.moduleEvidence !== 'Evidence pending.' && (
+               <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Evidence: {d.moduleEvidence}</p>
+             )}
+             {d.fixThisThisWeek && d.fixThisThisWeek !== 'Weekly action pending.' && (
+               <div style={{ marginTop: 6, padding: "6px 10px", background: "#16a34a10", border: "1px solid #16a34a20", borderRadius: 6 }}>
+                 <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.04em" }}>Fix This Week: </span>
+                 <span style={{ fontSize: 11, color: "var(--text-soft)" }}>{d.fixThisThisWeek}</span>
+               </div>
+             )}
           </div>
         ))}
       </div>
@@ -985,6 +1043,88 @@ function FullLaunchDisplay({ result, externalUrl, onOpenReport }: {
             <FileText size={10} /> Investment Case
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Decision Layer Display ─────────────────────────────────────────────────
+
+function DecisionLayer({ items, accent }: { items: { label: string; value: any }[]; accent: string }) {
+  const validItems = items.filter(i => i.value && i.value !== 'pending.' && !String(i.value).endsWith(' pending.'));
+  if (validItems.length === 0) return null;
+
+  return (
+    <div style={{
+      marginTop: 8,
+      padding: "12px 14px",
+      background: `${accent}06`,
+      border: `1px solid ${accent}18`,
+      borderRadius: 12,
+      borderLeft: `3px solid ${accent}`,
+    }}>
+      <div style={{
+        fontSize: 10,
+        fontWeight: 800,
+        color: accent,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        marginBottom: 10,
+      }}>
+        Recommendation
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {validItems.map((item, i) => (
+          <div key={i}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+              {item.label}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.55 }}>
+              {Array.isArray(item.value) ? item.value.join(" · ") : String(item.value)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AlignmentWarnings({ warnings }: { warnings: string[] | undefined }) {
+  if (!warnings || warnings.length === 0) return null;
+
+  return (
+    <div style={{
+      marginTop: 8,
+      padding: "10px 14px",
+      background: "#d9770608",
+      border: "1px solid #d9770620",
+      borderRadius: 10,
+      borderLeft: "3px solid #d97706",
+    }}>
+      <div style={{
+        fontSize: 10,
+        fontWeight: 800,
+        color: "#d97706",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        marginBottom: 6,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        Needs Alignment
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {warnings.map((w, i) => (
+          <div key={i} style={{ fontSize: 11, color: "#d97706", lineHeight: 1.5 }}>
+            {w}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1113,6 +1253,8 @@ function MetricTile({ label, value, accent }: { label: string; value: string; ac
 
 function InvestorKitDisplay({ result, onOpenReport }: { result: Record<string, any>; onOpenReport: (content: string) => void }) {
   const ACCENT = "#7A8C5A";
+  const params = useParams();
+  const ventureId = params?.id as string | undefined;
   const slides = Array.isArray(result.pitchDeckOutline) ? result.pitchDeckOutline : [];
   const ask = result.askDetails || {};
   const milestones = Array.isArray(ask.keyMilestones) ? ask.keyMilestones : [];
@@ -1187,11 +1329,18 @@ function InvestorKitDisplay({ result, onOpenReport }: { result: Record<string, a
         </div>
       )}
 
-      {result.onePageMemo && (
-        <button onClick={() => onOpenReport(result.onePageMemo)} style={smallLinkStyle}>
-          <FileText size={10} /> Open Investor Memo
-        </button>
-      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {result.onePageMemo && (
+          <button onClick={() => onOpenReport(result.onePageMemo)} style={smallLinkStyle}>
+            <FileText size={10} /> Open Investor Memo
+          </button>
+        )}
+        {ventureId && (
+          <a href={`/dashboard/venture/${ventureId}/investor-kit/edit`} style={{ ...smallLinkStyle, textDecoration: "none" }}>
+            <Pencil size={10} /> Edit Kit
+          </a>
+        )}
+      </div>
     </div>
   );
 }
