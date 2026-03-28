@@ -852,7 +852,7 @@ const statDivider: React.CSSProperties = {
 
 const gridStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(248px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(min(248px, 100%), 1fr))',
   gap: 16,
 }
 
