@@ -5,6 +5,7 @@ import {
   type BillingModuleId,
   type BillingPeriod,
   type PlanSlug,
+  PLAN_SEQUENCE,
   type TopupSlug,
   BILLING_PLANS,
   TOPUP_PRODUCTS,
@@ -539,6 +540,20 @@ export async function assertCanRunModule(userId: string, moduleId: BillingModule
   }
 
   return { snapshot, requiredCredits }
+}
+
+export async function assertCanAccessMarketingAutomation(userId: string, db?: DbClient): Promise<BillingSnapshot> {
+  const snapshot = await getBillingSnapshot(userId, db)
+  if (snapshot.hasUnlimitedAccess) return snapshot
+
+  const currentPlanIndex = PLAN_SEQUENCE.indexOf(snapshot.planSlug)
+  const minimumPlanIndex = PLAN_SEQUENCE.indexOf('builder')
+
+  if (currentPlanIndex === -1 || currentPlanIndex < minimumPlanIndex) {
+    throw new BillingError('Connected channels are available on Builder and higher plans', 403, 'marketing_automation_locked')
+  }
+
+  return snapshot
 }
 
 // ── HTTP-level rate limiter ────────────────────────────────────────────────
