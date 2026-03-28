@@ -1,8 +1,39 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+
+interface UploadedDoc {
+  name: string
+  content: string
+  type: string
+}
+
+async function extractTextFromFile(file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+
+  if (['txt', 'md', 'csv', 'json'].includes(ext)) {
+    return await file.text()
+  }
+
+  if (ext === 'pdf') {
+    const pdfjsLib = await import('pdfjs-dist')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+
+    const arrayBuffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    const pages: string[] = []
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      pages.push(textContent.items.map((item: any) => item.str).join(' '))
+    }
+    return pages.join('\n\n')
+  }
+
+  return await file.text() // fallback
+}
 
 export default function NewProjectPage() {
   const router = useRouter()
@@ -14,9 +45,46 @@ export default function NewProjectPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [docs, setDocs] = useState<UploadedDoc[]>([])
+  const [parsing, setParsing] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [planSlug, setPlanSlug] = useState<string | null>(null)
+
+  const BUILDER_PLUS_PLANS = ['builder', 'pro', 'studio']
+  const canUploadDocs = planSlug ? BUILDER_PLUS_PLANS.includes(planSlug) : false
+
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).slice(0, 5 - docs.length) // max 5 docs
+    if (fileArray.length === 0) return
+
+    setParsing(true)
+    try {
+      const newDocs: UploadedDoc[] = []
+      for (const file of fileArray) {
+        const content = await extractTextFromFile(file)
+        if (content.trim()) {
+          newDocs.push({
+            name: file.name,
+            content: content.slice(0, 50000), // cap at 50k chars
+            type: file.name.split('.').pop()?.toLowerCase() ?? 'txt',
+          })
+        }
+      }
+      setDocs(prev => [...prev, ...newDocs].slice(0, 5))
+    } catch (err) {
+      console.error('File parsing error:', err)
+    } finally {
+      setParsing(false)
+    }
+  }, [docs.length])
 
   useEffect(() => {
     setMounted(true)
+    fetch('/api/billing/me')
+      .then(r => r.json())
+      .then(d => { if (d.planSlug) setPlanSlug(d.planSlug) })
+      .catch(() => {})
   }, [])
 
   const canSubmit = ideaInput.trim().length > 5 && !submitting
@@ -83,12 +151,20 @@ export default function NewProjectPage() {
       }
       const project = await projRes.json()
 
-      // Step 3: Save the global idea
+      // Step 3: Save the global idea + source documents
       setStatus('Saving your vision...')
+      const patchBody: Record<string, unknown> = { global_idea: idea }
+      if (docs.length > 0) {
+        patchBody.source_documents = docs.map(d => ({
+          name: d.name,
+          content: d.content,
+          type: d.type,
+        }))
+      }
       await fetch(`/api/projects/${project.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ global_idea: idea }),
+        body: JSON.stringify(patchBody),
       })
 
       // Step 4: Create initial venture
@@ -246,6 +322,109 @@ export default function NewProjectPage() {
             disabled={submitting}
             aria-label="Describe your startup idea"
           />
+
+          {/* Document upload zone */}
+          <div
+            onDragOver={(e) => { if (canUploadDocs) { e.preventDefault(); setDragOver(true) } }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(false)
+              if (canUploadDocs && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
+            }}
+            style={{
+              border: `1px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 10,
+              padding: docs.length > 0 ? '10px 12px' : '14px 12px',
+              background: dragOver ? 'var(--accent-soft)' : 'transparent',
+              transition: 'all 200ms',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              opacity: canUploadDocs ? 1 : 0.5,
+            }}
+          >
+            {docs.length === 0 && !parsing && (
+              <div
+                onClick={() => canUploadDocs ? fileInputRef.current?.click() : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: canUploadDocs ? 'pointer' : 'default',
+                  color: 'var(--muted)',
+                  fontSize: 12,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                {canUploadDocs
+                  ? 'Drop PDF, TXT, or MD files here — or click to browse'
+                  : 'Upload reference docs — available on Builder+ plans'
+                }
+              </div>
+            )}
+
+            {parsing && (
+              <div style={{ fontSize: 12, color: 'var(--accent)', textAlign: 'center' }}>
+                Extracting text from document...
+              </div>
+            )}
+
+            {docs.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {docs.map((doc, i) => (
+                  <div key={i} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 10px',
+                    background: 'var(--nav-active)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}>
+                    <span style={{ color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
+                      {doc.name}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: 'var(--muted)', fontSize: 11 }}>
+                        {Math.round(doc.content.length / 1000)}k chars
+                      </span>
+                      <button
+                        onClick={() => setDocs(prev => prev.filter((_, idx) => idx !== i))}
+                        style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 2, fontSize: 14, lineHeight: 1 }}
+                        title="Remove"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {docs.length < 5 && (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 11, fontWeight: 600, textAlign: 'left', padding: '2px 0' }}
+                  >
+                    + Add another document
+                  </button>
+                )}
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.md,.csv,.json"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                if (e.target.files?.length) handleFiles(e.target.files)
+                e.target.value = '' // reset so same file can be re-selected
+              }}
+            />
+          </div>
 
           {/* Action bar */}
           <div style={{
