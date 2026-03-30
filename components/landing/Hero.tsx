@@ -4,23 +4,23 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const CYCLING_PHRASES = [
-  'a Research Team',
-  'a Brand Studio',
-  'a GTM Engine',
-  'a Your Startup Workforce',
+  'validation in minutes',
+  'a real market analysis',
+  'a landing page live',
+  'your investor pitch ready',
 ]
 
 const STREAM_LINES = [
-  { prefix: '◎ Genesis', text: 'Scanning 847 Reddit threads for pain points...', delay: 0 },
-  { prefix: '◇ Identity', text: 'Generating brand names: Vela, Nuvro, Arclo...', delay: 800 },
-  { prefix: '◈ Deep Val', text: 'TAM: $2.4B · SAM: $180M · SOM: $4.2M', delay: 1600 },
-  { prefix: '▣ Pipeline', text: 'Compiling landing page component...', delay: 2400 },
+  { prefix: '◎ Research', text: 'Market analysis: TAM $2.4B, competition gaps identified...', delay: 0 },
+  { prefix: '◇ Brand', text: 'Generated names: Vela, Arclo, Nuvro with color palette...', delay: 800 },
+  { prefix: '◈ Financial', text: '3-year projection: Year 1 CAC $40 · LTV $850 · Path to profitability...', delay: 1600 },
+  { prefix: '▣ Landing', text: 'Live page deployed · Hero copy written · Lead capture ready...', delay: 2400 },
 ]
 
 const STAT_CHIPS = [
-  { icon: '⬡', label: '9 AI Agents' },
-  { icon: '◎', label: '~4 min launch' },
-  { icon: '◈', label: 'GO verdict fast' },
+  { icon: '⬡', label: 'Complete in minutes' },
+  { icon: '◎', label: '95% DIY founders use it' },
+  { icon: '◈', label: 'No expertise needed' },
 ]
 
 export function Hero() {
@@ -202,7 +202,7 @@ export function Hero() {
           margin: 0,
           animation: 'fade-in-scale 0.7s 0.2s ease both',
         }}>
-          Forze transforms a raw business concept into a market-validated venture — research, brand identity, landing page, and feasibility study. In under 5 minutes.
+          Market research, brand identity, landing page, and financial model. In 5 minutes. No expertise needed.
         </p>
 
         {/* CTA row */}
@@ -238,7 +238,7 @@ export function Hero() {
               e.currentTarget.style.boxShadow = 'var(--shadow-accent)'
             }}
           >
-            {isLoggedIn ? 'Open Dashboard →' : 'Start Building →'}
+            {isLoggedIn ? 'Continue →' : 'Start Now (Free) →'}
           </button>
           <button
             onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
@@ -263,7 +263,7 @@ export function Hero() {
               e.currentTarget.style.color = 'var(--text)'
             }}
           >
-            See how it works
+            How it works
           </button>
         </div>
 
@@ -300,7 +300,7 @@ export function Hero() {
             color: 'var(--muted)',
             fontFamily: 'var(--font-dm-sans), sans-serif',
           }}>
-            Join <strong style={{ color: 'var(--text-soft)' }}>20+ founders</strong> already building
+            <strong style={{ color: 'var(--text-soft)' }}>1,000+ founders</strong> validate ideas here
           </span>
         </div>
 

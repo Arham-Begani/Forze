@@ -70,10 +70,10 @@ export function Testimonials() {
         transition: 'opacity 0.6s ease, transform 0.6s ease',
       }}>
         <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.12em', color: 'var(--accent)', textTransform: 'uppercase', margin: '0 0 12px' }}>
-          Social Proof
+          Proof
         </p>
         <h2 style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, color: 'var(--text)', margin: '0 0 16px', letterSpacing: '-0.02em' }}>
-          Founders ship faster
+          What's working for founders
         </h2>
       </div>
 

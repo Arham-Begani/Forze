@@ -8,24 +8,24 @@ const STEPS = [
     icon: '◉',
     accent: '#6B8F71',
     title: 'Describe Your Idea',
-    description: 'Type your concept in plain English. No jargon, no 40-question form, no template. One sentence is enough to activate your workforce.',
-    detail: 'e.g. "A marketplace for local farmers to sell directly to restaurants"',
+    description: 'One sentence. What problem? Who needs it? Done.',
+    detail: 'Example: "AI scheduling for insurance agents"',
   },
   {
     number: '02',
     icon: '⬡',
     accent: '#C4975A',
-    title: 'Your Workforce Activates',
-    description: 'Specialized AI agents coordinate in parallel — researching your market, building your brand, writing your copy, validating your numbers.',
-    detail: '9 agents · Contextually linked · ~4 minute runtime',
+    title: 'Forze Analyzes',
+    description: 'Market potential, competition, unit economics, and GO/NO-GO verdict in 4 minutes.',
+    detail: 'TAM · Competition · Financials · Risk assessment',
   },
   {
     number: '03',
     icon: '▣',
     accent: '#8C7A5A',
-    title: 'Collect Your Venture',
-    description: 'A complete, coherent venture package arrives: research report, brand bible, live landing page, 3-year financial model, and feasibility verdict.',
-    detail: 'Everything connected. Brand voice consistent. Ready to ship.',
+    title: 'Copy Everything',
+    description: 'Market research. Brand identity. Landing page. Business plan. All connected and ready to launch.',
+    detail: 'Download or share immediately',
   },
 ]
 
@@ -76,7 +76,7 @@ export function HowItWorks() {
           letterSpacing: '-0.02em',
           lineHeight: 1.2,
         }}>
-          How Forze Works
+          From Idea to Market-Ready in 3 Steps
         </h2>
         <p style={{
           fontFamily: 'var(--font-dm-sans), sans-serif',
@@ -86,7 +86,7 @@ export function HowItWorks() {
           margin: '0 auto',
           lineHeight: 1.6,
         }}>
-          Three steps. One coherent venture package.
+          Everything you need to launch is generated in minutes.
         </p>
       </div>
 

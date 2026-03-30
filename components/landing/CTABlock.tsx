@@ -105,14 +105,14 @@ export function CTABlock() {
           letterSpacing: '-0.025em',
           lineHeight: 1.1,
         }}>
-          Your next venture is<br />
+          Don't wait months to validate.<br />
           <span style={{
             background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>
-            5 minutes away.
+            Validate in 5 minutes.
           </span>
         </h2>
 
@@ -123,7 +123,7 @@ export function CTABlock() {
           margin: 0,
           lineHeight: 1.6,
         }}>
-          Join thousands of founders building with Forze.
+          Get market research, landing page, brand, and financial model instantly.
         </p>
 
         <button
@@ -151,7 +151,7 @@ export function CTABlock() {
             e.currentTarget.style.boxShadow = '0 12px 36px -4px hsla(28,62%,42%,0.45)'
           }}
         >
-          Start Building for Free →
+          Validate Your Idea Now →
         </button>
 
         <p style={{
@@ -160,7 +160,7 @@ export function CTABlock() {
           color: 'var(--muted)',
           margin: 0,
         }}>
-          No credit card required · Free tier available · 30 credits included
+          No card required. Free tier included.
         </p>
       </div>
     </section>

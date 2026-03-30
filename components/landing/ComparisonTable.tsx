@@ -119,13 +119,13 @@ export function ComparisonTable() {
           transition: 'opacity 0.6s ease, transform 0.6s ease',
         }}>
           <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.12em', color: 'var(--accent)', textTransform: 'uppercase', margin: '0 0 12px' }}>
-            Why Forze
+            Compared
           </p>
           <h2 style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: 'clamp(24px, 6vw, 44px)', fontWeight: 800, color: 'var(--text)', margin: '0 0 12px', letterSpacing: '-0.02em' }}>
-            Everything else is a fragment.
+            5 minutes vs everything else.
           </h2>
           <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '15px', color: 'var(--text-soft)', margin: '0 auto', lineHeight: 1.6 }}>
-            Forze is the whole picture.
+            Forze replaces months of work.
           </p>
         </div>
 

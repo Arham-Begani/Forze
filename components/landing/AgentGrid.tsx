@@ -6,13 +6,13 @@ const FEATURED = {
   icon: '⬡',
   accent: '#C4975A',
   title: 'Full Launch',
-  tagline: 'Your Startup Workforce in one command',
-  description: 'Runs Research, Branding, Landing Page, and Feasibility as a coordinated Agent Team. All outputs share context — brand voice matches research positioning, landing page uses branding colors, feasibility cites the research data.',
+  tagline: 'Everything. 5 minutes. One price.',
+  description: 'Research + Branding + Landing Page + Financials. Everything talks to everything else. Your brand matches your market. Your copy uses your brand voice. Your numbers are real.',
   subAgents: [
-    { icon: '◎', label: 'Genesis Engine', accent: '#5A8C6E' },
-    { icon: '◇', label: 'Identity Architect', accent: '#5A6E8C' },
-    { icon: '▣', label: 'Production Pipeline', accent: '#8C7A5A' },
-    { icon: '◈', label: 'Deep Validation', accent: '#7A5A8C' },
+    { icon: '◎', label: 'Research', accent: '#5A8C6E' },
+    { icon: '◇', label: 'Branding', accent: '#5A6E8C' },
+    { icon: '▣', label: 'Landing Page', accent: '#8C7A5A' },
+    { icon: '◈', label: 'Financials', accent: '#7A5A8C' },
   ],
 }
 
@@ -21,57 +21,57 @@ const AGENTS = [
     icon: '◎',
     accent: '#5A8C6E',
     title: 'Research',
-    description: 'Real-time market intelligence with TAM/SAM/SOM, SWOT analysis, and 10 ranked high-alpha concepts.',
-    outputs: ['Market sizing with cited sources', 'Competitor gap analysis', '12-risk risk matrix'],
+    description: 'Market size. Competition. Opportunity score.',
+    outputs: ['TAM / SAM / SOM', 'Top 5 competitors + gaps', 'Risk scorecard'],
   },
   {
     icon: '◇',
     accent: '#5A6E8C',
     title: 'Branding',
-    description: 'Full Brand Bible — 5 name candidates, color psychology, typography pairing, tone of voice.',
-    outputs: ['5 brand name candidates', 'Complete UI Kit spec', 'Logo concept descriptions'],
+    description: '5 names. Colors. Fonts. Brand voice.',
+    outputs: ['Names + positioning', 'Color + typography guide', 'Brand voice specs'],
   },
   {
     icon: '▲',
     accent: '#8C5A7A',
     title: 'Marketing',
-    description: '30-day Go-to-Market strategy, 90 platform-specific social captions, and a 7-part email launch sequence.',
-    outputs: ['Week-by-week GTM plan', '90 social captions (X, LinkedIn, IG)', '5 SEO blog outlines'],
+    description: '30-day launch plan. Copy. Social strategy.',
+    outputs: ['GTM playbook', '90 ready-to-post captions', 'Email launch sequence'],
   },
   {
     icon: '▣',
     accent: '#8C7A5A',
     title: 'Landing Page',
-    description: 'High-conversion copy + full Next.js component + live deployed URL with lead capture wired.',
-    outputs: ['Deployed URL in minutes', 'Hero, features, pricing, FAQ copy', 'Lead capture + analytics'],
+    description: 'Live URL. Conversion-optimized. Lead capture ready.',
+    outputs: ['Live deployed URL', 'Full page copy', 'Lead capture wired'],
   },
   {
     icon: '◈',
     accent: '#7A5A8C',
-    title: 'Feasibility',
-    description: '20-page study with 3-year financial model, unit economics, and a clear GO/NO-GO verdict.',
-    outputs: ['3-year P&L projections', 'Market timing score (1–10)', 'GO/NO-GO with rationale'],
+    title: 'Financial Model',
+    description: '3-year projections. Unit economics. GO/NO-GO.',
+    outputs: ['Revenue forecast', 'Profitability timeline', 'Feasibility verdict'],
   },
   {
     icon: '◉',
     accent: '#6B8F71',
-    title: 'Co-pilot',
-    description: 'Context-aware venture advisor. Knows everything your agents produced. Answers questions, refines strategy.',
-    outputs: ['Cross-agent context synthesis', 'Strategic Q&A', 'Module re-run suggestions'],
+    title: 'Advisor',
+    description: 'Q&A. Strategic guidance. Cross-module insights.',
+    outputs: ['Contextual answers', 'Strategic pivots', 'Refinement ideas'],
   },
   {
     icon: '⚔',
     accent: '#E04848',
-    title: 'Shadow Board',
-    description: 'Three AI personas deliver brutal, honest feedback. Venture Survival Score. Synthetic user interviews.',
-    outputs: ['Venture Survival Score (0–100)', '3 strategic pivot recommendations', '5 synthetic user interviews'],
+    title: 'Reality Check',
+    description: 'Your assumptions stress-tested by experts. Survival score.',
+    outputs: ['Survival Score (0–100)', 'Critical blind spots', 'Pivot recommendations'],
   },
   {
     icon: '✂',
     accent: '#C45A5A',
-    title: 'MVP Scalpel',
-    description: 'Cuts your idea to its essential core. Defines the smallest version that earns your first dollar.',
-    outputs: ['Feature kill list', 'Weekend sprint spec', 'Time-to-first-dollar estimate'],
+    title: 'MVP Scope',
+    description: 'What can you ship in 48 hours to test the core idea?',
+    outputs: ['Must-have features', 'Weekend sprint spec', 'First success metric'],
   },
 ]
 
@@ -112,7 +112,7 @@ export function AgentGrid() {
           textTransform: 'uppercase',
           margin: '0 0 12px',
         }}>
-          The Workforce
+          Inside Forze
         </p>
         <h2 style={{
           fontFamily: 'var(--font-dm-sans), sans-serif',
@@ -122,7 +122,7 @@ export function AgentGrid() {
           margin: '0 0 16px',
           letterSpacing: '-0.02em',
         }}>
-          Your Startup Workforce
+          The 8 Agents
         </h2>
         <p style={{
           fontFamily: 'var(--font-dm-sans), sans-serif',
@@ -132,7 +132,7 @@ export function AgentGrid() {
           margin: '0 auto',
           lineHeight: 1.6,
         }}>
-          9 specialized agents. One coherent outcome. Every output builds on the last.
+          Each specialized. All working together.
         </p>
       </div>
 
