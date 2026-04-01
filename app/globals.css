@@ -1335,3 +1335,12 @@ button, a {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ─── Surgical Edit ──────────────────────────────────────────────────────────── */
+@keyframes surgical-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.surgical-spin {
+  animation: surgical-spin 800ms linear infinite;
+}
