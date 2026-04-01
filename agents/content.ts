@@ -10,6 +10,7 @@ import {
     Content,
 } from '@/lib/gemini'
 import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
+import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 
 // ── ContentOutput Zod Schema ────────────────────────────────────────────────
 
@@ -351,7 +352,7 @@ export async function runContentAgent(
     const hasBranding = !!venture.context.branding
 
     const contextParts: string[] = []
-    if (venture.globalIdea) contextParts.push(`Global Startup Vision: ${venture.globalIdea}`)
+    if (venture.globalIdea) contextParts.push(`Global Startup Vision: ${sanitize(venture.globalIdea, 1000)}`)
 
     // Research — extract only fields the marketing agent needs (not the full ~20KB dump)
     if (hasResearch) {
@@ -416,7 +417,7 @@ export async function runContentAgent(
                 : existingMarketing!.marketingPlan,
         }
 
-        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current Marketing Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+        const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Marketing Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
 
         const editRun = async () => {
             const model = getFlashModel()
@@ -443,7 +444,7 @@ export async function runContentAgent(
 
 ${contextParts.join('\n\n')}
 
-Specific Venture Focus: ${venture.name}
+Specific Venture Focus: ${sanitizeLabel(venture.name)}
 
 ${hasResearch && hasBranding
     ? 'All content must use the brand voice from the identity document.\nSocial captions must reference real pain points from the research.'
