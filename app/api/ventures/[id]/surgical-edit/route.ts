@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const SurgicalEditSchema = z.object({
-  conversationId: z.string().min(1),
-  path: z.array(z.string()).min(1),
-  oldText: z.string().min(1),
-  newText: z.string().min(1),
+  conversationId: z.string().min(1).max(100),
+  path: z.array(z.string().min(1).max(100)).min(1).max(10),
+  oldText: z.string().min(1).max(5000),
+  newText: z.string().min(1).max(5000),
 })
 
 export async function PATCH(
