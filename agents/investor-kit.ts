@@ -8,6 +8,7 @@ import {
     Content,
 } from '@/lib/gemini'
 import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
+import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 
 // ── Investor Kit Output Schema ──────────────────────────────────────────────
 
@@ -199,7 +200,7 @@ export async function runInvestorKitAgent(
                 : existingKit!.onePageMemo,
         }
 
-        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current Investor Kit\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+        const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Investor Kit\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
 
         const editRun = async () => {
             const fullText = await streamPrompt(model, EDIT_SYSTEM_PROMPT, editUserMessage, onStream)
@@ -218,7 +219,7 @@ export async function runInvestorKitAgent(
     const contextParts: string[] = []
 
     if (venture.globalIdea) {
-        contextParts.push(`Venture Vision: ${venture.globalIdea}`)
+        contextParts.push(`Venture Vision: ${sanitize(venture.globalIdea, 1000)}`)
     }
 
     // Research — extract only investor-relevant metrics
@@ -304,7 +305,7 @@ export async function runInvestorKitAgent(
         ? "Continue from where you left off. Do not repeat anything already outputted. Complete the InvestorKitOutput JSON object strictly."
         : `Generate an investor-ready kit for this venture.
 
-Venture: ${venture.name}
+Venture: ${sanitizeLabel(venture.name)}
 
 ${contextParts.join('\n\n')}
 
