@@ -38,7 +38,12 @@
       "Bash(xxd \"C:\\\\Users\\\\arham\\\\Documents\\\\Github\\\\Forge\\\\.env.local\")",
       "Bash(wc -l \"C:\\\\Users\\\\arham\\\\Documents\\\\Github\\\\Forge\\\\agents\"/*.ts)",
       "Bash(find /c/Users/arham/Documents/Github/Forge -name *.ts -path */app/api/* -type f)",
-      "Bash(find /c/Users/arham/Documents/Github/Forge/src -type f -name *.ts)"
+      "Bash(find /c/Users/arham/Documents/Github/Forge/src -type f -name *.ts)",
+      "Bash(find /c/Users/arham/Documents/Github/Forge/app/api -name \"route.ts\" -exec grep -l \"request.json\\(\\)\" {})",
+      "Bash(while read:*)",
+      "Bash(do if:*)",
+      "Bash(! grep:*)",
+      "Bash(then echo:*)"
     ]
   }
 }
