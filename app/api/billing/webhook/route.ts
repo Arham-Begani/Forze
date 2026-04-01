@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPlanPrice } from '@/lib/billing'
+import { getPlanPrice, TOPUP_PRODUCTS } from '@/lib/billing'
 import {
   cancelSubscriptionAtPeriodEnd,
   finalizeSubscriptionPurchase,
@@ -14,6 +14,15 @@ import { hashWebhookPayload, verifyRazorpayWebhookSignature } from '@/lib/razorp
 function toIsoFromUnix(value: unknown): string | null {
   if (typeof value !== 'number') return null
   return new Date(value * 1000).toISOString()
+}
+
+function validatePaymentAmount(
+  actualAmountPaise: number,
+  expectedAmountInr: number
+): boolean {
+  // Allow 1-rupee deviation due to rounding
+  const actualInr = Math.round(actualAmountPaise / 100)
+  return Math.abs(actualInr - expectedAmountInr) <= 1
 }
 
 export async function POST(request: NextRequest) {
@@ -54,12 +63,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (eventType === 'payment.captured' && mergedNotes.type === 'topup' && userId && mergedNotes.topupSlug) {
+      const topup = TOPUP_PRODUCTS[mergedNotes.topupSlug]
+      if (!topup || !validatePaymentAmount(payment.amount ?? 0, topup.amountInr)) {
+        console.warn(`[Webhook] Topup amount mismatch or invalid topup: ${payload.entity?.payment?.id} - expected ${topup?.amountInr}INR, got ${payment?.amount}paise`)
+        return NextResponse.json({ error: 'Payment amount validation failed' }, { status: 400 })
+      }
       await finalizeTopupPurchase({
         userId,
         topupSlug: mergedNotes.topupSlug,
         providerPaymentId: payment.id,
         providerOrderId: payment.order_id ?? null,
-        amountInr: Math.round((payment.amount ?? 0) / 100),
+        amountInr: topup.amountInr,
         rawPayload: event,
       }, admin)
     }
@@ -73,6 +87,11 @@ export async function POST(request: NextRequest) {
       subscription?.id &&
       payment?.id
     ) {
+      const expectedAmountInr = getPlanPrice(mergedNotes.planSlug, mergedNotes.billingPeriod)
+      if (!validatePaymentAmount(payment.amount ?? 0, expectedAmountInr)) {
+        console.warn(`[Webhook] Subscription amount mismatch: ${subscription.id} - expected ${expectedAmountInr}INR, got ${payment?.amount}paise`)
+        return NextResponse.json({ error: 'Payment amount validation failed' }, { status: 400 })
+      }
       await finalizeSubscriptionPurchase({
         userId,
         planSlug: mergedNotes.planSlug,
@@ -81,7 +100,7 @@ export async function POST(request: NextRequest) {
         providerPlanId: subscription.plan_id ?? null,
         providerPaymentId: payment.id,
         providerOrderId: payment.order_id ?? null,
-        amountInr: Math.round((payment.amount ?? getPlanPrice(mergedNotes.planSlug, mergedNotes.billingPeriod) * 100) / 100),
+        amountInr: expectedAmountInr,
         rawPayload: event,
         currentPeriodStart: toIsoFromUnix(subscription.current_start),
         currentPeriodEnd: toIsoFromUnix(subscription.current_end),

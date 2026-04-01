@@ -62,6 +62,20 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
     prefill: options.prefill,
     notes: options.notes,
     handler: options.handler,
+    method: {
+      upi: true,
+      card: true,
+      netbanking: true,
+      wallet: true,
+      emi: false,
+    },
+    config: {
+      display: {
+        preferences: {
+          show_default_blocks: true,
+        },
+      },
+    },
     theme: {
       color: '#C47A3A',
     },
