@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPlanPrice, TOPUP_PRODUCTS } from '@/lib/billing'
+import { getPlanPrice, TOPUP_PRODUCTS, type TopupSlug, type PlanSlug, type BillingPeriod } from '@/lib/billing'
 import {
   cancelSubscriptionAtPeriodEnd,
   finalizeSubscriptionPurchase,
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const mergedNotes = {
       ...(subscription?.notes ?? {}),
       ...(payment?.notes ?? {}),
-    }
+    } as Record<string, unknown>
 
     let userId = mergedNotes.userId as string | undefined
     if (!userId && subscription?.id) {
@@ -63,14 +63,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (eventType === 'payment.captured' && mergedNotes.type === 'topup' && userId && mergedNotes.topupSlug) {
-      const topup = TOPUP_PRODUCTS[mergedNotes.topupSlug]
+      const topupSlug = String(mergedNotes.topupSlug) as TopupSlug
+      const topup = TOPUP_PRODUCTS[topupSlug]
       if (!topup || !validatePaymentAmount(payment.amount ?? 0, topup.amountInr)) {
-        console.warn(`[Webhook] Topup amount mismatch or invalid topup: ${payload.entity?.payment?.id} - expected ${topup?.amountInr}INR, got ${payment?.amount}paise`)
+        console.warn(`[Webhook] Topup amount mismatch or invalid topup: ${payment?.id} - expected ${topup?.amountInr}INR, got ${payment?.amount}paise`)
         return NextResponse.json({ error: 'Payment amount validation failed' }, { status: 400 })
       }
       await finalizeTopupPurchase({
         userId,
-        topupSlug: mergedNotes.topupSlug,
+        topupSlug,
         providerPaymentId: payment.id,
         providerOrderId: payment.order_id ?? null,
         amountInr: topup.amountInr,
@@ -87,15 +88,17 @@ export async function POST(request: NextRequest) {
       subscription?.id &&
       payment?.id
     ) {
-      const expectedAmountInr = getPlanPrice(mergedNotes.planSlug, mergedNotes.billingPeriod)
+      const planSlug = String(mergedNotes.planSlug) as PlanSlug
+      const billingPeriod = String(mergedNotes.billingPeriod) as BillingPeriod
+      const expectedAmountInr = getPlanPrice(planSlug, billingPeriod)
       if (!validatePaymentAmount(payment.amount ?? 0, expectedAmountInr)) {
         console.warn(`[Webhook] Subscription amount mismatch: ${subscription.id} - expected ${expectedAmountInr}INR, got ${payment?.amount}paise`)
         return NextResponse.json({ error: 'Payment amount validation failed' }, { status: 400 })
       }
       await finalizeSubscriptionPurchase({
         userId,
-        planSlug: mergedNotes.planSlug,
-        billingPeriod: mergedNotes.billingPeriod,
+        planSlug: planSlug as Exclude<typeof planSlug, 'free'>,
+        billingPeriod,
         providerSubscriptionId: subscription.id,
         providerPlanId: subscription.plan_id ?? null,
         providerPaymentId: payment.id,
