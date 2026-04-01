@@ -8,6 +8,7 @@ import {
     Content,
 } from '@/lib/gemini'
 import { DOCUMENT_STYLE_GUIDE } from '@/lib/agent-document-style'
+import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 
 // NOTE: Do NOT import withRetry for this agent.
 // Pro thinking runs are expensive — single attempt only.
@@ -478,7 +479,7 @@ export async function runFeasibilityAgent(
                 : existingFeasibility!.feasibilityReport,
         }
 
-        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current Feasibility Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+        const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Feasibility Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
 
         const editRun = async () => {
             const model = getFlashModel()
@@ -501,7 +502,7 @@ export async function runFeasibilityAgent(
         contextParts.push(`Architect's Plan:\n${venture.context.architectPlan}`)
     }
     if (venture.globalIdea) {
-        contextParts.push(`Global Startup Vision: ${venture.globalIdea}`)
+        contextParts.push(`Global Startup Vision: ${sanitize(venture.globalIdea, 1000)}`)
     }
     if (venture.context?.research) {
         const r = venture.context.research as Record<string, any>
@@ -564,7 +565,7 @@ export async function runFeasibilityAgent(
 
     const userMessage = `Produce a ${depth} feasibility study with GO/NO-GO verdict for this venture.
 
-Venture: ${venture.name}
+Venture: ${sanitizeLabel(venture.name)}
 
 ${contextParts.join('\n\n')}
 
