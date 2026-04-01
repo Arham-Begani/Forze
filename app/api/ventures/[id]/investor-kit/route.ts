@@ -8,9 +8,29 @@ import {
     updateInvestorKit,
     getProject,
 } from '@/lib/queries'
-import { runInvestorKitAgent } from '@/agents/investor-kit'
+import { runInvestorKitAgent, InvestorKitSchema } from '@/agents/investor-kit'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import crypto from 'crypto'
+
+// Zod schema for PATCH — only the exact fields that can be manually edited
+const InvestorKitPatchSchema = z.object({
+    patch: z.object({
+        executiveSummary: z.string().max(10000).optional(),
+        pitchDeckOutline: z.array(z.object({
+            slide: z.string().max(200),
+            content: z.string().max(5000),
+            speakerNotes: z.string().max(3000),
+        })).max(20).optional(),
+        onePageMemo: z.string().max(20000).optional(),
+        askDetails: z.object({
+            suggestedRaise: z.string().max(200).optional(),
+            useOfFunds: z.array(z.string().max(200)).max(20).optional(),
+            keyMilestones: z.array(z.string().max(500)).max(20).optional(),
+        }).optional(),
+        dataRoomSections: z.array(z.string().max(200)).max(30).optional(),
+    }).refine(p => Object.keys(p).length > 0, { message: 'Patch must contain at least one field' }),
+})
 
 function generateAccessCode(): string {
     return crypto.randomBytes(3).toString('hex').toUpperCase() // 6-char alphanumeric
@@ -101,6 +121,14 @@ export async function POST(
             return NextResponse.json({ error: 'Agent failed to produce output' }, { status: 500 })
         }
 
+        // Validate agent output before writing to DB
+        const agentValidation = InvestorKitSchema.safeParse(kitData)
+        if (!agentValidation.success) {
+            console.error('Investor kit agent output failed schema validation:', agentValidation.error.flatten())
+            return NextResponse.json({ error: 'Agent produced invalid output' }, { status: 500 })
+        }
+        kitData = agentValidation.data as unknown as Record<string, unknown>
+
         // ── AI/manual merge policy ──
         // If an existing kit has manual edits, preserve manually-edited fields
         const existingKit = await getInvestorKitByVenture(id)
@@ -179,13 +207,12 @@ export async function PATCH(
         }
 
         const body = await request.json()
-        const { patch } = body as { patch: Record<string, unknown> }
-
-        if (!patch || typeof patch !== 'object' || Object.keys(patch).length === 0) {
-            return NextResponse.json({ error: 'Patch object is required and must be non-empty' }, { status: 400 })
+        const parsed = InvestorKitPatchSchema.safeParse(body)
+        if (!parsed.success) {
+            return NextResponse.json({ error: 'Invalid patch', details: parsed.error.flatten() }, { status: 400 })
         }
 
-        const updated = await updateInvestorKit(kit.id, session.userId, patch)
+        const updated = await updateInvestorKit(kit.id, session.userId, parsed.data.patch as Record<string, unknown>)
         return NextResponse.json({ kit: updated })
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
