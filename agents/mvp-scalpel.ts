@@ -7,6 +7,7 @@ import {
     withRetry,
     Content,
 } from '@/lib/gemini'
+import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 
 // ── MVP Scalpel Output Schema ───────────────────────────────────────────────
 
@@ -391,7 +392,7 @@ export async function runMVPScalpelAgent(
             verdict: existingMVP!.verdict,
         }
 
-        const editUserMessage = `## Edit Request\n${venture.name}\n\n## Current MVP Scalpel Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+        const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current MVP Scalpel Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
 
         const editRun = async () => {
             const fullText = await streamPrompt(model, EDIT_SYSTEM_PROMPT, editUserMessage, onStream)
@@ -410,7 +411,7 @@ export async function runMVPScalpelAgent(
     const contextParts: string[] = []
 
     if (venture.globalIdea) {
-        contextParts.push(`Venture Vision: ${venture.globalIdea}`)
+        contextParts.push(`Venture Vision: ${sanitize(venture.globalIdea, 1000)}`)
     }
 
     // Research — deep extraction for MVP scoping
@@ -522,7 +523,7 @@ export async function runMVPScalpelAgent(
         ? "Continue from where you left off. Do not repeat anything already outputted. Complete the MVPScalpelOutput JSON object strictly."
         : `Apply the Scalpel to this venture. Be brutally specific — use every data point from the context below.
 
-Venture: ${venture.name}
+Venture: ${sanitizeLabel(venture.name)}
 
 ${contextParts.join('\n\n')}
 
