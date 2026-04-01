@@ -5,6 +5,7 @@ import {
     withRetry,
     Content,
 } from '@/lib/gemini'
+import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 
 // ── General Chat Agent ──────────────────────────────────────────────────────
 // A conversational agent for general venture questions — name suggestions,
@@ -72,7 +73,7 @@ function buildDeepContext(globalIdea: string | undefined, ctx: Record<string, un
     const sections: string[] = []
 
     if (globalIdea) {
-        sections.push(`## Venture Idea\n${globalIdea}`)
+        sections.push(`## Venture Idea\n${sanitize(globalIdea, 1000)}`)
     }
 
     // Module availability status
@@ -218,10 +219,10 @@ export async function runGeneralAgent(
     } else if (history.length > 0) {
         // Multi-turn conversation — context was already injected in the first turn
         // Just send the current question/prompt (venture.name contains "Venture: prompt")
-        finalUserMessage = venture.name
+        finalUserMessage = sanitize(venture.name, 2000)
     } else {
         // First message in this conversation — inject full venture context
-        finalUserMessage = `${venture.name}${contextBlock}`
+        finalUserMessage = `${sanitize(venture.name, 2000)}${contextBlock}`
     }
 
     const run = async () => {
