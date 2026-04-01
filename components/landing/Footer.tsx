@@ -20,11 +20,21 @@ const LINKS = {
     { label: 'Careers', href: '#' },
   ],
   Legal: [
-    { label: 'Privacy Policy', href: '#' },
-    { label: 'Terms of Service', href: '#' },
-    { label: 'Refund Policy', href: '#' },
+    { label: 'Privacy Policy', href: '/legal/privacy-policy' },
+    { label: 'Terms of Service', href: '/legal/terms-of-service' },
+    { label: 'Refund Policy', href: '/pricing' },
   ],
 }
+
+const CONTACT_EMAILS = [
+  { label: 'Support', email: 'support@forze.ai' },
+  { label: 'Business', email: 'business@forze.ai' },
+]
+
+const SOCIAL_LINKS = [
+  { label: '𝕏', href: 'https://x.com/ArhamBegani', title: 'Twitter/X' },
+  { label: 'in', href: 'https://www.linkedin.com/in/arhambegani/', title: 'LinkedIn' },
+]
 
 export function Footer() {
   const router = useRouter()
@@ -70,42 +80,63 @@ export function Footer() {
             }}>
               Your Startup Workforce. Transform a raw idea into a market-validated venture in under 5 minutes.
             </p>
-            {/* Social links */}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-              {[
-                { label: '𝕏', href: '#' },
-                { label: 'in', href: '#' },
-              ].map(s => (
-                <a
-                  key={s.label}
-                  href={s.href}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontFamily: 'var(--font-dm-sans), sans-serif',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    color: 'var(--text-soft)',
-                    textDecoration: 'none',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = 'var(--accent)'
-                    e.currentTarget.style.color = 'var(--accent)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'var(--border)'
-                    e.currentTarget.style.color = 'var(--text-soft)'
-                  }}
-                >
-                  {s.label}
-                </a>
-              ))}
+            {/* Social & Contact Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Social Links */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {SOCIAL_LINKS.map(s => (
+                  <a
+                    key={s.label}
+                    href={s.href}
+                    title={s.title}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: 'var(--font-dm-sans), sans-serif',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: 'var(--text-soft)',
+                      textDecoration: 'none',
+                      transition: 'all var(--transition-fast)',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'var(--accent)'
+                      e.currentTarget.style.color = 'var(--accent)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'var(--border)'
+                      e.currentTarget.style.color = 'var(--text-soft)'
+                    }}
+                  >
+                    {s.label}
+                  </a>
+                ))}
+              </div>
+              {/* Contact Emails */}
+              <div style={{ display: 'flex', gap: '16px', fontSize: '13px' }}>
+                {CONTACT_EMAILS.map(c => (
+                  <a
+                    key={c.email}
+                    href={`mailto:${c.email}`}
+                    style={{
+                      color: 'var(--muted)',
+                      textDecoration: 'none',
+                      transition: 'color var(--transition-fast)',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+                  >
+                    <span style={{ fontWeight: 600, color: 'var(--text-soft)' }}>{c.label}:</span> {c.email}
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
 
