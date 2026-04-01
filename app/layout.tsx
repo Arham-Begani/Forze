@@ -26,10 +26,10 @@ export const metadata: Metadata = {
         title: 'Forze - Build Smarter AI Features',
         description: 'Autonomous Venture Orchestrator for turning business concepts into production-ready ventures.',
         type: 'website',
-        url: process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.ai',
+        url: process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.in',
         images: [
             {
-                url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.ai'}/api/og`,
+                url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.in'}/api/og`,
                 width: 1200,
                 height: 630,
                 alt: 'Forze - Autonomous Venture Orchestrator',
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
         card: 'summary_large_image',
         title: 'Forze - Build Smarter AI Features',
         description: 'Autonomous Venture Orchestrator for turning business concepts into production-ready ventures.',
-        images: [`${process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.ai'}/api/og`],
+        images: [`${process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.in'}/api/og`],
     },
 }
 
