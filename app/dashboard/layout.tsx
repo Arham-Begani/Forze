@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LoadingScreen } from '@/components/ui/LoadingScreen'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
+import { ToastProvider, useToast } from '@/components/ui/Toast'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ interface VentureItem {
   name: string
   project_id: string | null
   created_at: string
+  completedModules: string[]
 }
 
 const MODULES = [
@@ -47,13 +49,14 @@ const MODULES = [
   { id: 'feasibility',  label: 'Feasibility',  icon: '◈', accent: '#7A5A8C' },
   { id: 'general',      label: 'Co-pilot',     icon: '◉', accent: '#6B8F71' },
   { id: 'shadow-board', label: 'Shadow Board', icon: '⚔', accent: '#E04848' },
+  { id: 'investor-kit', label: 'Investor Kit', icon: '■', accent: '#7A8C5A' },
   { id: 'mvp-scalpel',  label: 'MVP Scalpel',  icon: '✂', accent: '#C45A5A' },
 ] as const
 
 const MODULE_GROUPS = [
   { label: 'LAUNCH', ids: ['full-launch', 'launch-autopilot'] },
   { label: 'AGENTS', ids: ['research', 'branding', 'marketing', 'landing', 'feasibility'] },
-  { label: 'TOOLS',  ids: ['general', 'shadow-board', 'mvp-scalpel'] },
+  { label: 'TOOLS',  ids: ['general', 'shadow-board', 'investor-kit', 'mvp-scalpel'] },
 ] as const
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -70,9 +73,25 @@ function getInitials(name: string): string {
 
 // ─── Layout ─────────────────────────────────────────────────────────────────────
 
+function normalizeVentureItem(venture: Omit<VentureItem, 'completedModules'> & { completedModules?: string[] }): VentureItem {
+  return {
+    ...venture,
+    completedModules: Array.isArray(venture.completedModules) ? venture.completedModules : [],
+  }
+}
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
+  return (
+    <ToastProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </ToastProvider>
+  )
+}
+
+function DashboardLayoutContent({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
+  const toast = useToast()
 
   const [session, setSession] = useState<SessionData | null>(null)
   const [projects, setProjects] = useState<ProjectItem[]>([])
@@ -81,6 +100,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [appReady, setAppReady] = useState(false)
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
+  const [expandedVentures, setExpandedVentures] = useState<Set<string>>(new Set())
 
   const [showNewProject, setShowNewProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
@@ -101,6 +121,34 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    try {
+      const storedProjects = localStorage.getItem('Forze-expanded-projects')
+      if (storedProjects) {
+        const parsed = JSON.parse(storedProjects)
+        if (Array.isArray(parsed)) setExpandedProjects(new Set(parsed))
+      }
+
+      const storedVentures = localStorage.getItem('Forze-expanded-ventures')
+      if (storedVentures) {
+        const parsed = JSON.parse(storedVentures)
+        if (Array.isArray(parsed)) setExpandedVentures(new Set(parsed))
+      }
+    } catch {
+      // Ignore invalid persisted navigation state.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+    localStorage.setItem('Forze-expanded-projects', JSON.stringify(Array.from(expandedProjects)))
+  }, [expandedProjects, mounted])
+
+  useEffect(() => {
+    if (!mounted) return
+    localStorage.setItem('Forze-expanded-ventures', JSON.stringify(Array.from(expandedVentures)))
+  }, [expandedVentures, mounted])
 
   // ─── Dark mode ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -158,7 +206,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         ])
         if (sessRes.ok) setSession(await sessRes.json())
         if (projRes.ok) setProjects(await projRes.json())
-        if (ventRes.ok) setVentures(await ventRes.json())
+        if (ventRes.ok) {
+          const data = await ventRes.json()
+          setVentures(data.map(normalizeVentureItem))
+        }
         if (cohRes.ok) setCohorts(await cohRes.json())
       } catch (err) {
         console.error('Failed to load dashboard layout data:', err)
@@ -202,8 +253,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       setProjects(prev => prev.map(p => p.id === projectId ? { ...p, global_idea } : p))
     }
     function handleVentureAdded(e: Event) {
-      const venture = (e as CustomEvent).detail
+      const venture = normalizeVentureItem((e as CustomEvent).detail)
       setVentures(prev => [venture, ...prev])
+      if (venture.project_id) {
+        setExpandedProjects(prev => new Set(prev).add(venture.project_id!))
+      }
+      setExpandedVentures(prev => new Set(prev).add(venture.id))
     }
     function handleRefreshProjects() {
       // Reload projects and ventures when a new project is created externally
@@ -212,7 +267,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         fetch('/api/ventures').then(r => r.ok ? r.json() : []),
       ]).then(([projs, vents]) => {
         setProjects(projs)
-        setVentures(vents)
+        setVentures(vents.map(normalizeVentureItem))
       }).catch(() => {})
     }
 
@@ -257,13 +312,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         const project: ProjectItem = await res.json()
         setProjects(prev => [project, ...prev])
         setExpandedProjects(prev => new Set(prev).add(project.id))
+        toast.success('Project created')
         router.push(`/dashboard/greeting?projectId=${project.id}`)
       } else {
-        const err = await res.json()
-        alert(`Error creating project: ${err.error || 'Unknown error'}`)
+        toast.error('Something went wrong - please try again')
       }
-    } catch (e) {
-      alert(`Network error creating project: ${e}`)
+    } catch {
+      toast.error('Something went wrong - please try again')
     } finally {
       setIsSubmittingProject(false)
       setShowNewProject(false)
@@ -278,6 +333,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   function toggleProject(id: string) {
     setExpandedProjects(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+
+  function toggleVenture(id: string) {
+    setExpandedVentures(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   }
 
   function isModuleActive(ventureId: string, moduleId: string): boolean {
@@ -296,12 +355,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       if (res.ok) {
         setProjects(prev => prev.filter(p => p.id !== id))
         setVentures(prev => prev.filter(v => v.project_id !== id))
+        setExpandedProjects(prev => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
         if (pathname.includes(`/dashboard/project/${id}`) || pathname.includes(`/dashboard/greeting`)) {
           router.push('/dashboard')
         }
+        toast.success('Project deleted')
+      } else {
+        toast.error('Something went wrong - please try again')
       }
     } catch(err) {
       console.error('Failed to delete project', err)
+      toast.error('Something went wrong - please try again')
     }
   }
 
@@ -323,9 +391,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       })
       if (res.ok) {
         setProjects(prev => prev.map(p => p.id === renamingProject ? { ...p, name: trimmed } : p))
+        toast.success('Project renamed')
+      } else {
+        toast.error('Something went wrong - please try again')
       }
     } catch (err) {
       console.error('Failed to rename project', err)
+      toast.error('Something went wrong - please try again')
     } finally {
       setRenamingProject(null)
       setRenameProjectValue('')
@@ -647,8 +719,22 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                             role="button"
                             tabIndex={0}
                             className="group"
-                            onClick={() => toggleProject(proj.id)}
-                            onKeyDown={e => e.key === 'Enter' && toggleProject(proj.id)}
+                            onClick={() => {
+                              if (!proj.global_idea) {
+                                router.push(`/dashboard/greeting?projectId=${proj.id}`)
+                              } else {
+                                toggleProject(proj.id)
+                              }
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                if (!proj.global_idea) {
+                                  router.push(`/dashboard/greeting?projectId=${proj.id}`)
+                                } else {
+                                  toggleProject(proj.id)
+                                }
+                              }
+                            }}
                             whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                             transition={{ duration: 0.12 }}
                             style={{
@@ -712,9 +798,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           {/* Modules directly under project */}
                           {mounted && (
                             <AnimatePresence>
-                              {isOpen && projVentures.length > 0 && (() => {
-                                const v = projVentures[0]
-                                return (
+                              {isOpen && projVentures.length > 0 && (
                                 <motion.div
                                   style={{
                                     display: 'flex',
@@ -731,12 +815,86 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                   exit={{ height: 0, opacity: 0 }}
                                   transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                                 >
+                                  {projVentures.map((venture, ventureIndex) => {
+                                    const ventureIsOpen = expandedVentures.has(venture.id)
+                                    const venturePath = `/dashboard/venture/${venture.id}`
+                                    const ventureActive = pathname === venturePath || pathname.startsWith(`${venturePath}/`)
+
+                                    return (
+                                      <div key={venture.id}>
+                                        {ventureIndex > 0 && (
+                                          <div style={{ height: 1, background: 'var(--border)', margin: '6px 4px', opacity: 0.45 }} />
+                                        )}
+
+                                        <motion.button
+                                          initial={{ opacity: 0, x: -4 }}
+                                          animate={{ opacity: 1, x: 0 }}
+                                          whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                                          onClick={() => toggleVenture(venture.id)}
+                                          aria-expanded={ventureIsOpen}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            padding: '6px 8px',
+                                            borderRadius: 6,
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            fontFamily: 'inherit',
+                                            background: ventureActive ? 'var(--nav-active)' : 'transparent',
+                                          }}
+                                        >
+                                          <motion.svg
+                                            width="10"
+                                            height="10"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="var(--muted)"
+                                            strokeWidth="2.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            animate={{ rotate: ventureIsOpen ? 90 : 0 }}
+                                            transition={{ duration: 0.18, ease: 'easeInOut' }}
+                                            style={{ flexShrink: 0 }}
+                                          >
+                                            <polyline points="9 18 15 12 9 6" />
+                                          </motion.svg>
+                                          <span
+                                            style={{
+                                              fontSize: 12,
+                                              fontWeight: 600,
+                                              color: ventureActive ? 'var(--text)' : 'var(--text-soft)',
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                              whiteSpace: 'nowrap',
+                                            }}
+                                          >
+                                            {venture.name}
+                                          </span>
+                                        </motion.button>
+
+                                        <AnimatePresence>
+                                          {ventureIsOpen && (
+                                            <motion.div
+                                              initial={{ height: 0, opacity: 0 }}
+                                              animate={{ height: 'auto', opacity: 1 }}
+                                              exit={{ height: 0, opacity: 0 }}
+                                              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                                              style={{
+                                                overflow: 'hidden',
+                                                marginLeft: 10,
+                                                paddingLeft: 10,
+                                                borderLeft: '1px solid var(--border)',
+                                              }}
+                                            >
                                   {/* Master Dossier Link */}
                                   <motion.button
                                     initial={{ opacity: 0, x: -4 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
-                                    onClick={() => router.push(`/dashboard/venture/${v.id}`)}
+                                    onClick={() => router.push(`/dashboard/venture/${venture.id}`)}
                                     style={{
                                       display: 'flex',
                                       alignItems: 'center',
@@ -749,8 +907,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                       textAlign: 'left',
                                       fontFamily: 'inherit',
                                       transition: 'background 150ms ease',
-                                      background: pathname === `/dashboard/venture/${v.id}` ? 'var(--nav-active)' : 'transparent',
-                                      borderLeft: pathname === `/dashboard/venture/${v.id}` ? '2px solid var(--accent)' : '2px solid transparent',
+                                      background: pathname === `/dashboard/venture/${venture.id}` ? 'var(--nav-active)' : 'transparent',
+                                      borderLeft: pathname === `/dashboard/venture/${venture.id}` ? '2px solid var(--accent)' : '2px solid transparent',
                                       marginBottom: 2,
                                     }}
                                   >
@@ -778,7 +936,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                           {group.label}
                                         </div>
                                         {groupModules.map((m, idx) => {
-                                          const active = isModuleActive(v.id, m.id)
+                                          const active = isModuleActive(venture.id, m.id)
+                                          const completed = venture.completedModules.includes(m.id)
                                           return (
                                             <motion.button
                                               key={m.id}
@@ -786,7 +945,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                               animate={{ opacity: 1, x: 0 }}
                                               transition={{ delay: idx * 0.03 }}
                                               whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
-                                              onClick={() => router.push(`/dashboard/venture/${v.id}/${m.id}`)}
+                                              onClick={() => router.push(`/dashboard/venture/${venture.id}/${m.id}`)}
                                               aria-label={`Open ${m.label} module`}
                                               aria-current={active ? 'page' : undefined}
                                               style={{
@@ -808,11 +967,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                             >
                                               <span style={{ color: m.accent, fontSize: 11, lineHeight: 1, width: 14, textAlign: 'center' as const }}>{m.icon}</span>
                                               <span style={{ fontSize: 11.5, color: active ? 'var(--text)' : 'var(--text-soft)', fontWeight: active ? 600 : 500 }}>{m.label}</span>
-                                              {active && (
-                                                <motion.div
-                                                  layoutId="module-active-dot"
-                                                  style={{ width: 4, height: 4, borderRadius: '50%', background: m.accent, marginLeft: 'auto', flexShrink: 0 }}
-                                                />
+                                              {(completed || active) && (
+                                                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                                  {completed && (
+                                                    <span
+                                                      aria-hidden="true"
+                                                      style={{
+                                                        width: 4,
+                                                        height: 4,
+                                                        borderRadius: '50%',
+                                                        background: '#5A8C6E',
+                                                        boxShadow: '0 0 6px rgba(90, 140, 110, 0.45)',
+                                                      }}
+                                                    />
+                                                  )}
+                                                  {active && (
+                                                    <motion.div
+                                                      layoutId="module-active-dot"
+                                                      style={{ width: 4, height: 4, borderRadius: '50%', background: m.accent }}
+                                                    />
+                                                  )}
+                                                </span>
                                               )}
                                             </motion.button>
                                           )
@@ -820,9 +995,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                       </div>
                                     )
                                   })}
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
+                                      </div>
+                                    )
+                                  })}
                                 </motion.div>
-                                )
-                              })()}
+                              )}
                             </AnimatePresence>
                           )}
                         </motion.div>
@@ -959,7 +1139,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   key={proj.id}
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => { setSidebarCollapsed(false); toggleProject(proj.id) }}
+                  onClick={() => {
+                    setSidebarCollapsed(false)
+                    if (!proj.global_idea) {
+                      router.push(`/dashboard/greeting?projectId=${proj.id}`)
+                    } else {
+                      toggleProject(proj.id)
+                    }
+                  }}
                   style={{
                     width: 36,
                     height: 36,
