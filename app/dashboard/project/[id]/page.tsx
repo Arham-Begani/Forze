@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useToast } from '@/components/ui/Toast'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ const MODULES = [
 export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const toast = useToast()
   const projectId = params.id as string
 
   const [mounted, setMounted] = useState(false)
@@ -86,9 +88,14 @@ export default function ProjectDetailPage() {
       })
       if (res.ok) {
         setProject(prev => prev ? { ...prev, name: trimmed } : prev)
+        window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
+        toast.success('Project renamed')
+      } else {
+        toast.error('Something went wrong - please try again')
       }
     } catch (err) {
       console.error('Failed to rename project', err)
+      toast.error('Something went wrong - please try again')
     } finally {
       setRenamingProject(false)
     }
@@ -108,9 +115,14 @@ export default function ProjectDetailPage() {
           if (!prev) return prev
           return { ...prev, ventures: prev.ventures.map(v => v.id === renamingVentureId ? { ...v, name: trimmed } : v) }
         })
+        window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
+        toast.success('Venture renamed')
+      } else {
+        toast.error('Something went wrong - please try again')
       }
     } catch (err) {
       console.error('Failed to rename venture', err)
+      toast.error('Something went wrong - please try again')
     } finally {
       setRenamingVentureId(null)
     }
@@ -122,9 +134,14 @@ export default function ProjectDetailPage() {
       const res = await fetch(`/api/ventures/${ventureId}`, { method: 'DELETE' })
       if (res.ok) {
         setProject(prev => prev ? { ...prev, ventures: prev.ventures.filter(v => v.id !== ventureId) } : prev)
+        window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
+        toast.success('Venture deleted')
+      } else {
+        toast.error('Something went wrong - please try again')
       }
     } catch (err) {
       console.error('Failed to delete venture', err)
+      toast.error('Something went wrong - please try again')
     }
   }
 
