@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [source, setSource] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -48,7 +49,10 @@ export default function SignUpPage() {
         email: trimmedEmail,
         password,
         options: {
-          data: { name: name.trim() || undefined },
+          data: { 
+            name: name.trim() || undefined,
+            source: source || undefined,
+          },
           emailRedirectTo: `${(process.env.NEXT_PUBLIC_APP_URL || '').trim()}/auth/confirm`,
         },
       });
@@ -152,6 +156,21 @@ export default function SignUpPage() {
               placeholder="Your name (optional)"
               autoComplete="name"
             />
+
+            <label className="auth-label" htmlFor="source">Where did you hear about us?</label>
+            <select
+              id="source"
+              className="auth-input"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Select an option (optional)</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="twitter">Twitter/X</option>
+              <option value="reddit">Reddit</option>
+              <option value="other">Other</option>
+            </select>
 
             <label className="auth-label" htmlFor="password">Password</label>
             <div style={passwordFieldWrapStyle}>
@@ -523,4 +542,12 @@ const criteriaDotStyle: React.CSSProperties = {
   height: 8,
   borderRadius: "50%",
   flexShrink: 0,
+};
+
+const selectStyle: React.CSSProperties = {
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23c07a3a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 12px center",
+  paddingRight: 36,
 };
