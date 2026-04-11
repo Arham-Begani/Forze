@@ -545,7 +545,18 @@ export default function DashboardPage() {
                 whileTap={{ scale: 0.96 }}
                 style={quickActionBtnStyle}
                 onClick={() => {
-                  if (a.action === 'new-project') router.push('/dashboard/new')
+                  if (a.action === 'new-project') {
+                    router.push('/dashboard/new')
+                    return
+                  }
+
+                  const latest = ventures[0]
+                  if (latest) {
+                    router.push(`/dashboard/venture/${latest.id}/${a.action}`)
+                    return
+                  }
+
+                  router.push('/dashboard/new')
                 }}
               >
                 <span style={{ fontSize: 15 }}>{a.icon}</span>
