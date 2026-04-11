@@ -82,6 +82,18 @@ const FULL_LAUNCH_AGENTS = [
   { key: 'feasibility', label: 'Feasibility Check', detail: 'Legal & Technical risk assessment' },
 ]
 
+const NEXT_STEP_MAP: Partial<Record<ModuleId, { nextModuleId: ModuleId; description: string }>> = {
+  research: { nextModuleId: 'branding', description: 'Brand Identity is ready to build' },
+  branding: { nextModuleId: 'landing', description: 'Build your landing page next' },
+  marketing: { nextModuleId: 'landing', description: 'See your copy on a live page' },
+  landing: { nextModuleId: 'feasibility', description: 'Now stress-test the business model' },
+  feasibility: { nextModuleId: 'shadow-board', description: "Get your Shadow Board's verdict" },
+  'shadow-board': { nextModuleId: 'investor-kit', description: 'Turn this into a pitch' },
+  'full-launch': { nextModuleId: 'shadow-board', description: 'Pressure-test your results' },
+  'investor-kit': { nextModuleId: 'launch-autopilot', description: 'Now plan the launch' },
+  'launch-autopilot': { nextModuleId: 'mvp-scalpel', description: 'Cut the MVP to the bone' },
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AgentStatus = 'pending' | 'running' | 'complete' | 'failed'
@@ -378,6 +390,88 @@ function ScopeRefusalCard({
   )
 }
 
+function NextStepCard({
+  nextModuleId,
+  description,
+  onRunNext,
+}: {
+  nextModuleId: ModuleId
+  description: string
+  onRunNext: () => void
+}) {
+  const nextModule = getModule(nextModuleId)
+
+  return (
+    <motion.div
+      style={{
+        marginTop: 12,
+        borderRadius: 16,
+        border: `1px solid ${nextModule.accent}30`,
+        background: `${nextModule.accent}10`,
+        padding: '15px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 14,
+      }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            background: `${nextModule.accent}18`,
+            color: nextModule.accent,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <ModuleIconSvg id={nextModule.id} size={16} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: nextModule.accent }}>
+            What's Next?
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginTop: 2 }}>
+            {nextModule.label}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 3, lineHeight: 1.5 }}>
+            {description}
+          </div>
+        </div>
+      </div>
+
+      <motion.button
+        type="button"
+        onClick={onRunNext}
+        whileHover={{ scale: 1.03, y: -1 }}
+        whileTap={{ scale: 0.97 }}
+        style={{
+          border: 'none',
+          borderRadius: 10,
+          padding: '10px 14px',
+          background: nextModule.accent,
+          color: '#fff',
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
+          boxShadow: `0 10px 24px ${nextModule.accent}30`,
+        }}
+      >
+        Run {nextModule.label} -&gt;
+      </motion.button>
+    </motion.div>
+  )
+}
+
 export default function ModulePage() {
   const params = useParams()
   const router = useRouter()
@@ -389,6 +483,7 @@ export default function ModulePage() {
   const suggestions = SUGGESTIONS[activeModule] ?? SUGGESTIONS['research']
 
   const [ventureName, setVentureName] = useState<string>('...')
+  const [ventureProjectId, setVentureProjectId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationEntry[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -607,6 +702,7 @@ export default function ModulePage() {
         if (!res.ok) return
         const data = await res.json()
         setVentureName(data.name ?? 'Venture')
+        setVentureProjectId(data.project_id ?? null)
 
         const moduleConvos: ConversationEntry[] = (
           data.conversations?.[activeModule] ?? []
@@ -787,6 +883,9 @@ export default function ModulePage() {
           } else if (data.type === 'complete') {
             streamDone = true
             updateEntry({ isRunning: false, result: data.result, agentStatuses: buildCompletedStatuses(mod.accent) })
+            if (activeModule !== 'general') {
+              window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
+            }
             es.close()
             esRef.current = null
             activeConversationIdRef.current = null
@@ -914,6 +1013,8 @@ export default function ModulePage() {
   }
 
   const canSubmit = !!prompt.trim() && !isSubmitting && !isLoadingQuestions && hasEnoughCredits
+  const latestConversation = conversations[conversations.length - 1] ?? null
+  const nextStep = activeModule === 'full-launch' ? null : (NEXT_STEP_MAP[activeModule] ?? null)
 
   // Compute latest result for reading panel
   const latestResult = [...conversations]
@@ -968,12 +1069,43 @@ export default function ModulePage() {
             <ModuleIconSvg id={activeModule} size={18} />
           </motion.div>
           <div>
+            {ventureProjectId && (
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/project/${ventureProjectId}`)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  fontSize: 10,
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                  marginBottom: 4,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                &larr; Project
+              </button>
+            )}
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
               {mod.label}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, letterSpacing: '0.01em' }}>
+            <button
+              type="button"
+              onClick={() => router.push(`/dashboard/venture/${ventureId}`)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                fontSize: 11,
+                color: 'var(--muted)',
+                marginTop: 2,
+                letterSpacing: '0.01em',
+                cursor: 'pointer',
+              }}
+            >
               {ventureName}
-            </div>
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1530,6 +1662,14 @@ export default function ModulePage() {
                             ))
                           }}
                         />
+
+                        {nextStep && latestConversation?.conversationId === entry.conversationId && !entry.isError && (
+                          <NextStepCard
+                            nextModuleId={nextStep.nextModuleId}
+                            description={nextStep.description}
+                            onRunNext={() => router.push(`/dashboard/venture/${ventureId}/${nextStep.nextModuleId}`)}
+                          />
+                        )}
                       </motion.div>
                     )}
 
