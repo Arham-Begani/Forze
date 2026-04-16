@@ -537,7 +537,24 @@ export function ConnectedChannelsPanel({
   return (
     <div style={panelStyle}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Connected Channels</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Connected Channels</div>
+          <span
+            style={{
+              padding: '5px 12px',
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#d97706',
+              background: '#d9770612',
+              border: '1px solid #d9770620',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            Coming Soon
+          </span>
+        </div>
         <div style={{ fontSize: 13, color: 'var(--text-soft)', lineHeight: 1.6 }}>
           Connect external channels for <strong style={{ color: 'var(--text)' }}>{ventureName}</strong>, turn your marketing strategy into reviewable drafts, and schedule publishes without leaving Forge.
         </div>
@@ -546,7 +563,7 @@ export function ConnectedChannelsPanel({
       {success && <FlashMessage tone="success" message={success} />}
       {error && <FlashMessage tone="error" message={error} />}
 
-      <div style={providerGridStyle}>
+      <div style={{ ...providerGridStyle, opacity: 0.5, pointerEvents: 'none' }}>
         {PROVIDERS.map((provider) => {
           const connection = connections.find((item) => item.provider === provider.id)
           const isBusy = busyProvider === provider.id
@@ -584,15 +601,15 @@ export function ConnectedChannelsPanel({
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {connection ? (
                   <>
-                    <button type="button" onClick={() => handleDisconnect(provider.id)} disabled={isBusy} style={buttonStyle('secondary')}>
+                    <button type="button" onClick={() => handleDisconnect(provider.id)} disabled={true} style={buttonStyle('secondary')}>
                       Disconnect
                     </button>
-                    <button type="button" onClick={() => handleGenerate(provider.id)} disabled={isBusy} style={buttonStyle('primary')}>
+                    <button type="button" onClick={() => handleGenerate(provider.id)} disabled={true} style={buttonStyle('primary')}>
                       {provider.id === 'youtube' ? 'Create YouTube Draft' : 'Create LinkedIn Drafts'}
                     </button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => handleConnect(provider.id)} disabled={isBusy} style={buttonStyle('primary')}>
+                  <button type="button" onClick={() => handleConnect(provider.id)} disabled={true} style={buttonStyle('primary')}>
                     Connect {provider.label}
                   </button>
                 )}
@@ -602,7 +619,7 @@ export function ConnectedChannelsPanel({
         })}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: 0.5, pointerEvents: 'none' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Draft Queue</div>
         {loading ? (
           <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading connected channels…</div>
