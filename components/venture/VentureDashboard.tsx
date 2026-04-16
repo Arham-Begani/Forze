@@ -87,31 +87,32 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 overflow-x-auto border-b border-[var(--border)] bg-[var(--glass-bg)] p-3 sm:p-4 no-scrollbar">
-        <div className="max-w-7xl mx-auto flex gap-2 w-full">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              relative flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-300 sm:px-6
-              ${activeTab === tab.id 
-                ? "bg-[var(--glass-bg-strong)] text-[var(--text)] shadow-sm" 
-                : "text-[var(--muted)] hover:text-[var(--text-soft)] hover:bg-[var(--glass-bg)]"}
-            `}
-          >
-            <span style={{ color: activeTab === tab.id ? tab.color : "inherit" }}>
-              {tab.icon}
-            </span>
-            {tab.label}
-            {activeTab === tab.id && (
-              <motion.div
-                layoutId="activeTab"
-                className="absolute bottom-0 left-2 right-2 h-0.5"
-                style={{ backgroundColor: tab.color }}
-              />
-            )}
-          </button>
+      <div className="border-b border-[var(--border)] bg-[var(--glass-bg)]">
+        <div className="flex gap-2 overflow-x-auto p-3 sm:p-4 no-scrollbar max-w-7xl mx-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`
+                relative flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-300 sm:px-6
+                ${activeTab === tab.id 
+                  ? "bg-[var(--glass-bg-strong)] text-[var(--text)] shadow-sm" 
+                  : "text-[var(--muted)] hover:text-[var(--text-soft)] hover:bg-[var(--glass-bg)]"}
+              `}
+            >
+              <span style={{ color: activeTab === tab.id ? tab.color : "inherit" }}>
+                {tab.icon}
+              </span>
+              {tab.label}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute bottom-0 left-2 right-2 h-0.5"
+                  style={{ backgroundColor: tab.color }}
+                />
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
