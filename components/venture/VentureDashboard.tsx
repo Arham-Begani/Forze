@@ -55,36 +55,40 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
   return (
     <div className="flex h-full flex-col bg-[var(--bg)]">
       {/* Top Header / Stats */}
-      <div className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--sidebar)] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--text)] sm:text-2xl">{venture.name}</h1>
-          <p className="text-sm text-[var(--muted)]">Master Venture Dossier</p>
-        </div>
-        <div className="flex w-full flex-wrap gap-3 sm:w-auto sm:justify-end sm:gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleExportPDF}
-            disabled={isExporting}
-            className="flex min-w-[170px] flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--nav-active)] px-3 py-2 text-sm font-semibold text-[var(--text)] shadow-sm transition-all hover:bg-[var(--glass-bg-strong)] disabled:opacity-50 sm:min-w-0 sm:flex-initial sm:px-4"
-          >
-            <Download size={16} className={isExporting ? "animate-bounce" : ""} />
-            {isExporting ? "Exporting..." : "Export Unified PDF"}
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="flex min-w-[150px] flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-xl sm:min-w-0 sm:flex-initial sm:px-4"
-          >
-            <Share2 size={16} />
-            Share Dossier
-          </motion.button>
+      <div className="border-b border-[var(--border)] bg-[var(--sidebar)]">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6 max-w-7xl mx-auto w-full">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--text)] sm:text-2xl truncate">{venture.name}</h1>
+            <p className="text-sm text-[var(--muted)]" style={{ marginTop: '2px' }}>Master Venture Dossier</p>
+          </div>
+          <div className="flex w-full gap-2 sm:w-auto sm:justify-end sm:gap-3 flex-wrap sm:flex-nowrap">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--nav-active)] px-3 py-2 text-sm font-semibold text-[var(--text)] shadow-sm transition-all hover:bg-[var(--glass-bg-strong)] disabled:opacity-50 whitespace-nowrap"
+            >
+              <Download size={16} className={isExporting ? "animate-bounce" : ""} />
+              <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export PDF"}</span>
+              <span className="sm:hidden">{isExporting ? "..." : "PDF"}</span>
+            </motion.button>
+            
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-xl whitespace-nowrap"
+            >
+              <Share2 size={16} />
+              <span className="hidden sm:inline">Share</span>
+            </motion.button>
+          </div>
         </div>
       </div>
 
       {/* Tab Navigation */}
       <div className="flex gap-2 overflow-x-auto border-b border-[var(--border)] bg-[var(--glass-bg)] p-3 sm:p-4 no-scrollbar">
+        <div className="max-w-7xl mx-auto flex gap-2 w-full">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -108,12 +112,12 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
               />
             )}
           </button>
-        ))}
+        </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto bg-[var(--bg)] p-4 scroll-smooth sm:p-8 no-scrollbar">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           {mounted && (
             <AnimatePresence mode="wait">
               <motion.div
