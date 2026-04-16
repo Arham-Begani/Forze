@@ -1808,7 +1808,7 @@ function MVPScalpelDisplay({ result }: { result: Record<string, any> }) {
         <div>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>MVP Readiness</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: rc.color, marginTop: 3, textTransform: "uppercase" }}>{(verdict.readiness || 'almost-ready').replace(/-/g, ' ')}</div>
-          {verdict.summary && <div style={{ fontSize: 11, color: "var(--text-soft)\", marginTop: 4, lineHeight: 1.4 }}>{verdict.summary}</div>}
+          {verdict.summary && <div style={{ fontSize: 11, color: "var(--text-soft)", marginTop: 4, lineHeight: 1.4 }}>{verdict.summary}</div>}
         </div>
         <span style={{
           display: "inline-flex", alignItems: "center", gap: 6,
