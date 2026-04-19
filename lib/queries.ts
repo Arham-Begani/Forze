@@ -137,7 +137,7 @@ export async function createProject(
   userId: string,
   name: string,
   description = '',
-  icon = '🚀'
+  icon = '💡'
 ): Promise<Project> {
   return withRetry(async () => {
     const db = await createDb()
