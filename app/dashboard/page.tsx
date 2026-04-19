@@ -163,33 +163,35 @@ export default function DashboardPage() {
           </div>
 
           {/* Skeleton Stats Bar */}
-          <div className="glass stats-responsive" style={{ borderRadius: 16, marginBottom: 28, border: 'none' }}>
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 32, height: 28, borderRadius: 6 }} className="skeleton" />
+          <div className="stats-responsive" style={{ display: 'flex', alignItems: 'center', padding: '16px 0', marginBottom: 48, borderBottom: '1px solid var(--border)' }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6 }} className="skeleton" />
                 <div style={{ width: 60, height: 12, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
               </div>
             ))}
           </div>
 
-          {/* Skeleton Grid */}
-          <div className="grid-responsive">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="glass-card" style={{ ...projectCardStyle, border: 'none', pointerEvents: 'none' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 13 }} className="skeleton" />
-                  <div style={{ width: 40, height: 12, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ width: '70%', height: 18, borderRadius: 6 }} className="skeleton" />
-                  <div style={{ width: '90%', height: 14, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                  <div style={{ width: 70, height: 12, borderRadius: 4 }} className="skeleton" />
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {[1, 2, 3, 4].map(j => (
-                      <div key={j} style={{ width: 6, height: 6, borderRadius: '50%' }} className="skeleton" />
-                    ))}
+          {/* Skeleton List (Minimalist) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="glass-card w-full" style={{ ...projectCardStyle, border: 'none', pointerEvents: 'none', padding: '24px 32px' }}>
+                <div className="flex flex-col md:flex-row items-start md:items-center w-full justify-between">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 14 }} className="skeleton" />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ width: 140, height: 18, borderRadius: 6 }} className="skeleton" />
+                      <div style={{ width: 200, height: 14, borderRadius: 4, opacity: 0.5 }} className="skeleton" />
+                    </div>
+                  </div>
+                  <div className="flex w-full md:w-auto justify-between md:justify-end items-center gap-8 md:gap-32 mt-4 md:mt-0">
+                    <div style={{ width: 80, height: 14, borderRadius: 4 }} className="skeleton" />
+                    <div className="hidden md:flex" style={{ gap: 6 }}>
+                      {[1, 2, 3, 4].map(j => (
+                        <div key={j} style={{ width: 6, height: 6, borderRadius: '50%' }} className="skeleton" />
+                      ))}
+                    </div>
+                    <div style={{ width: 60, height: 14, borderRadius: 4 }} className="skeleton" />
                   </div>
                 </div>
               </div>
@@ -541,8 +543,8 @@ export default function DashboardPage() {
               <motion.button
                 key={a.action}
                 variants={{ hidden: { opacity: 0, y: 10, scale: 0.95 }, show: { opacity: 1, y: 0, scale: 1 } }}
-                whileHover={{ scale: 1.04, y: -1, boxShadow: 'var(--shadow-md)' }}
-                whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.02, backgroundColor: 'var(--glass-bg)' }}
+                whileTap={{ scale: 0.98 }}
                 style={quickActionBtnStyle}
                 onClick={() => {
                   if (a.action === 'new-project') {
@@ -565,10 +567,16 @@ export default function DashboardPage() {
             ))}
           </motion.div>
 
-          {/* Stats bar */}
+          {/* Stats bar (Minimalist) */}
           <motion.div
-            className="glass stats-responsive"
-            style={{ borderRadius: 16, marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}
+            className="stats-responsive"
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              padding: '16px 0', 
+              marginBottom: 48, 
+              borderBottom: '1px solid var(--border)' 
+            }}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
@@ -582,9 +590,9 @@ export default function DashboardPage() {
             <StatItem label="AI Agents" value={6} delay={0.3} />
           </motion.div>
 
-          {/* Project grid */}
+          {/* Project list (Minimalist Workspace) */}
           <motion.div
-            className="grid-responsive"
+            style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
             initial="hidden" animate="show"
             variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }}
           >
@@ -595,93 +603,98 @@ export default function DashboardPage() {
                 <motion.button
                   key={proj.id}
                   variants={{
-                    hidden: { opacity: 0, y: 24, scale: 0.96 },
-                    show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 280, damping: 22 } }
+                    hidden: { opacity: 0, y: 16 },
+                    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 280, damping: 22 } }
                   }}
-                  whileHover={{ scale: 1.02, y: -3 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.01, x: 4 }}
+                  whileTap={{ scale: 0.99 }}
                   onClick={() => router.push(`/dashboard/project/${proj.id}`)}
                   onMouseEnter={() => setHoveredProject(proj.id)}
                   onMouseLeave={() => setHoveredProject(null)}
-                  className="glass-card"
+                  className="glass-card w-full"
                   style={{
                     ...projectCardStyle,
                     borderColor: isHovered ? 'var(--accent-glow)' : 'var(--glass-border)',
-                    boxShadow: isHovered ? 'var(--shadow-lg), 0 0 0 1px var(--accent-glow)' : 'var(--shadow-sm)',
+                    boxShadow: isHovered ? 'var(--shadow-md), 0 0 0 1px var(--accent-glow)' : 'var(--shadow-xs)',
                   }}
                 >
-                  {/* Top accent bar */}
+                  {/* Left Accent Strip (Minimalist) */}
                   <motion.div
                     style={{
-                      position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-                      background: 'linear-gradient(90deg, var(--accent), #e8963a, transparent)',
-                      borderRadius: '16px 16px 0 0',
+                      position: 'absolute', top: 0, bottom: 0, left: 0, width: 3,
+                      background: 'var(--accent)',
+                      borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
                     }}
                     animate={{ opacity: isHovered ? 1 : 0 }}
-                    transition={{ duration: 0.25 }}
+                    transition={{ duration: 0.2 }}
                   />
 
                   {/* Hover glow layer */}
                   <motion.div
                     style={{
                       position: 'absolute', inset: 0, borderRadius: 16,
-                      background: 'radial-gradient(circle at 50% 0%, var(--accent-soft) 0%, transparent 60%)',
+                      background: 'radial-gradient(circle at 10% 50%, var(--accent-soft) 0%, transparent 40%)',
                       pointerEvents: 'none',
                     }}
                     animate={{ opacity: isHovered ? 1 : 0 }}
                     transition={{ duration: 0.3 }}
                   />
 
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, position: 'relative', zIndex: 1 }}>
-                    <motion.div
-                      style={{
-                        width: 46,
-                        height: 46,
-                        borderRadius: 13,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: isHovered ? 'var(--accent-soft)' : 'var(--nav-active)',
-                        boxShadow: isHovered ? '0 0 12px var(--accent-glow)' : 'none',
-                        transition: 'background 300ms ease, box-shadow 300ms ease',
-                      }}
-                      animate={isHovered ? { scale: 1.08 } : { scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                    >
-                      <span style={{ fontSize: 22 }}>{proj.icon}</span>
-                    </motion.div>
-                    <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>{formatDate(proj.created_at)}</span>
-                  </div>
+                  <div className="flex flex-col md:flex-row items-start md:items-center w-full justify-between" style={{ zIndex: 1, position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flex: 1 }}>
+                      <motion.div
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: 14,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: isHovered ? 'var(--accent-soft)' : 'var(--nav-active)',
+                          boxShadow: isHovered ? '0 0 16px var(--accent-glow)' : 'none',
+                          transition: 'background 300ms ease, box-shadow 300ms ease',
+                          flexShrink: 0,
+                        }}
+                        animate={isHovered ? { scale: 1.05 } : { scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                      >
+                        <span style={{ fontSize: 24 }}>{proj.icon}</span>
+                      </motion.div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, position: 'relative', zIndex: 1 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{proj.name}</span>
-                    {proj.description && (
-                      <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{proj.description}</span>
-                    )}
-                  </div>
-
-                  {/* Bottom bar */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, position: 'relative', zIndex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{
-                        width: 6, height: 6, borderRadius: '50%',
-                        background: ventureCount > 0 ? 'var(--accent)' : 'var(--border-strong)',
-                        boxShadow: ventureCount > 0 ? '0 0 6px var(--accent-glow)' : 'none',
-                      }} />
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-soft)' }}>{ventureCount} venture{ventureCount !== 1 ? 's' : ''}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, overflow: 'hidden' }}>
+                        <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em' }}>{proj.name}</span>
+                        {proj.description && (
+                          <span style={{ fontSize: 14, color: 'var(--muted)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{proj.description}</span>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 3 }}>
-                      {MODULES.map((m, idx) => (
-                        <motion.div
-                          key={m.id}
-                          style={{ width: 6, height: 6, borderRadius: '50%' }}
-                          animate={{
-                            background: isHovered ? m.accent : 'var(--border-strong)',
-                            boxShadow: isHovered ? `0 0 4px ${m.accent}80` : 'none',
-                          }}
-                          transition={{ delay: isHovered ? idx * 0.04 : 0, duration: 0.25 }}
-                        />
-                      ))}
+
+                    {/* Right Side Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 32, marginTop: '16px', flexShrink: 0 }} className="md:mt-0 md:ml-4 w-full md:w-auto justify-between md:justify-end">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: ventureCount > 0 ? 'var(--accent)' : 'var(--border-strong)',
+                          boxShadow: ventureCount > 0 ? '0 0 8px var(--accent-glow)' : 'none',
+                        }} />
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-soft)' }}>{ventureCount} venture{ventureCount !== 1 ? 's' : ''}</span>
+                      </div>
+
+                      <div className="hidden md:flex" style={{ gap: 6 }}>
+                        {MODULES.map((m, idx) => (
+                          <motion.div
+                            key={m.id}
+                            style={{ width: 6, height: 6, borderRadius: '50%' }}
+                            animate={{
+                              background: isHovered ? m.accent : 'var(--border-strong)',
+                              boxShadow: isHovered ? `0 0 4px ${m.accent}80` : 'none',
+                            }}
+                            transition={{ delay: isHovered ? idx * 0.04 : 0, duration: 0.25 }}
+                          />
+                        ))}
+                      </div>
+
+                      <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500, minWidth: 60, textAlign: 'right' }}>{formatDate(proj.created_at)}</span>
                     </div>
                   </div>
                 </motion.button>
@@ -691,20 +704,20 @@ export default function DashboardPage() {
             {/* New project card */}
             <motion.button
               variants={{
-                hidden: { opacity: 0, y: 24 },
+                hidden: { opacity: 0, y: 16 },
                 show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 280, damping: 22 } }
               }}
-              whileHover={{ scale: 1.02, y: -3, borderColor: 'var(--accent)', boxShadow: 'var(--shadow-md)' }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01, borderColor: 'var(--accent)', boxShadow: 'var(--shadow-sm)' }}
+              whileTap={{ scale: 0.99 }}
               onClick={() => router.push('/dashboard/new')}
               style={newProjectCardStyle}
+              className="flex-col md:flex-row"
             >
               <motion.div
                 style={{
                   width: 44, height: 44, borderRadius: 13,
                   background: 'var(--accent-soft)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: 10,
                 }}
                 whileHover={{ scale: 1.1, rotate: 90 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 15 }}
@@ -713,8 +726,10 @@ export default function DashboardPage() {
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
               </motion.div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginTop: 2 }}>New Project</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Start a new workspace</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em' }}>New Project</span>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>Start a new workspace</span>
+              </div>
             </motion.button>
           </motion.div>
 
@@ -737,9 +752,9 @@ export default function DashboardPage() {
 
 function StatItem({ label, value, delay = 0 }: { label: string; value: number; delay?: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, justifyContent: 'center' }}>
       <motion.span
-        style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em' }}
+        style={{ fontSize: 24, fontWeight: 400, color: 'var(--text)', letterSpacing: '-0.02em' }}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay, type: 'spring', stiffness: 300, damping: 20 }}
@@ -747,7 +762,7 @@ function StatItem({ label, value, delay = 0 }: { label: string; value: number; d
         {value}
       </motion.span>
       <motion.span
-        style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.07em', textTransform: 'uppercase' }}
+        style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)', letterSpacing: '0.04em' }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: delay + 0.1 }}
@@ -765,6 +780,10 @@ const pageStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'center',
   position: 'relative',
+  paddingTop: '80px',
+  paddingBottom: '80px',
+  paddingLeft: '32px',
+  paddingRight: '32px',
 }
 
 const ambientBlob1: React.CSSProperties = {
@@ -797,7 +816,7 @@ const ambientBlob2: React.CSSProperties = {
 
 const contentStyle: React.CSSProperties = {
   width: '100%',
-  maxWidth: 880,
+  maxWidth: 1040,
   display: 'flex',
   flexDirection: 'column',
   gap: 0,
@@ -806,22 +825,26 @@ const contentStyle: React.CSSProperties = {
 }
 
 const heroStyle: React.CSSProperties = {
-  marginBottom: 24,
+  marginBottom: 48,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
 }
 
 const heroHeadingStyle: React.CSSProperties = {
-  fontSize: 32,
-  fontWeight: 800,
+  fontSize: 42,
+  fontWeight: 400,
   color: 'var(--text)',
-  margin: '0 0 6px',
-  letterSpacing: '-0.04em',
+  margin: '0 0 12px',
+  letterSpacing: '-0.03em',
 }
 
 const heroSubStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 15,
   color: 'var(--muted)',
   margin: 0,
   letterSpacing: '0.01em',
+  fontWeight: 400,
 }
 
 const quickActionsStyle: React.CSSProperties = {
@@ -834,16 +857,13 @@ const quickActionsStyle: React.CSSProperties = {
 const quickActionBtnStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 7,
-  padding: '8px 16px',
-  borderRadius: 10,
-  border: '1px solid var(--border-strong)',
-  background: 'var(--glass-bg-strong)',
-  backdropFilter: 'blur(12px)',
-  WebkitBackdropFilter: 'blur(12px)',
+  gap: 8,
+  padding: '10px 16px',
+  borderRadius: 8,
+  background: 'transparent',
   cursor: 'pointer',
   fontFamily: 'inherit',
-  transition: 'box-shadow 200ms, border-color 200ms, transform 150ms',
+  transition: 'background 200ms, transform 150ms',
 }
 
 const statsBarStyle: React.CSSProperties = {
@@ -857,7 +877,7 @@ const statsBarStyle: React.CSSProperties = {
 
 const statDivider: React.CSSProperties = {
   width: 1,
-  height: 30,
+  height: 24,
   background: 'var(--border)',
 }
 
@@ -870,14 +890,17 @@ const gridStyle: React.CSSProperties = {
 const projectCardStyle: React.CSSProperties = {
   position: 'relative',
   display: 'flex',
-  flexDirection: 'column',
-  padding: 22,
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '24px 32px',
   textAlign: 'left',
   fontFamily: 'inherit',
   cursor: 'pointer',
   overflow: 'hidden',
-  minHeight: 176,
-  transition: 'box-shadow 300ms ease, border-color 300ms ease',
+  background: 'var(--glass-bg)',
+  border: '1px solid var(--glass-border)',
+  borderRadius: 16,
+  transition: 'all 300ms ease',
 }
 
 const createProjectBtnStyle: React.CSSProperties = {
@@ -899,18 +922,17 @@ const createProjectBtnStyle: React.CSSProperties = {
 
 const newProjectCardStyle: React.CSSProperties = {
   display: 'flex',
-  flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: 22,
-  minHeight: 176,
+  gap: 16,
+  padding: '24px 32px',
   borderRadius: 16,
-  border: '1.5px dashed var(--border-strong)',
+  border: '1px dashed var(--border-strong)',
   background: 'transparent',
   cursor: 'pointer',
   fontFamily: 'inherit',
   textAlign: 'center',
-  transition: 'border-color 300ms ease, box-shadow 300ms ease, transform 200ms ease',
+  transition: 'all 300ms ease',
 }
 
 const footerTextStyle: React.CSSProperties = {
