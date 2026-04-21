@@ -31,3 +31,22 @@ export function formatAbsoluteDate(value: string | Date): string {
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 }
+
+export function estimateReadingTimeFromHtml(
+  value: string,
+  wordsPerMinute: number = 220
+): string {
+  const plainText = value
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&[a-z0-9#]+;/gi, ' ')
+    .trim()
+
+  if (!plainText) return '1 min read'
+
+  const wordCount = plainText.split(/\s+/).filter(Boolean).length
+  const minutes = Math.max(1, Math.ceil(wordCount / wordsPerMinute))
+  return `${minutes} min read`
+}

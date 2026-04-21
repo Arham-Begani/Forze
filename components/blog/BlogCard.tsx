@@ -20,51 +20,83 @@ export function BlogCard({
   publishedAt,
   viewCount,
 }: BlogCardProps) {
+  const publishedLabel = publishedAt ? formatRelativeDate(publishedAt) : 'Freshly published'
+  const hasImage = Boolean(featuredImage)
+  const featuredImageSrc = featuredImage ?? undefined
+
   return (
-    <article className='group flex flex-col overflow-hidden rounded-lg border border-[#e8e4dc] bg-white transition-shadow hover:shadow-md dark:border-[#272523] dark:bg-[#0d0d0c]'>
-      {featuredImage && (
-        <Link href={`/blog/${slug}`} className='block h-48 w-full overflow-hidden bg-[#f4f2ed] dark:bg-[#111110]'>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={featuredImage}
-            alt={title}
-            className='h-full w-full object-cover transition-transform group-hover:scale-[1.02]'
-            loading='lazy'
-          />
-        </Link>
-      )}
+    <article className='group h-full'>
+      <Link
+        href={`/blog/${slug}`}
+        className='flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-black/10 bg-white/88 shadow-[0_20px_60px_-34px_rgba(42,24,10,0.42)] backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_70px_-34px_rgba(42,24,10,0.48)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c07a3a] focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#15120f]/88 dark:shadow-[0_26px_70px_-34px_rgba(0,0,0,0.72)] dark:focus-visible:ring-[#d4924a] dark:focus-visible:ring-offset-[#110f0c]'
+      >
+        <div className='relative aspect-[4/3] overflow-hidden border-b border-black/5 bg-[#eadfce] dark:border-white/10 dark:bg-[#1b1714]'>
+          {hasImage ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={featuredImageSrc}
+                alt={title}
+                className='h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]'
+                loading='lazy'
+              />
+              <div className='absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent' />
+            </>
+          ) : (
+            <div className='absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(192,122,58,0.34),_transparent_42%),linear-gradient(135deg,#f3e7d7_0%,#f8f3ea_52%,#efe3d3_100%)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(212,146,74,0.22),_transparent_38%),linear-gradient(135deg,#18120e_0%,#221912_48%,#120e0b_100%)]'>
+              <div className='absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/20' />
+              <div className='flex h-full flex-col justify-between p-5'>
+                <span className='w-fit rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#7a4f29] backdrop-blur-sm dark:border-white/10 dark:bg-white/5 dark:text-[#f0c998]'>
+                  Forze Journal
+                </span>
+                <div className='space-y-2'>
+                  <p className='text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8a6340] dark:text-[#d7b18a]'>
+                    Founder brief
+                  </p>
+                  <p className='max-w-[13rem] text-sm leading-6 text-[#5d4b3d] dark:text-[#ddc8b4]'>
+                    Practical writing on validation, launch timing, and sharper early-stage decisions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
-      <div className='flex flex-1 flex-col p-6'>
-        <Link href={`/blog/${slug}`} className='mb-2 block'>
-          <h3 className='text-lg font-semibold text-gray-900 transition-colors hover:text-[#c07a3a] dark:text-gray-50 dark:hover:text-[#d4924a]'>
-            {title}
-          </h3>
-        </Link>
-
-        <p className='mb-4 line-clamp-3 text-sm text-gray-600 dark:text-gray-400'>
-          {description}
-        </p>
-
-        <div className='mt-auto flex items-center justify-between text-xs text-gray-500 dark:text-gray-500'>
-          <div className='flex items-center gap-2'>
-            <span>{authorName}</span>
-            {publishedAt && (
-              <>
-                <span>·</span>
-                <time dateTime={publishedAt}>{formatRelativeDate(publishedAt)}</time>
-              </>
-            )}
+          <div
+            className={
+              hasImage
+                ? 'absolute inset-x-0 bottom-0 flex items-center justify-between px-5 pb-4 text-[11px] font-medium uppercase tracking-[0.22em] text-white/82'
+                : 'absolute inset-x-0 bottom-0 flex items-center justify-between px-5 pb-4 text-[11px] font-medium uppercase tracking-[0.22em] text-[#7b614d] dark:text-[#cab39d]'
+            }
+          >
+            <span>Essay</span>
+            <time dateTime={publishedAt ?? undefined}>{publishedLabel}</time>
           </div>
-          <span>{viewCount.toLocaleString()} views</span>
         </div>
 
-        <Link
-          href={`/blog/${slug}`}
-          className='mt-4 inline-block text-sm font-medium text-[#c07a3a] hover:underline dark:text-[#d4924a]'
-        >
-          Read more →
-        </Link>
-      </div>
+        <div className='flex flex-1 flex-col gap-4 p-6'>
+          <div className='flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.22em] text-[#8a7460] dark:text-[#a28d79]'>
+            <span className='truncate'>{authorName}</span>
+            <span className='h-px w-8 bg-black/10 dark:bg-white/10' />
+            <span>{viewCount.toLocaleString()} views</span>
+          </div>
+
+          <div className='space-y-3'>
+            <h3 className='text-[1.45rem] font-semibold leading-[1.15] tracking-[-0.03em] text-[#19120d] transition-colors group-hover:text-[#9f5f2c] dark:text-[#fbf3e8] dark:group-hover:text-[#efb46f]'>
+              {title}
+            </h3>
+            <p className='line-clamp-3 text-[0.98rem] leading-7 text-[#625142] dark:text-[#c6b6a6]'>
+              {description}
+            </p>
+          </div>
+
+          <div className='mt-auto flex items-center justify-between border-t border-black/5 pt-4 text-sm font-medium text-[#9f5f2c] dark:border-white/10 dark:text-[#efb46f]'>
+            <span>Open article</span>
+            <span aria-hidden='true' className='transition-transform duration-300 group-hover:translate-x-1'>
+              {'->'}
+            </span>
+          </div>
+        </div>
+      </Link>
     </article>
   )
 }

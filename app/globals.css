@@ -1364,56 +1364,87 @@ button, a {
 
 /* ─── Blog content typography (no @tailwindcss/typography installed) ─────────── */
 .blog-content {
-  font-size: 1.0625rem;
-  line-height: 1.75;
+  font-size: 1.075rem;
+  line-height: 1.9;
+  color: inherit;
+}
+.blog-content > * {
+  max-width: 68ch;
+}
+.blog-content > img,
+.blog-content > pre,
+.blog-content > table,
+.blog-content > hr,
+.blog-content > blockquote {
+  max-width: none;
+}
+.blog-content > :first-child {
+  margin-top: 0;
 }
 .blog-content h2 {
-  font-size: 1.75rem;
+  font-size: clamp(1.9rem, 2vw, 2.35rem);
   font-weight: 700;
-  margin-top: 2.5rem;
-  margin-bottom: 1rem;
+  margin-top: 3.2rem;
+  margin-bottom: 1.2rem;
   color: inherit;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 .blog-content h3 {
-  font-size: 1.375rem;
+  font-size: clamp(1.45rem, 1.4vw, 1.75rem);
   font-weight: 600;
-  margin-top: 2rem;
-  margin-bottom: 0.75rem;
+  margin-top: 2.4rem;
+  margin-bottom: 0.9rem;
   color: inherit;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
 }
 .blog-content h4 {
-  font-size: 1.125rem;
+  font-size: 1.15rem;
   font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.55rem;
 }
 .blog-content p {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.35rem;
+  color: inherit;
+  text-wrap: pretty;
 }
 .blog-content ul,
 .blog-content ol {
-  margin: 0 0 1.25rem 1.5rem;
-  padding-left: 1rem;
+  margin: 0 0 1.5rem 1.2rem;
+  padding-left: 1.25rem;
 }
 .blog-content ul { list-style: disc; }
 .blog-content ol { list-style: decimal; }
-.blog-content li { margin-bottom: 0.5rem; }
-.blog-content a {
-  color: #c07a3a;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.blog-content li {
+  margin-bottom: 0.7rem;
+  padding-left: 0.2rem;
 }
-.dark .blog-content a { color: #d4924a; }
+.blog-content a {
+  color: #9f5f2c;
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  transition: color 180ms ease, background-size 180ms ease;
+}
+.blog-content a:hover {
+  color: #c07a3a;
+  background-size: 100% 2px;
+}
+.dark .blog-content a { color: #efb46f; }
+.dark .blog-content a:hover { color: #f4c891; }
 .blog-content strong { font-weight: 600; }
 .blog-content em { font-style: italic; }
 .blog-content blockquote {
   border-left: 3px solid #c07a3a;
-  padding-left: 1rem;
-  margin: 1.5rem 0;
+  padding: 0.35rem 0 0.35rem 1.2rem;
+  margin: 2rem 0;
   font-style: italic;
   color: inherit;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 .dark .blog-content blockquote { border-left-color: #d4924a; }
 .blog-content code {
@@ -1427,10 +1458,10 @@ button, a {
   font-family: var(--font-mono, monospace);
   background: #111110;
   color: #faf9f6;
-  padding: 1rem;
-  border-radius: 0.5rem;
+  padding: 1.1rem 1.15rem;
+  border-radius: 1rem;
   overflow-x: auto;
-  margin: 1.5rem 0;
+  margin: 1.75rem 0;
 }
 .blog-content pre code {
   background: transparent;
@@ -1438,13 +1469,30 @@ button, a {
   color: inherit;
 }
 .blog-content img {
-  border-radius: 0.5rem;
-  margin: 1.5rem 0;
+  border-radius: 1.25rem;
+  margin: 2rem 0;
   max-width: 100%;
   height: auto;
 }
+.blog-content table {
+  display: block;
+  overflow-x: auto;
+  border-spacing: 0;
+  border-collapse: separate;
+  border: 1px solid rgba(24, 17, 12, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+}
+.dark .blog-content table {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+.blog-content th,
+.blog-content td {
+  min-width: 11rem;
+}
 .blog-content hr {
-  margin: 2rem 0;
+  margin: 2.5rem 0;
   border: 0;
   border-top: 1px solid #e8e4dc;
 }
