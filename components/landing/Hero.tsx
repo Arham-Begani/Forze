@@ -292,7 +292,7 @@ export function Hero() {
             color: 'var(--muted)',
             fontFamily: 'var(--font-dm-sans), sans-serif',
           }}>
-            <strong style={{ color: 'var(--text-soft)' }}>20+ founders</strong> use Forze to pressure-test ideas before they build
+            <strong style={{ color: 'var(--text-soft)' }}>70+ founders</strong> use Forze to pressure-test ideas before they build
           </span>
         </div>
 
