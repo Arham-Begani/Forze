@@ -91,9 +91,8 @@ export function Hero() {
   const isLoggedIn = session !== 'loading' && session !== null
 
   return (
-    <section style={{
+    <section className="hero-section" style={{
       position: 'relative',
-      minHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -166,7 +165,7 @@ export function Hero() {
           }}>
             Your idea deserves
             <br />
-            <span style={{
+            <span className="hero-typewriter-line" style={{
               background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -377,30 +376,30 @@ export function Hero() {
                 </span>
               </div>
             ))}
-            {streamVisible[3] && (
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                alignItems: 'center',
-                animation: 'fade-in-scale 0.4s ease both',
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center',
+              opacity: streamVisible[3] ? 1 : 0,
+              transform: streamVisible[3] ? 'translateY(0)' : 'translateY(8px)',
+              transition: 'opacity 0.4s ease, transform 0.4s ease',
+            }}>
+              <span style={{
+                fontFamily: 'var(--font-jetbrains-mono), monospace',
+                fontSize: '12px',
+                color: '#22c55e',
+                flexShrink: 0,
               }}>
-                <span style={{
-                  fontFamily: 'var(--font-jetbrains-mono), monospace',
-                  fontSize: '12px',
-                  color: '#22c55e',
-                  flexShrink: 0,
-                }}>
-                  Done
-                </span>
-                <span style={{
-                  fontFamily: 'var(--font-jetbrains-mono), monospace',
-                  fontSize: '13px',
-                  color: 'var(--muted)',
-                }}>
-                  Validation package ready · 4m 12s
-                </span>
-              </div>
-            )}
+                Done
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-jetbrains-mono), monospace',
+                fontSize: '13px',
+                color: 'var(--muted)',
+              }}>
+                Validation package ready · 4m 12s
+              </span>
+            </div>
           </div>
         </div>
 

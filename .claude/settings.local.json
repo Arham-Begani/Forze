@@ -43,7 +43,8 @@
       "Bash(while read:*)",
       "Bash(do if:*)",
       "Bash(! grep:*)",
-      "Bash(then echo:*)"
+      "Bash(then echo:*)",
+      "Bash(echo \"EXIT=$?\")"
     ]
   }
 }

@@ -405,6 +405,7 @@ export function OutputTabs() {
           ))}
         </div>
 
+        <div style={{ minHeight: '460px' }}>
         <div
           key={activeTab}
           style={{
@@ -428,6 +429,7 @@ export function OutputTabs() {
           <div style={{ padding: '24px' }}>
             {getPreviewMap(barsVisible)[activeTab]}
           </div>
+        </div>
         </div>
       </div>
     </section>

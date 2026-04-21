@@ -8,10 +8,13 @@ This file is the Agent's memory between sessions.
 ---
 
 ## Current Status
-**Phase:** 13 — Auto-GTM Layer + Sidebar Redesign
-**Last updated:** April 19, 2026
+**Phase:** 14 — Public Blog System
+**Last updated:** April 20, 2026
 
-### Latest Session (April 19 2026)
+### Latest Session (April 20 2026)
+- Shipped the public blog system per `BLOG_SETUP_PROMPT.md`. Migration `017_blog_posts.sql` creates `blog_posts` + `blog_views` with RLS (public reads on `published = true`, authors manage own rows) and an `increment_blog_view_count(p_post_id)` SECURITY DEFINER RPC so anonymous visitors can bump the counter without UPDATE privileges. Added `lib/schemas/blog.ts` (input/row/summary Zod shapes), `lib/queries/blog-queries.ts` (Supabase list/detail/related/view helpers), three API routes under `/api/blog/posts`, `/blog` listing + `/blog/[slug]` detail pages using Next 16 `params: Promise<...>`. Added `BlogCard` + `BlogMeta` (JSON-LD `BlogPosting` + metadata helpers) and lightweight `format-date.ts` (skips adding `date-fns`). Added `.blog-content` typography block in `globals.css` since `@tailwindcss/typography` isn't installed. Seeded 3 launch posts via `db/seeds/blog-posts.sql` (idempotent via `ON CONFLICT (slug)`). `npx tsc --noEmit` clean.
+
+### Previous Session (April 19 2026)
 - Added Campaigns as a full sidebar module + venture tab (shared `VentureHeader`, `?tab=` deep link, Suspense boundary for `useSearchParams`). Fixed `/api/ventures/[id]` response-shape bug and cross-venture URL-tamper guard on the detail page. Switched `CampaignDetail` auto-poll from `POST /poll-replies` to `GET` (cheap read path). Hoisted `const sendInput = input.data` in `app/api/campaigns/[id]/send/route.ts` so nested closures carry the narrowed Zod type.
 - Fixed RLS violation on `createCampaign` — migration `015_campaign_rls.sql` enables RLS and adds policies for `campaigns`, `campaign_leads`, `campaign_analytics`, `campaign_replies`, `gmail_integrations`, `rate_limit_events` matching the `009_marketing_automation.sql` pattern (direct-owned rows gate on `auth.uid() = <owner>`, child rows gate via `EXISTS` on the parent campaign).
 

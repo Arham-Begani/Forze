@@ -1327,6 +1327,23 @@ button, a {
 }
 
 /* ─── Landing Page Mobile Overrides ────────────────────────────────────── */
+
+/* Hero section: proper viewport height that doesn't resize on iOS scroll */
+.hero-section {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Typewriter line: always reserve 2 lines on mobile to prevent layout jumps */
+.hero-typewriter-line {
+  min-height: 2.2em;
+}
+@media (min-width: 768px) {
+  .hero-typewriter-line {
+    min-height: 1.2em;
+  }
+}
+
 @media (max-width: 640px) {
   /* OutputTabs tab bar: scroll horizontally instead of wrapping */
   #features .flex-wrap {
@@ -1344,3 +1361,91 @@ button, a {
 .surgical-spin {
   animation: surgical-spin 800ms linear infinite;
 }
+
+/* ─── Blog content typography (no @tailwindcss/typography installed) ─────────── */
+.blog-content {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+.blog-content h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  color: inherit;
+  letter-spacing: -0.01em;
+}
+.blog-content h3 {
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  color: inherit;
+}
+.blog-content h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.blog-content p {
+  margin-bottom: 1.25rem;
+}
+.blog-content ul,
+.blog-content ol {
+  margin: 0 0 1.25rem 1.5rem;
+  padding-left: 1rem;
+}
+.blog-content ul { list-style: disc; }
+.blog-content ol { list-style: decimal; }
+.blog-content li { margin-bottom: 0.5rem; }
+.blog-content a {
+  color: #c07a3a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dark .blog-content a { color: #d4924a; }
+.blog-content strong { font-weight: 600; }
+.blog-content em { font-style: italic; }
+.blog-content blockquote {
+  border-left: 3px solid #c07a3a;
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: inherit;
+  opacity: 0.9;
+}
+.dark .blog-content blockquote { border-left-color: #d4924a; }
+.blog-content code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9em;
+  background: rgba(192, 122, 58, 0.10);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+}
+.blog-content pre {
+  font-family: var(--font-mono, monospace);
+  background: #111110;
+  color: #faf9f6;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+.blog-content pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.blog-content img {
+  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  max-width: 100%;
+  height: auto;
+}
+.blog-content hr {
+  margin: 2rem 0;
+  border: 0;
+  border-top: 1px solid #e8e4dc;
+}
+.dark .blog-content hr { border-top-color: #272523; }

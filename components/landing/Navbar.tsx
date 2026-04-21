@@ -241,19 +241,35 @@ export function Navbar() {
         <button
           className="show-mobile"
           onClick={() => setMobileOpen(o => !o)}
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           style={{
             marginLeft: 'auto',
-            background: 'none',
+            background: 'transparent',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-sm)',
-            padding: '6px 10px',
+            padding: '0',
             cursor: 'pointer',
             color: 'var(--text)',
-            fontSize: '18px',
-            lineHeight: 1,
+            width: '38px',
+            height: '38px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            transition: 'border-color var(--transition-fast)',
           }}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
         >
-          {mobileOpen ? 'X' : '≡'}
+          {mobileOpen ? (
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          )}
         </button>
       </nav>
 
@@ -267,34 +283,93 @@ export function Navbar() {
           WebkitBackdropFilter: 'blur(var(--glass-blur-strong))',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '24px',
-          paddingTop: '64px',
+          overflowY: 'auto',
         }}>
-          {navLinks.map(link => (
+          {/* Header row */}
+          <div style={{
+            height: '64px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 20px',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-dm-sans), sans-serif',
+              fontWeight: 700,
+              fontSize: '16px',
+              letterSpacing: '0.12em',
+              color: 'var(--text)',
+            }}>FORZE</span>
             <button
-              key={link.id}
-              onClick={() => scrollTo(link.id)}
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
               style={{
-                background: 'none',
-                border: 'none',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                width: '38px',
+                height: '38px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
-                fontSize: '24px',
-                fontWeight: 600,
                 color: 'var(--text)',
-                fontFamily: 'var(--font-dm-sans), sans-serif',
               }}
             >
-              {link.label}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
             </button>
-          ))}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '220px', marginTop: '16px' }}>
+          </div>
+
+          {/* Nav links */}
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '12px 8px',
+          }}>
+            {navLinks.map(link => (
+              <button
+                key={link.id}
+                onClick={() => scrollTo(link.id)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  fontFamily: 'var(--font-dm-sans), sans-serif',
+                  padding: '16px 12px',
+                  textAlign: 'left',
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'background var(--transition-fast)',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-soft)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                {link.label}
+              </button>
+            ))}
+          </div>
+
+          {/* CTA buttons */}
+          <div style={{
+            padding: '20px',
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            flexShrink: 0,
+          }}>
             {isLoggedIn ? (
               <button
                 onClick={() => { setMobileOpen(false); router.push('/dashboard') }}
                 style={{
-                  padding: '12px 24px',
+                  padding: '14px 24px',
                   borderRadius: 'var(--radius-md)',
                   background: 'var(--accent)',
                   color: '#fff',
@@ -303,6 +378,7 @@ export function Navbar() {
                   fontSize: '16px',
                   fontWeight: 600,
                   fontFamily: 'var(--font-dm-sans), sans-serif',
+                  width: '100%',
                 }}
               >
                 Dashboard {'->'}
@@ -310,25 +386,9 @@ export function Navbar() {
             ) : (
               <>
                 <button
-                  onClick={() => { setMobileOpen(false); router.push('/signin') }}
-                  style={{
-                    padding: '12px 24px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'transparent',
-                    color: 'var(--text)',
-                    border: '1px solid var(--border)',
-                    cursor: 'pointer',
-                    fontSize: '16px',
-                    fontWeight: 500,
-                    fontFamily: 'var(--font-dm-sans), sans-serif',
-                  }}
-                >
-                  Sign in
-                </button>
-                <button
                   onClick={() => { setMobileOpen(false); router.push('/signup') }}
                   style={{
-                    padding: '12px 24px',
+                    padding: '14px 24px',
                     borderRadius: 'var(--radius-md)',
                     background: 'var(--accent)',
                     color: '#fff',
@@ -337,9 +397,28 @@ export function Navbar() {
                     fontSize: '16px',
                     fontWeight: 600,
                     fontFamily: 'var(--font-dm-sans), sans-serif',
+                    width: '100%',
+                    boxShadow: 'var(--shadow-accent)',
                   }}
                 >
-                  Start Validating
+                  Start Validating Free
+                </button>
+                <button
+                  onClick={() => { setMobileOpen(false); router.push('/signin') }}
+                  style={{
+                    padding: '14px 24px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'transparent',
+                    color: 'var(--text)',
+                    border: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: 500,
+                    fontFamily: 'var(--font-dm-sans), sans-serif',
+                    width: '100%',
+                  }}
+                >
+                  Sign in
                 </button>
               </>
             )}
@@ -348,11 +427,14 @@ export function Navbar() {
       )}
 
       <style>{`
-        @media (max-width: 768px) {
+        @media (max-width: 1023px) {
           .hide-mobile { display: none !important; }
         }
-        @media (min-width: 769px) {
+        @media (min-width: 1024px) {
           .show-mobile { display: none !important; }
+        }
+        @media (max-width: 1023px) {
+          nav { padding: 0 1rem !important; }
         }
       `}</style>
     </>

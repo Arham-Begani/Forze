@@ -146,14 +146,22 @@ export default function AdminAnalyticsPage() {
             Platform-wide analytics {platform.timezone ? `· ${platform.timezone}` : ''}
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={loadData}
-          style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--glass-bg)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-        >
-          Refresh
-        </motion.button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <a
+            href='/dashboard/admin/blog'
+            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--glass-bg)', color: 'var(--text)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}
+          >
+            Blog
+          </a>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={loadData}
+            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--glass-bg)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Refresh
+          </motion.button>
+        </div>
       </div>
 
       {data.warnings && data.warnings.length > 0 && (
