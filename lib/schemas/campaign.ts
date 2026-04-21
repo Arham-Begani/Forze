@@ -9,7 +9,7 @@ export const CampaignSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().nullable().optional(),
   status: z.enum(['draft', 'active', 'paused', 'completed', 'archived']),
-  data_source: z.enum(['youtube', 'twitter', 'linkedin', 'manual', 'subreddit']),
+  data_source: z.enum(['youtube', 'twitter', 'linkedin', 'manual', 'subreddit', 'direct']),
   data_source_config: z.record(z.unknown()).optional().default({}),
   target_count: z.number().int().min(0).optional(),
   subject_line: z.string().nullable().optional(),
@@ -108,8 +108,22 @@ export const CreateCampaignSchema = z.object({
   venture_id: z.string().uuid(),
   name: z.string().min(1).max(200),
   description: z.string().optional(),
-  data_source: z.enum(['youtube', 'twitter', 'linkedin', 'manual', 'subreddit']).default('manual'),
+  data_source: z.enum(['youtube', 'twitter', 'linkedin', 'manual', 'subreddit', 'direct']).default('manual'),
   data_source_config: z.record(z.unknown()).optional().default({}),
+})
+
+// Direct Mail — the "mail anyone" channel. Accepts just an email per row;
+// the API route will derive a display first name when the caller omits it.
+export const UploadDirectRecipientsSchema = z.object({
+  recipients: z
+    .array(
+      z.object({
+        email: z.string().email(),
+        first_name: z.string().min(1).max(100).optional(),
+      })
+    )
+    .min(1)
+    .max(2000),
 })
 
 export const UpdateCampaignSchema = z.object({
@@ -175,6 +189,7 @@ export type CreateCampaignInput = z.infer<typeof CreateCampaignSchema>
 export type UpdateCampaignInput = z.infer<typeof UpdateCampaignSchema>
 export type SendCampaignInput = z.infer<typeof SendCampaignSchema>
 export type UploadLeadsInput = z.infer<typeof UploadLeadsSchema>
+export type UploadDirectRecipientsInput = z.infer<typeof UploadDirectRecipientsSchema>
 export type GenerateEmailInput = z.infer<typeof GenerateEmailSchema>
 
 export interface GeneratedEmail {
