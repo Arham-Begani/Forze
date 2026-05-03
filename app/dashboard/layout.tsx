@@ -42,7 +42,6 @@ interface VentureItem {
 
 const MODULES = [
   { id: 'full-launch',  label: 'Full Launch',  icon: '⬡', accent: '#C4975A' },
-  { id: 'launch-autopilot', label: 'Launch Autopilot', icon: '▶', accent: '#B8864E' },
   { id: 'research',     label: 'Research',     icon: '◎', accent: '#5A8C6E' },
   { id: 'branding',     label: 'Branding',     icon: '◇', accent: '#5A6E8C' },
   { id: 'marketing',    label: 'Marketing',    icon: '▲', accent: '#8C5A7A' },
@@ -50,15 +49,13 @@ const MODULES = [
   { id: 'feasibility',  label: 'Feasibility',  icon: '◈', accent: '#7A5A8C' },
   { id: 'general',      label: 'Co-pilot',     icon: '◉', accent: '#6B8F71' },
   { id: 'shadow-board', label: 'Shadow Board', icon: '⚔', accent: '#E04848' },
-  { id: 'investor-kit', label: 'Investor Kit', icon: '■', accent: '#7A8C5A' },
-  { id: 'mvp-scalpel',  label: 'MVP Scalpel',  icon: '✂', accent: '#C45A5A' },
   { id: 'campaigns',    label: 'Campaigns',    icon: '✉', accent: '#C07A3A' },
 ] as const
 
 const MODULE_GROUPS = [
-  { label: 'LAUNCH', ids: ['full-launch', 'launch-autopilot'] },
+  { label: 'LAUNCH', ids: ['full-launch'] },
   { label: 'AGENTS', ids: ['research', 'branding', 'marketing', 'landing', 'feasibility'] },
-  { label: 'TOOLS',  ids: ['general', 'shadow-board', 'investor-kit', 'mvp-scalpel'] },
+  { label: 'TOOLS',  ids: ['general', 'shadow-board'] },
   { label: 'OUTREACH', ids: ['campaigns'] },
 ] as const
 

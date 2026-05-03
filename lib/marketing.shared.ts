@@ -1,12 +1,12 @@
 import type { PlanSlug } from '@/lib/billing'
 
-export const SOCIAL_PROVIDERS = ['youtube', 'linkedin'] as const
+export const SOCIAL_PROVIDERS = ['youtube', 'linkedin', 'instagram'] as const
 export type SocialProvider = typeof SOCIAL_PROVIDERS[number]
 
 export const CONNECTION_STATUSES = ['active', 'expired', 'revoked', 'reauth_required'] as const
 export type ConnectionStatus = typeof CONNECTION_STATUSES[number]
 
-export const MARKETING_ASSET_TYPES = ['youtube_video', 'linkedin_post'] as const
+export const MARKETING_ASSET_TYPES = ['youtube_video', 'linkedin_post', 'instagram_post'] as const
 export type MarketingAssetType = typeof MARKETING_ASSET_TYPES[number]
 
 export const MARKETING_ASSET_STATUSES = [

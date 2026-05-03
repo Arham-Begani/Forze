@@ -343,6 +343,26 @@ export async function getMarketingAssetByIdAdmin(assetId: string, db?: DbClient)
   return data ? normalizeAsset(data as MarketingAsset) : null
 }
 
+export async function deleteMarketingAsset(
+  assetId: string,
+  userId: string,
+  db?: DbClient
+): Promise<void> {
+  const client = await resolveDb(db)
+
+  // Cancel any in-flight publish jobs first so a queued worker doesn't
+  // resurrect the post against an already-deleted asset_id.
+  await cancelPublishJobsForAsset(assetId, userId, client).catch(() => null)
+
+  const { error } = await client
+    .from('marketing_assets')
+    .delete()
+    .eq('id', assetId)
+    .eq('user_id', userId)
+
+  if (error) throw new Error(`deleteMarketingAsset failed: ${error.message}`)
+}
+
 export async function updateMarketingAsset(
   assetId: string,
   userId: string,

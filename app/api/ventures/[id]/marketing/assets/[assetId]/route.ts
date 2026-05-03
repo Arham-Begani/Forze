@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { marketingErrorResponse, requireMarketingVenture } from '@/lib/marketing-api'
-import { createOrReplaceQueuedPublishJob, getMarketingAssetById, updateMarketingAsset } from '@/lib/marketing-queries'
+import {
+  createOrReplaceQueuedPublishJob,
+  deleteMarketingAsset,
+  getMarketingAssetById,
+  updateMarketingAsset,
+} from '@/lib/marketing-queries'
 import { NextRequest, NextResponse } from 'next/server'
 
 const bodySchema = z.object({
@@ -43,6 +48,26 @@ export async function PATCH(
     }
 
     return NextResponse.json({ asset: updated })
+  } catch (error) {
+    return marketingErrorResponse(error)
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; assetId: string }> }
+) {
+  try {
+    const { id, assetId } = await params
+    const { session } = await requireMarketingVenture(id)
+
+    const asset = await getMarketingAssetById(assetId, session.userId, id)
+    if (!asset) {
+      return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
+    }
+
+    await deleteMarketingAsset(asset.id, session.userId)
+    return NextResponse.json({ ok: true })
   } catch (error) {
     return marketingErrorResponse(error)
   }

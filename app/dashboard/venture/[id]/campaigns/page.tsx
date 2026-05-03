@@ -6,6 +6,7 @@ import { CampaignList } from '@/components/venture/CampaignList'
 import { CreateCampaignFlow } from '@/components/venture/CreateCampaignFlow'
 import { DirectMailFlow } from '@/components/venture/DirectMailFlow'
 import { VentureHeader } from '@/components/venture/VentureHeader'
+import { ConnectedChannelsPanel } from '@/components/marketing/ConnectedChannelsPanel'
 import type { Campaign } from '@/lib/schemas/campaign'
 
 type VentureSummary = {
@@ -21,7 +22,7 @@ export default function CampaignsPage() {
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [view, setView] = useState<'list' | 'create' | 'direct'>('list')
-  const [tab, setTab] = useState<'campaigns' | 'direct'>('campaigns')
+  const [tab, setTab] = useState<'campaigns' | 'direct' | 'social'>('campaigns')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [venture, setVenture] = useState<VentureSummary | null>(null)
@@ -160,6 +161,16 @@ export default function CampaignsPage() {
                 >
                   Direct Mail
                 </button>
+                <button
+                  onClick={() => setTab('social')}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    tab === 'social'
+                      ? 'bg-[var(--accent)] text-white'
+                      : 'text-[var(--text-soft)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  Social
+                </button>
               </div>
 
               {tab === 'campaigns' ? (
@@ -171,7 +182,7 @@ export default function CampaignsPage() {
                   onDelete={handleDelete}
                   onArchive={handleArchive}
                 />
-              ) : (
+              ) : tab === 'direct' ? (
                 <DirectMailPanel
                   ventureId={ventureId}
                   campaigns={campaigns.filter((c) => c.data_source === 'direct')}
@@ -179,6 +190,12 @@ export default function CampaignsPage() {
                   onCompose={() => setView('direct')}
                   onDelete={handleDelete}
                   onArchive={handleArchive}
+                />
+              ) : (
+                <ConnectedChannelsPanel
+                  ventureId={ventureId}
+                  ventureName={ventureName}
+                  billing={null}
                 />
               )}
             </div>

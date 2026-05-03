@@ -150,6 +150,128 @@ export function buildLinkedInDraftSeeds(
   }]
 }
 
+// Keep raw paragraph breaks if the caption already uses them — Instagram readers
+// scan, they don't read walls of text.
+function preserveParagraphs(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value
+    .replace(/\r\n/g, '\n')
+    .split(/\n{2,}/)
+    .map((para) => para.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function extractInstagramHook(entry: unknown): string {
+  const record = asObject(entry)
+  return cleanText(firstString(record?.hook, record?.headline, record?.title))
+}
+
+function extractInstagramCta(entry: unknown): string {
+  const record = asObject(entry)
+  return cleanText(firstString(record?.cta, record?.callToAction, record?.ctaText))
+}
+
+function composeInstagramCaption(
+  hook: string,
+  rawText: string,
+  cta: string,
+  hashtags: string[],
+  ventureName: string
+): string {
+  const paragraphs = preserveParagraphs(rawText) || cleanText(rawText)
+
+  // Avoid duplicating the hook if it's already the opening sentence.
+  const opening = (() => {
+    if (!hook) return ''
+    const head = paragraphs.split(/\n|\.\s/)[0] ?? ''
+    if (head && head.toLowerCase().includes(hook.toLowerCase().slice(0, Math.min(24, hook.length)))) {
+      return ''
+    }
+    return hook.endsWith('.') || hook.endsWith('?') || hook.endsWith('!') ? hook : `${hook}.`
+  })()
+
+  const closing = cta
+    ? cta
+    : `Follow @${ventureName.replace(/[^a-zA-Z0-9_]+/g, '').toLowerCase()} for more.`
+
+  const sections = [opening, paragraphs, closing, hashtags.join(' ')]
+    .map((section) => section.trim())
+    .filter(Boolean)
+
+  return sections.join('\n\n')
+}
+
+export function buildInstagramDraftSeeds(
+  ventureName: string,
+  marketing: Record<string, unknown> | null | undefined,
+  limit = 10
+): CreateMarketingAssetSeed[] {
+  const socialCalendar = asArray(marketing?.socialCalendar)
+  const hashtagStrategy = asObject(marketing?.hashtagStrategy)
+  const igGlobalHashtags = normalizeHashtags(hashtagStrategy?.instagram)
+
+  const buildSeed = (entry: unknown, index: number): CreateMarketingAssetSeed | null => {
+    const text = extractSocialPostText(entry)
+    if (!text) return null
+
+    const entryHashtags = normalizeHashtags(asObject(entry)?.hashtags)
+    const allHashtags = [...new Set([...entryHashtags, ...igGlobalHashtags])].slice(0, 30)
+
+    const hook = extractInstagramHook(entry)
+    const cta = extractInstagramCta(entry)
+    const composedBody = composeInstagramCaption(hook, text, cta, allHashtags, ventureName)
+
+    const title = truncate(
+      firstString(hook, asObject(entry)?.title, composedBody, `${ventureName} Instagram post ${index + 1}`),
+      90
+    )
+
+    return {
+      provider: 'instagram' as const,
+      assetType: 'instagram_post' as const,
+      title,
+      body: composedBody,
+      payload: {
+        hashtags: allHashtags,
+        ventureName,
+      },
+    }
+  }
+
+  const igEntries = socialCalendar.filter((entry) => asObject(entry)?.platform === 'instagram')
+  let seeds = igEntries.map(buildSeed).filter(Boolean).slice(0, limit) as CreateMarketingAssetSeed[]
+
+  if (seeds.length === 0 && socialCalendar.length > 0) {
+    seeds = socialCalendar.map(buildSeed).filter(Boolean).slice(0, limit) as CreateMarketingAssetSeed[]
+  }
+
+  if (seeds.length > 0) return seeds
+
+  const overview = extractMarketingOverview(marketing)
+  if (!overview) return []
+
+  const fallbackHashtags = igGlobalHashtags.slice(0, 30)
+  const composedBody = composeInstagramCaption(
+    `Meet ${ventureName}.`,
+    overview,
+    `Curious? Tap the link in bio to learn more.`,
+    fallbackHashtags,
+    ventureName
+  )
+
+  return [{
+    provider: 'instagram',
+    assetType: 'instagram_post',
+    title: truncate(`Meet ${ventureName}`, 90),
+    body: composedBody,
+    payload: {
+      hashtags: fallbackHashtags,
+      ventureName,
+    },
+  }]
+}
+
 export function buildYouTubeDraftSeed(
   ventureName: string,
   marketing: Record<string, unknown> | null | undefined

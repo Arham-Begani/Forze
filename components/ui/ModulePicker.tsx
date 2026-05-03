@@ -11,10 +11,7 @@ export type ModuleId =
   | "landing"
   | "feasibility"
   | "general"
-  | "shadow-board"
-  | "launch-autopilot"
-  | "mvp-scalpel"
-  | "investor-kit";
+  | "shadow-board";
 
 export interface ModuleDefinition {
   id: ModuleId;
@@ -25,9 +22,9 @@ export interface ModuleDefinition {
 }
 
 const MODULE_GROUPS: { label: string; ids: ModuleId[] }[] = [
-  { label: "LAUNCH", ids: ["full-launch", "launch-autopilot"] },
+  { label: "LAUNCH", ids: ["full-launch"] },
   { label: "AGENTS", ids: ["research", "branding", "marketing", "landing", "feasibility"] },
-  { label: "TOOLS", ids: ["general", "shadow-board", "mvp-scalpel", "investor-kit"] },
+  { label: "TOOLS", ids: ["general", "shadow-board"] },
 ];
 
 export const MODULES: Record<ModuleId, ModuleDefinition> = {
@@ -39,9 +36,6 @@ export const MODULES: Record<ModuleId, ModuleDefinition> = {
   "feasibility": { id: "feasibility", icon: "F", label: "Feasibility", accent: "#7A5A8C", description: "Investor-grade verdict" },
   "general": { id: "general", icon: "CP", label: "Co-pilot", accent: "#6B8F71", description: "Ask across all outputs" },
   "shadow-board": { id: "shadow-board", icon: "SB", label: "Shadow Board", accent: "#E04848", description: "Stress-test assumptions" },
-  "launch-autopilot": { id: "launch-autopilot", icon: "LA", label: "Launch Autopilot", accent: "#B8864E", description: "14-day launch execution" },
-  "mvp-scalpel": { id: "mvp-scalpel", icon: "MVP", label: "MVP Scalpel", accent: "#C45A5A", description: "Smallest testable wedge" },
-  "investor-kit": { id: "investor-kit", icon: "IK", label: "Investor Kit", accent: "#7A8C5A", description: "Deck, memo, data room" },
 };
 
 export interface ModulePickerProps {

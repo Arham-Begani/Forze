@@ -17,6 +17,18 @@ const LINKEDIN_SCOPES = [
   'w_member_social',
 ]
 
+const META_SCOPES = [
+  'instagram_business_basic',
+  'instagram_business_content_publish',
+  // Required to read comments via /{media-id}/comments — without this the
+  // validation analyzer sees commentsCount > 0 but an empty comments array.
+  'instagram_business_manage_comments',
+]
+
+function stringValueOrEmpty(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export interface PendingOAuthState {
   state: string
   provider: SocialProvider
@@ -56,6 +68,18 @@ function getLinkedInClientId(): string {
 function getLinkedInClientSecret(): string {
   const value = process.env.LINKEDIN_CLIENT_SECRET
   if (!value) throw new Error('LINKEDIN_CLIENT_SECRET is required for LinkedIn integration')
+  return value
+}
+
+function getMetaClientId(): string {
+  const value = process.env.META_CLIENT_ID
+  if (!value) throw new Error('META_CLIENT_ID is required for Instagram integration')
+  return value
+}
+
+function getMetaClientSecret(): string {
+  const value = process.env.META_CLIENT_SECRET
+  if (!value) throw new Error('META_CLIENT_SECRET is required for Instagram integration')
   return value
 }
 
@@ -123,6 +147,13 @@ export function buildProviderAuthorizationUrl(provider: SocialProvider, input: {
     params.set('prompt', 'consent')
     params.set('scope', GOOGLE_SCOPES.join(' '))
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+  }
+
+  if (provider === 'instagram') {
+    params.set('client_id', getMetaClientId())
+    params.set('scope', META_SCOPES.join(','))
+    // Instagram Login flow (not Facebook Login)
+    return `https://www.instagram.com/oauth/authorize?${params.toString()}`
   }
 
   params.set('client_id', getLinkedInClientId())
@@ -197,6 +228,104 @@ export async function exchangeProviderCode(provider: SocialProvider, input: {
       metadata: {
         email: typeof profileData.email === 'string' ? profileData.email : null,
         picture: typeof profileData.picture === 'string' ? profileData.picture : null,
+      },
+    }
+  }
+
+  if (provider === 'instagram') {
+    // Step 1: short-lived token via Instagram Basic Display / Login flow
+    const shortTokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: getMetaClientId(),
+        client_secret: getMetaClientSecret(),
+        grant_type: 'authorization_code',
+        redirect_uri: input.redirectUri,
+        code: input.code,
+      }),
+    })
+
+    const shortTokenData = await parseJson<{
+      access_token?: string
+      user_id?: string | number
+      permissions?: string[]
+      error_message?: string
+      error_type?: string
+    }>(shortTokenRes)
+
+    if (!shortTokenRes.ok || !shortTokenData.access_token) {
+      throw new Error(shortTokenData.error_message || shortTokenData.error_type || 'Instagram token exchange failed')
+    }
+
+    // Step 2: exchange short-lived for long-lived (60-day) token
+    const longTokenRes = await fetch(
+      `https://graph.instagram.com/access_token?` +
+        new URLSearchParams({
+          grant_type: 'ig_exchange_token',
+          client_secret: getMetaClientSecret(),
+          access_token: shortTokenData.access_token,
+        }).toString()
+    )
+
+    const longTokenData = await parseJson<{
+      access_token?: string
+      expires_in?: number
+      error?: { message?: string }
+    }>(longTokenRes)
+
+    if (!longTokenRes.ok || !longTokenData.access_token) {
+      throw new Error(longTokenData.error?.message || 'Failed to upgrade Instagram token to long-lived')
+    }
+
+    // Step 3: resolve canonical IG Graph user_id from /me — the user_id returned
+    // by graph.instagram.com/{id}/media — using it produces error_subcode 33.
+    const profileRes = await fetch(
+      `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,account_type&access_token=${longTokenData.access_token}`
+    )
+    const igProfile = await parseJson<{
+      id?: string
+      user_id?: string
+      username?: string
+      name?: string
+      account_type?: string
+      error?: { message?: string }
+    }>(profileRes)
+
+    if (!profileRes.ok) {
+      throw new Error(igProfile.error?.message ?? 'Failed to fetch Instagram profile')
+    }
+
+    const instagramUserId = stringValueOrEmpty(igProfile.user_id)
+    const instagramScopedId = stringValueOrEmpty(igProfile.id)
+    const providerAccountId =
+      instagramUserId ||
+      instagramScopedId ||
+      String(shortTokenData.user_id ?? '')
+
+    if (!providerAccountId) {
+      throw new Error('Instagram profile response is missing a user identifier')
+    }
+
+    const username = stringValueOrEmpty(igProfile.username)
+    const displayName = stringValueOrEmpty(igProfile.name)
+    const providerAccountLabel = username ? `@${username}` : displayName || 'Instagram account'
+
+    return {
+      accessToken: longTokenData.access_token,
+      refreshToken: null,
+      expiresIn: typeof longTokenData.expires_in === 'number' ? longTokenData.expires_in : null,
+      scopes: Array.isArray(shortTokenData.permissions) && shortTokenData.permissions.length > 0
+        ? shortTokenData.permissions
+        : META_SCOPES,
+      providerAccountId,
+      providerAccountLabel,
+      metadata: {
+        username: username || null,
+        displayName: displayName || null,
+        accountType: stringValueOrEmpty(igProfile.account_type) || null,
+        igUserId: instagramUserId || null,
+        igScopedId: instagramScopedId || null,
       },
     }
   }

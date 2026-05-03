@@ -30,9 +30,6 @@ const MODULES = [
   { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', description: 'Financial model, risk matrix, GO/NO-GO verdict', agentName: 'Feasibility' },
   { id: 'general', label: 'Co-pilot', accent: '#6B8F71', description: 'Your venture-aware co-founder — knows your data, competitors, financials', agentName: 'Co-pilot' },
   { id: 'shadow-board', label: 'Shadow Board', accent: '#E04848', description: 'Silicon board of directors — stress-test your venture from every angle', agentName: 'Shadow Board' },
-  { id: 'launch-autopilot', label: 'Launch Autopilot', accent: '#B8864E', description: '14-day launch calendar with exact copy to paste — just execute', agentName: 'Autopilot' },
-  { id: 'mvp-scalpel', label: 'MVP Scalpel', accent: '#C45A5A', description: 'Cut features ruthlessly — kill list, skeleton MVP, weekend build spec', agentName: 'Scalpel' },
-  { id: 'investor-kit', label: 'Investor Kit', accent: '#7A8C5A', description: 'Pitch deck, memo, raise narrative, and data room structure', agentName: 'Investor Kit' },
 ] as const
 
 type ModuleId = typeof MODULES[number]['id']
@@ -67,9 +64,6 @@ const SUGGESTIONS: Record<string, [string, string]> = {
   'feasibility': ['Run a detailed financial and risk analysis', 'Stress test the business model and scalability'],
   'general': ["What's my biggest competitive risk?", 'Write me a cold email to investors'],
   'shadow-board': ['Run a full board review of my venture strategy', 'Challenge my assumptions from investor and operator perspectives'],
-  'launch-autopilot': ['Generate my 14-day launch execution plan', 'Build a paste-ready launch calendar for all channels'],
-  'mvp-scalpel': ['Cut my feature list down to a shippable weekend MVP', 'Tell me what NOT to build and how to get first dollar fast'],
-  'investor-kit': ['Turn this venture into a pitchable investor narrative', 'Build the deck outline, memo, and fundraise ask'],
 }
 
 // ─── Full Launch agent rows ───────────────────────────────────────────────────
@@ -88,10 +82,7 @@ const NEXT_STEP_MAP: Partial<Record<ModuleId, { nextModuleId: ModuleId; descript
   marketing: { nextModuleId: 'landing', description: 'See your copy on a live page' },
   landing: { nextModuleId: 'feasibility', description: 'Now stress-test the business model' },
   feasibility: { nextModuleId: 'shadow-board', description: "Get your Shadow Board's verdict" },
-  'shadow-board': { nextModuleId: 'investor-kit', description: 'Turn this into a pitch' },
   'full-launch': { nextModuleId: 'shadow-board', description: 'Pressure-test your results' },
-  'investor-kit': { nextModuleId: 'launch-autopilot', description: 'Now plan the launch' },
-  'launch-autopilot': { nextModuleId: 'mvp-scalpel', description: 'Cut the MVP to the bone' },
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1069,25 +1060,7 @@ export default function ModulePage() {
             <ModuleIconSvg id={activeModule} size={18} />
           </motion.div>
           <div>
-            {ventureProjectId && (
-              <button
-                type="button"
-                onClick={() => router.push(`/dashboard/project/${ventureProjectId}`)}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  padding: 0,
-                  fontSize: 10,
-                  color: 'var(--muted)',
-                  cursor: 'pointer',
-                  marginBottom: 4,
-                  letterSpacing: '0.04em',
-                }}
-              >
-                &larr; Project
-              </button>
-            )}
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
               {mod.label}
             </div>
             <button
@@ -1097,11 +1070,13 @@ export default function ModulePage() {
                 border: 'none',
                 background: 'transparent',
                 padding: 0,
-                fontSize: 11,
+                fontSize: 10,
                 color: 'var(--muted)',
-                marginTop: 2,
+                marginTop: 1,
                 letterSpacing: '0.01em',
                 cursor: 'pointer',
+                display: 'block',
+                textAlign: 'left'
               }}
             >
               {ventureName}

@@ -44,7 +44,9 @@
       "Bash(do if:*)",
       "Bash(! grep:*)",
       "Bash(then echo:*)",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git fsck *)",
+      "Bash(git ls-tree *)"
     ]
   }
 }
