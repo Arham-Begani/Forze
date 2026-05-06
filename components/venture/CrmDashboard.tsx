@@ -1,20 +1,118 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useToast } from '@/components/ui/Toast'
+import type { SocialConnection, SocialProvider } from '@/lib/marketing.shared'
 
 interface CrmDashboardProps {
   ventureId: string
   ventureName: string
 }
 
-export function CrmDashboard({ ventureId: _ventureId, ventureName }: CrmDashboardProps) {
+type TabId = 'inbox' | 'leads' | 'pipeline'
+
+type GmailUI = {
+  connected: boolean
+  email: string | null
+  canSend: boolean
+  state: 'not_connected' | 'active' | 'needs_reauth' | 'error' | 'disconnected'
+  errorMessage: string | null
+}
+
+type ChannelKey = SocialProvider | 'gmail' | 'reddit' | 'telegram'
+
+interface ChannelDescriptor {
+  key: ChannelKey
+  label: string
+  comingSoon?: boolean
+}
+
+const CHANNELS: ChannelDescriptor[] = [
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'gmail', label: 'Gmail' },
+  { key: 'reddit', label: 'Reddit', comingSoon: true },
+  { key: 'telegram', label: 'Telegram', comingSoon: true },
+]
+
+function statusColor(status: string | null | undefined): string {
+  switch (status) {
+    case 'active':
+      return '#16a34a'
+    case 'reauth_required':
+    case 'needs_reauth':
+      return '#d97706'
+    case 'expired':
+    case 'revoked':
+    case 'error':
+      return '#dc2626'
+    default:
+      return '#6b7280'
+  }
+}
+
+export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
+  const toast = useToast()
   const [mounted, setMounted] = useState(false)
+  const [tab, setTab] = useState<TabId>('inbox')
+  const [connections, setConnections] = useState<SocialConnection[]>([])
+  const [gmail, setGmail] = useState<GmailUI | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const [socialRes, gmailRes] = await Promise.all([
+          fetch('/api/integrations'),
+          fetch('/api/integrations/gmail'),
+        ])
+        if (!cancelled && socialRes.ok) {
+          const data = (await socialRes.json()) as { connections: SocialConnection[] }
+          setConnections(data.connections ?? [])
+        }
+        if (!cancelled && gmailRes.ok) {
+          const d = (await gmailRes.json()) as GmailUI
+          setGmail({
+            connected: Boolean(d.connected),
+            email: d.email ?? null,
+            canSend: Boolean(d.canSend),
+            state: d.state ?? (d.connected ? 'active' : 'not_connected'),
+            errorMessage: d.errorMessage ?? null,
+          })
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [ventureId])
+
   if (!mounted) return null
+
+  function pillStatus(channel: ChannelDescriptor): { label: string; color: string } {
+    if (channel.comingSoon) return { label: 'Coming soon', color: '#6b7280' }
+    if (channel.key === 'gmail') {
+      if (!gmail) return { label: 'Loading…', color: '#6b7280' }
+      if (gmail.connected) return { label: 'Connected', color: statusColor('active') }
+      if (gmail.state === 'needs_reauth') return { label: 'Reconnect', color: statusColor('reauth_required') }
+      return { label: 'Not connected', color: '#6b7280' }
+    }
+    const conn = connections.find((c) => c.provider === channel.key)
+    if (!conn) return { label: 'Not connected', color: '#6b7280' }
+    return { label: conn.status.replace('_', ' '), color: statusColor(conn.status) }
+  }
+
+  function handleComingSoon(label: string) {
+    toast.info(`${label} CRM is on the roadmap — connection coming soon.`)
+  }
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px 48px' }}>
@@ -32,16 +130,136 @@ export function CrmDashboard({ ventureId: _ventureId, ventureName }: CrmDashboar
           Inbound signal from every connected channel — comments, replies, and threads — aggregated into one inbox, deduplicated into leads, and tracked through your outreach pipeline.
         </div>
       </div>
+
       <div style={{
-        border: '1px dashed var(--border)',
-        background: 'var(--sidebar)',
-        borderRadius: 14,
-        padding: '24px 20px',
-        fontSize: 13,
-        color: 'var(--muted)',
+        display: 'flex', gap: 8, flexWrap: 'wrap',
+        marginBottom: 20,
       }}>
-        Loading CRM modules…
+        {CHANNELS.map((channel) => {
+          const { label, color } = pillStatus(channel)
+          const interactive = Boolean(channel.comingSoon)
+          return (
+            <button
+              key={channel.key}
+              type="button"
+              onClick={interactive ? () => handleComingSoon(channel.label) : undefined}
+              disabled={!interactive}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px',
+                borderRadius: 999,
+                border: `1px solid ${color}30`,
+                background: `${color}10`,
+                color: 'var(--text)',
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: interactive ? 'pointer' : 'default',
+              }}
+            >
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: color,
+              }} />
+              <span>{channel.label}</span>
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                color: 'var(--text-soft)',
+                textTransform: 'capitalize',
+              }}>
+                · {label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{
+        display: 'flex', gap: 4,
+        borderBottom: '1px solid var(--border)',
+        marginBottom: 18,
+      }}>
+        {([
+          { id: 'inbox' as const, label: 'Inbox' },
+          { id: 'leads' as const, label: 'Leads' },
+          { id: 'pipeline' as const, label: 'Pipeline' },
+        ]).map((t) => {
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                appearance: 'none',
+                background: 'transparent',
+                border: 'none',
+                padding: '10px 14px',
+                fontFamily: 'inherit',
+                fontSize: 13,
+                fontWeight: active ? 700 : 500,
+                color: active ? 'var(--text)' : 'var(--text-soft)',
+                borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                cursor: 'pointer',
+                marginBottom: -1,
+              }}
+            >
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div>
+        {tab === 'inbox' && <InboxTabPlaceholder loading={loading} />}
+        {tab === 'leads' && <LeadsTabPlaceholder />}
+        {tab === 'pipeline' && <PipelineTabPlaceholder ventureId={ventureId} />}
       </div>
     </div>
   )
+}
+
+function InboxTabPlaceholder({ loading }: { loading: boolean }) {
+  return (
+    <div style={emptyStateStyle}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+        {loading ? 'Loading inbox…' : 'No inbound signal yet'}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+        Once you publish content or run outreach, comments and replies will land here.
+      </div>
+    </div>
+  )
+}
+
+function LeadsTabPlaceholder() {
+  return (
+    <div style={emptyStateStyle}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>No leads yet</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+        Leads will appear once people engage with your content or campaigns.
+      </div>
+    </div>
+  )
+}
+
+function PipelineTabPlaceholder({ ventureId: _ventureId }: { ventureId: string }) {
+  return (
+    <div style={emptyStateStyle}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Pipeline coming up</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+        Outreach campaign metrics will appear here.
+      </div>
+    </div>
+  )
+}
+
+const emptyStateStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  borderRadius: 14,
+  border: '1px dashed var(--border)',
+  background: 'var(--sidebar)',
+  padding: '24px 20px',
 }
