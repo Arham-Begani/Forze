@@ -14,6 +14,16 @@ type InboxItem = {
   assetId: string | null
 }
 
+type LeadRow = {
+  id: string
+  identity: string
+  source: InboxItem['source']
+  count: number
+  lastTimestamp: string | null
+  lastText: string
+  lastPermalink: string | null
+}
+
 interface CrmDashboardProps {
   ventureId: string
   ventureName: string
@@ -71,6 +81,9 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
   const [inbox, setInbox] = useState<InboxItem[]>([])
   const [inboxLoading, setInboxLoading] = useState(true)
   const [inboxError, setInboxError] = useState<string | null>(null)
+  const [leads, setLeads] = useState<LeadRow[]>([])
+  const [leadsLoading, setLeadsLoading] = useState(true)
+  const [leadsError, setLeadsError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -122,6 +135,27 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
         if (!cancelled) setInboxError(e instanceof Error ? e.message : 'Failed to load CRM inbox')
       } finally {
         if (!cancelled) setInboxLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [ventureId])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLeadsLoading(true)
+      setLeadsError(null)
+      try {
+        const res = await fetch(`/api/ventures/${ventureId}/crm/leads`)
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Failed to load leads')
+        if (!cancelled) setLeads((data.leads as LeadRow[]) ?? [])
+      } catch (e) {
+        if (!cancelled) setLeadsError(e instanceof Error ? e.message : 'Failed to load leads')
+      } finally {
+        if (!cancelled) setLeadsLoading(false)
       }
     })()
     return () => {
@@ -248,7 +282,9 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
         {tab === 'inbox' && (
           <InboxTab loading={inboxLoading} error={inboxError} items={inbox} />
         )}
-        {tab === 'leads' && <LeadsTabPlaceholder />}
+        {tab === 'leads' && (
+          <LeadsTab loading={leadsLoading} error={leadsError} leads={leads} />
+        )}
         {tab === 'pipeline' && <PipelineTabPlaceholder ventureId={ventureId} />}
       </div>
     </div>
@@ -358,13 +394,99 @@ function InboxItemRow({ item }: { item: InboxItem }) {
   )
 }
 
-function LeadsTabPlaceholder() {
-  return (
-    <div style={emptyStateStyle}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>No leads yet</div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-        Leads will appear once people engage with your content or campaigns.
+function LeadsTab({
+  loading,
+  error,
+  leads,
+}: {
+  loading: boolean
+  error: string | null
+  leads: LeadRow[]
+}) {
+  if (loading) {
+    return (
+      <div style={emptyStateStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Loading leads…</div>
       </div>
+    )
+  }
+  if (error) {
+    return (
+      <div style={{ ...emptyStateStyle, borderColor: '#dc262630', background: '#dc262610' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#dc2626' }}>Failed to load leads</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>{error}</div>
+      </div>
+    )
+  }
+  if (leads.length === 0) {
+    return (
+      <div style={emptyStateStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>No leads yet</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Leads will appear once people engage with your content or campaigns.
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      borderRadius: 14,
+      border: '1px solid var(--border)',
+      background: 'var(--sidebar)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(140px, 1.4fr) minmax(80px, 1fr) 80px minmax(120px, 1fr)',
+        gap: 12,
+        padding: '12px 16px',
+        background: 'var(--bg)',
+        borderBottom: '1px solid var(--border)',
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        color: 'var(--muted)',
+      }}>
+        <div>Identity</div>
+        <div>Source</div>
+        <div>Count</div>
+        <div>Last touch</div>
+      </div>
+      {leads.map((lead) => {
+        const color = sourceBadgeColor(lead.source)
+        const stamp = lead.lastTimestamp ? new Date(lead.lastTimestamp).toLocaleDateString() : '—'
+        return (
+          <div
+            key={lead.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(140px, 1.4fr) minmax(80px, 1fr) 80px minmax(120px, 1fr)',
+              gap: 12,
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border)',
+              alignItems: 'center',
+              fontSize: 13,
+              color: 'var(--text)',
+            }}
+          >
+            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {lead.identity === 'unknown' ? <span style={{ color: 'var(--muted)' }}>unknown</span> : `@${lead.identity}`}
+            </div>
+            <div>
+              <span style={{
+                fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4,
+                color, background: `${color}14`, border: `1px solid ${color}30`,
+                padding: '3px 8px', borderRadius: 999,
+              }}>
+                {lead.source}
+              </span>
+            </div>
+            <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{lead.count}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-soft)' }}>{stamp}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
