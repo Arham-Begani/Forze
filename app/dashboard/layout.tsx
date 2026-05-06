@@ -50,13 +50,15 @@ const MODULES = [
   { id: 'general',      label: 'Co-pilot',     icon: '◉', accent: '#6B8F71' },
   { id: 'shadow-board', label: 'Shadow Board', icon: '⚔', accent: '#E04848' },
   { id: 'campaigns',    label: 'Campaigns',    icon: '✉', accent: '#C07A3A' },
+  { id: 'crm',          label: 'CRM',          icon: '◐', accent: '#5A8C5A' },
 ] as const
 
 const MODULE_GROUPS = [
-  { label: 'LAUNCH', ids: ['full-launch'] },
-  { label: 'AGENTS', ids: ['research', 'branding', 'marketing', 'landing', 'feasibility'] },
-  { label: 'TOOLS',  ids: ['general', 'shadow-board'] },
-  { label: 'OUTREACH', ids: ['campaigns'] },
+  { group: 'BUILD',         label: 'launch', ids: ['full-launch'] },
+  { group: 'BUILD',         label: 'agents', ids: ['research', 'branding', 'marketing', 'landing', 'feasibility'] },
+  { group: 'BUILD',         label: 'tools',  ids: ['general', 'shadow-board'] },
+  { group: 'OUTREACH',      label: null,     ids: ['campaigns'] },
+  { group: 'CRM DASHBOARD', label: null,     ids: ['crm'] },
 ] as const
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -300,12 +302,16 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     // Campaigns lives under its own section (list + detail pages) — not the
     // shared /[module] workspace used for agent runs.
     if (moduleId === 'campaigns') return `/dashboard/venture/${ventureId}/campaigns`
+    if (moduleId === 'crm') return `/dashboard/venture/${ventureId}/crm`
     return `/dashboard/venture/${ventureId}/${moduleId}`
   }
 
   function isModuleActive(ventureId: string, moduleId: string): boolean {
     if (moduleId === 'campaigns') {
       return pathname.startsWith(`/dashboard/venture/${ventureId}/campaigns`)
+    }
+    if (moduleId === 'crm') {
+      return pathname.startsWith(`/dashboard/venture/${ventureId}/crm`)
     }
     return pathname === `/dashboard/venture/${ventureId}/${moduleId}`
   }
@@ -785,23 +791,41 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                         <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 700 }}>Overview</span>
                       </motion.button>
 
-                      {/* Module groups */}
-                      {MODULE_GROUPS.map((group, groupIndex) => {
-                        const groupModules = group.ids.map(id => MODULES.find(m => m.id === id)!).filter(Boolean)
-                        return (
-                          <div key={group.label}>
-                            {groupIndex > 0 && (
+                      {/* Module groups — top-level (BUILD/OUTREACH/CRM DASHBOARD) with optional sub-labels */}
+                      {(() => {
+                        let lastTopGroup: string | null = null
+                        return MODULE_GROUPS.map((group, groupIndex) => {
+                          const groupModules = group.ids.map(id => MODULES.find(m => m.id === id)!).filter(Boolean)
+                          const isNewTopGroup = group.group !== lastTopGroup
+                          const previousTopGroup = lastTopGroup
+                          lastTopGroup = group.group
+                          return (
+                          <div key={`${group.group}-${group.label ?? 'main'}`}>
+                            {isNewTopGroup && previousTopGroup !== null && (
                               <div style={{ height: 1, background: 'var(--border)', margin: '4px 4px', opacity: 0.5 }} />
                             )}
-                            <div style={{
-                              fontSize: 9, fontWeight: 700,
-                              textTransform: 'uppercase' as const,
-                              letterSpacing: '0.08em',
-                              color: 'var(--muted)',
-                              padding: '12px 8px 3px', opacity: 0.6,
-                            }}>
-                              {group.label}
-                            </div>
+                            {isNewTopGroup && (
+                              <div style={{
+                                fontSize: 9, fontWeight: 700,
+                                textTransform: 'uppercase' as const,
+                                letterSpacing: '0.08em',
+                                color: 'var(--muted)',
+                                padding: '12px 8px 3px', opacity: 0.6,
+                              }}>
+                                {group.group}
+                              </div>
+                            )}
+                            {group.label && (
+                              <div style={{
+                                fontSize: 9, fontWeight: 600,
+                                fontStyle: 'italic' as const,
+                                letterSpacing: '0.06em',
+                                color: 'var(--muted)',
+                                padding: '6px 10px 2px', opacity: 0.5,
+                              }}>
+                                {group.label}
+                              </div>
+                            )}
                             {groupModules.map((m, idx) => {
                               const active = isModuleActive(activeVenture.id, m.id)
                               const completed = activeVenture.completedModules.includes(m.id)
@@ -850,8 +874,9 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                               )
                             })}
                           </div>
-                        )
-                      })}
+                          )
+                        })
+                      })()}
                     </>
                   )}
 
