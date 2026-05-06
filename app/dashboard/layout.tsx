@@ -767,7 +767,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                     </div>
                   ) : (
                     <>
-                      {/* Master Dossier */}
+                      {/* Overview */}
                       <motion.button
                         whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                         onClick={() => router.push(`/dashboard/venture/${activeVenture.id}`)}
@@ -782,7 +782,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                         }}
                       >
                         <span style={{ color: 'var(--accent)', fontSize: 12, width: 18, textAlign: 'center' }}>★</span>
-                        <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 700 }}>Master Dossier</span>
+                        <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 700 }}>Overview</span>
                       </motion.button>
 
                       {/* Module groups */}
