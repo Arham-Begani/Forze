@@ -24,6 +24,16 @@ type LeadRow = {
   lastPermalink: string | null
 }
 
+type CampaignSummary = {
+  id: string
+  name: string
+  status: string
+  sent_count?: number
+  opened_count?: number
+  clicked_count?: number
+  replied_count?: number
+}
+
 interface CrmDashboardProps {
   ventureId: string
   ventureName: string
@@ -84,6 +94,9 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
   const [leads, setLeads] = useState<LeadRow[]>([])
   const [leadsLoading, setLeadsLoading] = useState(true)
   const [leadsError, setLeadsError] = useState<string | null>(null)
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([])
+  const [campaignsLoading, setCampaignsLoading] = useState(true)
+  const [campaignsError, setCampaignsError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -156,6 +169,27 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
         if (!cancelled) setLeadsError(e instanceof Error ? e.message : 'Failed to load leads')
       } finally {
         if (!cancelled) setLeadsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [ventureId])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setCampaignsLoading(true)
+      setCampaignsError(null)
+      try {
+        const res = await fetch(`/api/campaigns?venture_id=${encodeURIComponent(ventureId)}`)
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Failed to load campaigns')
+        if (!cancelled) setCampaigns((data.campaigns as CampaignSummary[]) ?? [])
+      } catch (e) {
+        if (!cancelled) setCampaignsError(e instanceof Error ? e.message : 'Failed to load campaigns')
+      } finally {
+        if (!cancelled) setCampaignsLoading(false)
       }
     })()
     return () => {
@@ -285,7 +319,14 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
         {tab === 'leads' && (
           <LeadsTab loading={leadsLoading} error={leadsError} leads={leads} />
         )}
-        {tab === 'pipeline' && <PipelineTabPlaceholder ventureId={ventureId} />}
+        {tab === 'pipeline' && (
+          <PipelineTab
+            ventureId={ventureId}
+            loading={campaignsLoading}
+            error={campaignsError}
+            campaigns={campaigns}
+          />
+        )}
       </div>
     </div>
   )
@@ -491,13 +532,162 @@ function LeadsTab({
   )
 }
 
-function PipelineTabPlaceholder({ ventureId: _ventureId }: { ventureId: string }) {
-  return (
-    <div style={emptyStateStyle}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Pipeline coming up</div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-        Outreach campaign metrics will appear here.
+function PipelineTab({
+  ventureId,
+  loading,
+  error,
+  campaigns,
+}: {
+  ventureId: string
+  loading: boolean
+  error: string | null
+  campaigns: CampaignSummary[]
+}) {
+  if (loading) {
+    return (
+      <div style={emptyStateStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Loading campaigns…</div>
       </div>
+    )
+  }
+  if (error) {
+    return (
+      <div style={{ ...emptyStateStyle, borderColor: '#dc262630', background: '#dc262610' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#dc2626' }}>Failed to load pipeline</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>{error}</div>
+      </div>
+    )
+  }
+
+  const totals = campaigns.reduce(
+    (acc, c) => ({
+      sent: acc.sent + (c.sent_count ?? 0),
+      opened: acc.opened + (c.opened_count ?? 0),
+      clicked: acc.clicked + (c.clicked_count ?? 0),
+      replied: acc.replied + (c.replied_count ?? 0),
+    }),
+    { sent: 0, opened: 0, clicked: 0, replied: 0 }
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{
+        display: 'grid',
+        gap: 10,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+      }}>
+        <PipelineMetric label="Sent" value={totals.sent} color="#5A6E8C" />
+        <PipelineMetric label="Opened" value={totals.opened} color="#5A8C6E" />
+        <PipelineMetric label="Clicked" value={totals.clicked} color="#C4975A" />
+        <PipelineMetric label="Replied" value={totals.replied} color="#8C5A7A" />
+      </div>
+
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '4px 4px 0',
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 800, letterSpacing: 0.5,
+          textTransform: 'uppercase', color: 'var(--muted)',
+        }}>
+          Campaigns · {campaigns.length}
+        </div>
+        <a
+          href={`/dashboard/venture/${ventureId}/campaigns`}
+          style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--accent)',
+            textDecoration: 'none',
+          }}
+        >
+          View all →
+        </a>
+      </div>
+
+      {campaigns.length === 0 ? (
+        <div style={emptyStateStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>No campaigns yet</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+            Start an outreach campaign to populate this pipeline view.
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          borderRadius: 14,
+          border: '1px solid var(--border)',
+          background: 'var(--sidebar)',
+          overflow: 'hidden',
+        }}>
+          {campaigns.map((c) => (
+            <a
+              key={c.id}
+              href={`/dashboard/venture/${ventureId}/campaigns/${c.id}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(160px, 2fr) 80px repeat(4, minmax(64px, 1fr))',
+                gap: 10,
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--border)',
+                alignItems: 'center',
+                fontSize: 13,
+                color: 'var(--text)',
+                textDecoration: 'none',
+              }}
+            >
+              <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {c.name}
+              </div>
+              <div style={{
+                fontSize: 11, fontWeight: 700, textTransform: 'capitalize',
+                color: 'var(--text-soft)',
+              }}>
+                {c.status}
+              </div>
+              <PipelineCell value={c.sent_count} />
+              <PipelineCell value={c.opened_count} />
+              <PipelineCell value={c.clicked_count} />
+              <PipelineCell value={c.replied_count} />
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PipelineMetric({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 4,
+      padding: '12px 14px',
+      borderRadius: 12,
+      border: `1px solid ${color}30`,
+      background: `${color}10`,
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+        textTransform: 'uppercase', color,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: 20, fontWeight: 800, color: 'var(--text)',
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {value.toLocaleString()}
+      </div>
+    </div>
+  )
+}
+
+function PipelineCell({ value }: { value: number | undefined }) {
+  return (
+    <div style={{
+      fontSize: 12, fontWeight: 600,
+      color: 'var(--text-soft)',
+      fontVariantNumeric: 'tabular-nums',
+      textAlign: 'right',
+    }}>
+      {(value ?? 0).toLocaleString()}
     </div>
   )
 }
