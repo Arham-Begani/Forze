@@ -4,6 +4,16 @@ import { useEffect, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import type { SocialConnection, SocialProvider } from '@/lib/marketing.shared'
 
+type InboxItem = {
+  id: string
+  source: 'instagram' | 'linkedin' | 'gmail' | 'reddit' | 'telegram'
+  username: string | null
+  text: string
+  timestamp: string | null
+  permalink: string | null
+  assetId: string | null
+}
+
 interface CrmDashboardProps {
   ventureId: string
   ventureName: string
@@ -58,6 +68,9 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [gmail, setGmail] = useState<GmailUI | null>(null)
   const [loading, setLoading] = useState(true)
+  const [inbox, setInbox] = useState<InboxItem[]>([])
+  const [inboxLoading, setInboxLoading] = useState(true)
+  const [inboxError, setInboxError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -88,6 +101,27 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
         }
       } finally {
         if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [ventureId])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setInboxLoading(true)
+      setInboxError(null)
+      try {
+        const res = await fetch(`/api/ventures/${ventureId}/crm/inbox`)
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Failed to load CRM inbox')
+        if (!cancelled) setInbox((data.items as InboxItem[]) ?? [])
+      } catch (e) {
+        if (!cancelled) setInboxError(e instanceof Error ? e.message : 'Failed to load CRM inbox')
+      } finally {
+        if (!cancelled) setInboxLoading(false)
       }
     })()
     return () => {
@@ -211,7 +245,9 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
       </div>
 
       <div>
-        {tab === 'inbox' && <InboxTabPlaceholder loading={loading} />}
+        {tab === 'inbox' && (
+          <InboxTab loading={inboxLoading} error={inboxError} items={inbox} />
+        )}
         {tab === 'leads' && <LeadsTabPlaceholder />}
         {tab === 'pipeline' && <PipelineTabPlaceholder ventureId={ventureId} />}
       </div>
@@ -219,15 +255,105 @@ export function CrmDashboard({ ventureId, ventureName }: CrmDashboardProps) {
   )
 }
 
-function InboxTabPlaceholder({ loading }: { loading: boolean }) {
+function InboxTab({
+  loading,
+  error,
+  items,
+}: {
+  loading: boolean
+  error: string | null
+  items: InboxItem[]
+}) {
+  if (loading) {
+    return (
+      <div style={emptyStateStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Loading inbox…</div>
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div style={{
+        ...emptyStateStyle,
+        borderColor: '#dc262630',
+        background: '#dc262610',
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#dc2626' }}>Failed to load inbox</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>{error}</div>
+      </div>
+    )
+  }
+  if (items.length === 0) {
+    return (
+      <div style={emptyStateStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>No inbound signal yet</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Once you publish content or run outreach, comments and replies will land here.
+        </div>
+      </div>
+    )
+  }
   return (
-    <div style={emptyStateStyle}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-        {loading ? 'Loading inbox…' : 'No inbound signal yet'}
+    <div style={{ display: 'grid', gap: 10 }}>
+      {items.map((item) => (
+        <InboxItemRow key={item.id} item={item} />
+      ))}
+    </div>
+  )
+}
+
+function sourceBadgeColor(source: InboxItem['source']): string {
+  switch (source) {
+    case 'instagram': return '#8C5A7A'
+    case 'linkedin':  return '#5A6E8C'
+    case 'gmail':     return '#5A8C6E'
+    default:          return '#6b7280'
+  }
+}
+
+function InboxItemRow({ item }: { item: InboxItem }) {
+  const color = sourceBadgeColor(item.source)
+  const stamp = item.timestamp ? new Date(item.timestamp).toLocaleString() : null
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 8,
+      padding: '14px 16px',
+      borderRadius: 14,
+      border: '1px solid var(--border)',
+      background: 'var(--sidebar)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{
+          fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5,
+          color, background: `${color}14`, border: `1px solid ${color}30`,
+          padding: '3px 8px', borderRadius: 999,
+        }}>
+          {item.source}
+        </span>
+        {item.username && (
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+            @{item.username}
+          </span>
+        )}
+        {stamp && (
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>
+            {stamp}
+          </span>
+        )}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-        Once you publish content or run outreach, comments and replies will land here.
+      <div style={{ fontSize: 13, color: 'var(--text-soft)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+        {item.text}
       </div>
+      {item.permalink && (
+        <a
+          href={item.permalink}
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}
+        >
+          Open original ↗
+        </a>
+      )}
     </div>
   )
 }
