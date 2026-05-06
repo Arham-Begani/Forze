@@ -55,6 +55,14 @@ type ConnectionsResponse = {
   connections: SocialConnection[]
 }
 
+type GmailUI = {
+  connected: boolean
+  email: string | null
+  canSend: boolean
+  state: 'not_connected' | 'active' | 'needs_reauth' | 'error' | 'disconnected'
+  errorMessage: string | null
+}
+
 type AssetsResponse = {
   assets: MarketingAsset[]
 }
@@ -1136,6 +1144,28 @@ export function ConnectedChannelsPanel({
   const [aggregateLoading, setAggregateLoading] = useState(false)
   const [aggregateError, setAggregateError] = useState<string | null>(null)
   const [aggregateGeneratedAt, setAggregateGeneratedAt] = useState<string | null>(null)
+  const [gmail, setGmail] = useState<GmailUI | null>(null)
+  const [gmailBusy, setGmailBusy] = useState(false)
+
+  async function refreshGmail() {
+    try {
+      const response = await fetch('/api/integrations/gmail')
+      if (!response.ok) {
+        setGmail({ connected: false, email: null, canSend: false, state: 'not_connected', errorMessage: null })
+        return
+      }
+      const data = (await response.json()) as GmailUI
+      setGmail({
+        connected: Boolean(data.connected),
+        email: data.email ?? null,
+        canSend: Boolean(data.canSend),
+        state: data.state ?? (data.connected ? 'active' : 'not_connected'),
+        errorMessage: data.errorMessage ?? null,
+      })
+    } catch {
+      setGmail({ connected: false, email: null, canSend: false, state: 'not_connected', errorMessage: null })
+    }
+  }
 
   async function refreshData() {
     setLoading(true)
@@ -1209,6 +1239,7 @@ export function ConnectedChannelsPanel({
 
   useEffect(() => {
     refreshData()
+    void refreshGmail()
   }, [ventureId])
 
   // Refresh the venture-level validation every time this panel mounts (i.e.
