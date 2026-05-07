@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { CampaignList } from '@/components/venture/CampaignList'
 import { CreateCampaignFlow } from '@/components/venture/CreateCampaignFlow'
 import { DirectMailFlow } from '@/components/venture/DirectMailFlow'
-import { VentureHeader } from '@/components/venture/VentureHeader'
 import { ConnectedChannelsPanel } from '@/components/marketing/ConnectedChannelsPanel'
 import type { Campaign } from '@/lib/schemas/campaign'
 
@@ -96,11 +95,16 @@ export default function CampaignsPage() {
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg)]">
-      <VentureHeader
-        ventureId={ventureId}
-        ventureName={ventureName}
-        subtitle="Outreach Campaigns"
-      />
+      <div className="border-b border-[var(--border)] bg-[var(--sidebar)]">
+        <div className="max-w-7xl mx-auto w-full p-4 sm:p-6">
+          <h1 className="text-xl font-bold tracking-tight text-[var(--text)] sm:text-2xl truncate">
+            {ventureName}
+          </h1>
+          <p className="text-sm text-[var(--muted)]" style={{ marginTop: 2 }}>
+            Outreach Campaigns
+          </p>
+        </div>
+      </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="max-w-7xl mx-auto p-4 sm:p-6">
