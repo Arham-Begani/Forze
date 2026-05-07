@@ -184,19 +184,21 @@ function FeasibilityPreview() {
         <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
           3-Year Projections
         </p>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-          {[
-            { year: 'Year 1', rev: '$120K', net: '-$48K', customers: '85' },
-            { year: 'Year 2', rev: '$680K', net: '$142K', customers: '420' },
-            { year: 'Year 3', rev: '$2.1M', net: '$890K', customers: '1,240' },
-          ].map((row, i) => (
-            <div key={row.year} style={{ display: 'grid', gridTemplateColumns: '50px 1fr 1fr 1fr', gap: '6px', padding: '10px 12px', borderBottom: i < 2 ? '1px solid var(--border)' : 'none', alignItems: 'center', fontSize: '12px' }}>
-              <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '11px', color: 'var(--muted)' }}>{row.year}</span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--text)', fontWeight: 600 }}>{row.rev}</span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', color: i === 0 ? '#ef4444' : '#22c55e', fontSize: '12px' }}>{row.net}</span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)', fontSize: '12px' }}>{row.customers} users</span>
-            </div>
-          ))}
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: '420px' }}>
+            {[
+              { year: 'Year 1', rev: '$120K', net: '-$48K', customers: '85' },
+              { year: 'Year 2', rev: '$680K', net: '$142K', customers: '420' },
+              { year: 'Year 3', rev: '$2.1M', net: '$890K', customers: '1,240' },
+            ].map((row, i) => (
+              <div key={row.year} style={{ display: 'grid', gridTemplateColumns: '50px 1fr 1fr 1fr', gap: '6px', padding: '10px 12px', borderBottom: i < 2 ? '1px solid var(--border)' : 'none', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '11px', color: 'var(--muted)' }}>{row.year}</span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--text)', fontWeight: 600 }}>{row.rev}</span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', color: i === 0 ? '#ef4444' : '#22c55e', fontSize: '12px' }}>{row.net}</span>
+                <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)', fontSize: '12px' }}>{row.customers} users</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
