@@ -11,6 +11,7 @@ import { z } from 'zod'
 
 const bodySchema = z.object({
   returnTo: z.string().optional(),
+  forceReauth: z.boolean().optional(),
 })
 
 export async function POST(
@@ -33,7 +34,11 @@ export async function POST(
     const state = generateOpaqueToken()
     const returnTo = normalizeIntegrationReturnPath(payload.data.returnTo)
     const redirectUri = `${request.nextUrl.origin}/api/integrations/${provider}/callback`
-    const authUrl = buildProviderAuthorizationUrl(provider, { redirectUri, state })
+    const authUrl = buildProviderAuthorizationUrl(provider, {
+      redirectUri,
+      state,
+      forceReauth: payload.data.forceReauth,
+    })
 
     const response = NextResponse.json({ authUrl })
     response.cookies.set({

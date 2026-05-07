@@ -134,6 +134,7 @@ export function decodePendingOAuthState(value: string | undefined): PendingOAuth
 export function buildProviderAuthorizationUrl(provider: SocialProvider, input: {
   redirectUri: string
   state: string
+  forceReauth?: boolean
 }): string {
   const params = new URLSearchParams({
     response_type: 'code',
@@ -152,6 +153,11 @@ export function buildProviderAuthorizationUrl(provider: SocialProvider, input: {
   if (provider === 'instagram') {
     params.set('client_id', getMetaClientId())
     params.set('scope', META_SCOPES.join(','))
+    // Force Meta to re-prompt the consent screen so the user can grant any
+    // scope they previously skipped (e.g. instagram_business_manage_comments).
+    if (input.forceReauth) {
+      params.set('auth_type', 'rerequest')
+    }
     // Instagram Login flow (not Facebook Login)
     return `https://www.instagram.com/oauth/authorize?${params.toString()}`
   }
