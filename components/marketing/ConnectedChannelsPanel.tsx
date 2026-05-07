@@ -1293,6 +1293,55 @@ export function ConnectedChannelsPanel({
     }
   }
 
+  async function handleConnectGmail() {
+    setGmailBusy(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/integrations/gmail', { method: 'POST' })
+      const data = (await response.json().catch(() => ({}))) as { authUrl?: string; error?: string }
+      if (!response.ok || !data.authUrl) {
+        throw new Error(data.error || 'Failed to start Gmail connect')
+      }
+      const popup = window.open(data.authUrl, 'gmail-oauth', 'width=500,height=700')
+      if (!popup) {
+        window.location.href = data.authUrl
+        return
+      }
+      const poll = window.setInterval(async () => {
+        if (popup.closed) {
+          window.clearInterval(poll)
+          await refreshGmail()
+          setGmailBusy(false)
+        }
+      }, 500)
+    } catch (connectError) {
+      setError(connectError instanceof Error ? connectError.message : 'Failed to connect Gmail')
+      setGmailBusy(false)
+    }
+  }
+
+  async function handleDisconnectGmail() {
+    setGmailBusy(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/integrations/gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnect' }),
+      })
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error || 'Failed to disconnect Gmail')
+      }
+      setSuccess('Gmail disconnected')
+      await refreshGmail()
+    } catch (disconnectError) {
+      setError(disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect Gmail')
+    } finally {
+      setGmailBusy(false)
+    }
+  }
+
   async function handleDisconnect(provider: SocialProvider) {
     setBusyProvider(provider)
     setError(null)
@@ -1431,6 +1480,72 @@ export function ConnectedChannelsPanel({
             </div>
           )
         })}
+
+        {/* Gmail card — uses dedicated /api/integrations/gmail flow, not a SocialProvider. */}
+        <div style={providerCardStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Gmail</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginTop: 6 }}>
+                Connect Gmail to send outreach campaigns and track replies inside Forge.
+              </div>
+            </div>
+            <span
+              style={{
+                alignSelf: 'flex-start',
+                padding: '5px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 700,
+                color: statusColor(gmail?.connected ? 'active' : (gmail?.state === 'needs_reauth' ? 'needs_reauth' : 'revoked')),
+                background: `${statusColor(gmail?.connected ? 'active' : (gmail?.state === 'needs_reauth' ? 'needs_reauth' : 'revoked'))}12`,
+                border: `1px solid ${statusColor(gmail?.connected ? 'active' : (gmail?.state === 'needs_reauth' ? 'needs_reauth' : 'revoked'))}20`,
+              }}
+            >
+              {gmail === null
+                ? 'Loading…'
+                : gmail.connected
+                  ? 'connected'
+                  : gmail.state === 'needs_reauth'
+                    ? 'reconnect'
+                    : 'Not connected'}
+            </span>
+          </div>
+
+          {gmail?.connected && gmail.email && (
+            <div style={{ fontSize: 12, color: 'var(--text-soft)' }}>
+              Connected as {gmail.email}
+            </div>
+          )}
+
+          {gmail?.state === 'error' && gmail.errorMessage && (
+            <div style={{ fontSize: 12, color: '#dc2626', lineHeight: 1.5 }}>
+              {gmail.errorMessage}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {gmail?.connected ? (
+              <button
+                type="button"
+                onClick={handleDisconnectGmail}
+                disabled={gmailBusy}
+                style={buttonStyle('secondary')}
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConnectGmail}
+                disabled={gmailBusy}
+                style={buttonStyle('primary')}
+              >
+                {gmailBusy ? 'Connecting…' : gmail?.state === 'needs_reauth' ? 'Reconnect Gmail' : 'Connect Gmail'}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div style={dividerStyle} />
