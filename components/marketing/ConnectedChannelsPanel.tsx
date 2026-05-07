@@ -734,7 +734,10 @@ function MonitorCard({
       </div>
 
       {insights?.commentsFetchError && (
-        <FlashMessage tone="error" message={insights.commentsFetchError} />
+        <CommentsFetchErrorCta
+          error={insights.commentsFetchError}
+          onReconnect={onReconnect}
+        />
       )}
 
       {validation && (
@@ -855,6 +858,79 @@ function MonitorCard({
           </span>
         )}
       </div>
+    </div>
+  )
+}
+
+function CommentsFetchErrorCta({
+  error,
+  onReconnect,
+}: {
+  error: string
+  onReconnect?: () => void
+}) {
+  // Error strings come from lib/instagram-insights.ts and contain stable
+  // markers we can keyword-match: "PERSONAL", "instagram_business_manage_comments",
+  // "Development Mode".
+  const isPersonal = /PERSONAL/i.test(error)
+  const isMissingScope = /instagram_business_manage_comments/i.test(error) && !isPersonal
+  const isDevMode = /Development Mode/i.test(error) && !isPersonal && !isMissingScope
+
+  const heading = isPersonal
+    ? 'Instagram account is Personal'
+    : isMissingScope
+      ? 'Comment permission missing'
+      : isDevMode
+        ? 'Meta App in Development Mode'
+        : 'Instagram comments unavailable'
+
+  const detail = isPersonal
+    ? 'Switch your Instagram to a Business or Creator account in the Instagram app, then reconnect to grant comment-read permission.'
+    : isMissingScope
+      ? 'Reconnect Instagram and approve the comment-read permission so Forge can pull comments for analysis.'
+      : isDevMode
+        ? 'The connected Instagram user must be added as a tester in your Meta app dashboard, or the app must pass App Review.'
+        : error
+
+  const showReconnect = (isPersonal || isMissingScope) && Boolean(onReconnect)
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6,
+      border: '1px solid #dc262630',
+      background: '#dc262610',
+      borderRadius: 12,
+      padding: '12px 14px',
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+        {heading}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.6 }}>
+        {detail}
+      </div>
+      {showReconnect && (
+        <button
+          type="button"
+          onClick={onReconnect}
+          style={{
+            alignSelf: 'flex-start',
+            marginTop: 4,
+            border: '1px solid #dc262640',
+            background: '#dc262614',
+            color: '#dc2626',
+            borderRadius: 10,
+            padding: '8px 12px',
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          Reconnect Instagram →
+        </button>
+      )}
     </div>
   )
 }
