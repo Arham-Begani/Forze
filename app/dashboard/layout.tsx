@@ -108,6 +108,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [buildOpen, setBuildOpen] = useState(true)
   // Project icon hover tooltip + context menu (portal-based so they escape overflow:hidden)
   const [projTooltip, setProjTooltip] = useState<{ id: string; name: string; top: number } | null>(null)
   const [projContextMenu, setProjContextMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null)
@@ -791,91 +792,158 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                         <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 700 }}>Overview</span>
                       </motion.button>
 
-                      {/* Module groups — top-level (BUILD/OUTREACH/CRM DASHBOARD) with optional sub-labels */}
+                      {/* Top-level nav: Build (collapsible) / Outreach / CRM */}
                       {(() => {
-                        let lastTopGroup: string | null = null
-                        return MODULE_GROUPS.map((group, groupIndex) => {
-                          const groupModules = group.ids.map(id => MODULES.find(m => m.id === id)!).filter(Boolean)
-                          const isNewTopGroup = group.group !== lastTopGroup
-                          const previousTopGroup = lastTopGroup
-                          lastTopGroup = group.group
-                          return (
-                          <div key={`${group.group}-${group.label ?? 'main'}`}>
-                            {isNewTopGroup && previousTopGroup !== null && (
-                              <div style={{ height: 1, background: 'var(--border)', margin: '4px 4px', opacity: 0.5 }} />
-                            )}
-                            {isNewTopGroup && (
-                              <div style={{
-                                fontSize: 9, fontWeight: 700,
-                                textTransform: 'uppercase' as const,
-                                letterSpacing: '0.08em',
-                                color: 'var(--muted)',
-                                padding: '12px 8px 3px', opacity: 0.6,
-                              }}>
-                                {group.group}
-                              </div>
-                            )}
-                            {group.label && (
-                              <div style={{
-                                fontSize: 9, fontWeight: 600,
-                                fontStyle: 'italic' as const,
-                                letterSpacing: '0.06em',
-                                color: 'var(--muted)',
-                                padding: '6px 10px 2px', opacity: 0.5,
-                              }}>
-                                {group.label}
-                              </div>
-                            )}
-                            {groupModules.map((m, idx) => {
-                              const active = isModuleActive(activeVenture.id, m.id)
-                              const completed = activeVenture.completedModules.includes(m.id)
-                              return (
-                                <motion.button
-                                  key={m.id}
-                                  initial={{ opacity: 0, x: -4 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: idx * 0.02 }}
-                                  whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
-                                  onClick={() => router.push(moduleHref(activeVenture.id, m.id))}
-                                  aria-label={`Open ${m.label} module`}
-                                  aria-current={active ? 'page' : undefined}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 8,
-                                    padding: '0 8px', height: 36,
-                                    borderRadius: 7, border: 'none',
-                                    cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit',
-                                    background: active ? `${m.accent}12` : 'transparent',
-                                    borderLeft: active ? `2px solid ${m.accent}` : '2px solid transparent',
-                                  }}
-                                >
-                                  <span style={{ color: m.accent, fontSize: 12, lineHeight: 1, width: 18, textAlign: 'center' as const, flexShrink: 0 }}>{m.icon}</span>
-                                  <span style={{ fontSize: 13, color: active ? 'var(--text)' : 'var(--text-soft)', fontWeight: active ? 600 : 500 }}>{m.label}</span>
-                                  {(completed || active) && (
-                                    <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                                      {completed && (
-                                        <span
-                                          aria-hidden="true"
-                                          style={{
-                                            width: 4, height: 4, borderRadius: '50%',
-                                            background: '#5A8C6E',
-                                            boxShadow: '0 0 6px rgba(90, 140, 110, 0.45)',
-                                          }}
-                                        />
-                                      )}
-                                      {active && (
-                                        <motion.div
-                                          layoutId="module-active-dot"
-                                          style={{ width: 4, height: 4, borderRadius: '50%', background: m.accent }}
-                                        />
-                                      )}
-                                    </span>
-                                  )}
-                                </motion.button>
-                              )
-                            })}
-                          </div>
-                          )
+                        const buildSubgroups = MODULE_GROUPS.filter(g => g.group === 'BUILD')
+                        const buildIds = buildSubgroups.flatMap(g => g.ids as readonly string[])
+                        const campaignsModule = MODULES.find(m => m.id === 'campaigns')!
+                        const crmModule = MODULES.find(m => m.id === 'crm')!
+                        const buildActive = buildIds.some(id => isModuleActive(activeVenture.id, id))
+                        const outreachActive = isModuleActive(activeVenture.id, 'campaigns')
+                        const crmActive = isModuleActive(activeVenture.id, 'crm')
+
+                        const sectionButtonStyle = (active: boolean, accent: string): React.CSSProperties => ({
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '0 8px', height: 38,
+                          borderRadius: 8, border: 'none',
+                          cursor: 'pointer', width: '100%', textAlign: 'left' as const, fontFamily: 'inherit',
+                          background: active ? `${accent}12` : 'transparent',
+                          borderLeft: active ? `2px solid ${accent}` : '2px solid transparent',
                         })
+
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 8 }}>
+                            {/* Build — collapsible */}
+                            <motion.button
+                              whileHover={{ backgroundColor: 'var(--nav-active)' }}
+                              onClick={() => setBuildOpen(o => !o)}
+                              aria-expanded={buildOpen}
+                              aria-label="Toggle Build modules"
+                              style={sectionButtonStyle(buildActive, '#C4975A')}
+                            >
+                              <span style={{ color: '#C4975A', fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>⬡</span>
+                              <span style={{ fontSize: 13, color: buildActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: buildActive ? 700 : 600 }}>Build</span>
+                              <motion.span
+                                animate={{ rotate: buildOpen ? 90 : 0 }}
+                                transition={{ duration: 0.18 }}
+                                style={{
+                                  marginLeft: 'auto',
+                                  fontSize: 10,
+                                  color: 'var(--muted)',
+                                  opacity: 0.7,
+                                  display: 'flex', alignItems: 'center',
+                                }}
+                              >
+                                ▶
+                              </motion.span>
+                            </motion.button>
+
+                            <AnimatePresence initial={false}>
+                              {buildOpen && (
+                                <motion.div
+                                  key="build-children"
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  style={{ overflow: 'hidden' }}
+                                >
+                                  <div style={{ paddingLeft: 14, paddingTop: 4, paddingBottom: 4, borderLeft: '1px solid var(--border)', marginLeft: 12 }}>
+                                    {buildSubgroups.map((group) => {
+                                      const groupModules = group.ids.map(id => MODULES.find(m => m.id === id)!).filter(Boolean)
+                                      return (
+                                        <div key={group.label ?? 'main'}>
+                                          {group.label && (
+                                            <div style={{
+                                              fontSize: 9, fontWeight: 600,
+                                              fontStyle: 'italic' as const,
+                                              letterSpacing: '0.06em',
+                                              color: 'var(--muted)',
+                                              padding: '6px 6px 2px', opacity: 0.55,
+                                            }}>
+                                              {group.label}
+                                            </div>
+                                          )}
+                                          {groupModules.map((m, idx) => {
+                                            const active = isModuleActive(activeVenture.id, m.id)
+                                            const completed = activeVenture.completedModules.includes(m.id)
+                                            return (
+                                              <motion.button
+                                                key={m.id}
+                                                initial={{ opacity: 0, x: -4 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: idx * 0.02 }}
+                                                whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                                                onClick={() => router.push(moduleHref(activeVenture.id, m.id))}
+                                                aria-label={`Open ${m.label} module`}
+                                                aria-current={active ? 'page' : undefined}
+                                                style={{
+                                                  display: 'flex', alignItems: 'center', gap: 8,
+                                                  padding: '0 8px', height: 34,
+                                                  borderRadius: 7, border: 'none',
+                                                  cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit',
+                                                  background: active ? `${m.accent}12` : 'transparent',
+                                                  borderLeft: active ? `2px solid ${m.accent}` : '2px solid transparent',
+                                                }}
+                                              >
+                                                <span style={{ color: m.accent, fontSize: 12, lineHeight: 1, width: 18, textAlign: 'center' as const, flexShrink: 0 }}>{m.icon}</span>
+                                                <span style={{ fontSize: 13, color: active ? 'var(--text)' : 'var(--text-soft)', fontWeight: active ? 600 : 500 }}>{m.label}</span>
+                                                {(completed || active) && (
+                                                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                                    {completed && (
+                                                      <span
+                                                        aria-hidden="true"
+                                                        style={{
+                                                          width: 4, height: 4, borderRadius: '50%',
+                                                          background: '#5A8C6E',
+                                                          boxShadow: '0 0 6px rgba(90, 140, 110, 0.45)',
+                                                        }}
+                                                      />
+                                                    )}
+                                                    {active && (
+                                                      <motion.div
+                                                        layoutId="module-active-dot"
+                                                        style={{ width: 4, height: 4, borderRadius: '50%', background: m.accent }}
+                                                      />
+                                                    )}
+                                                  </span>
+                                                )}
+                                              </motion.button>
+                                            )
+                                          })}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            {/* Outreach — single button, routes to campaigns */}
+                            <motion.button
+                              whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                              onClick={() => router.push(moduleHref(activeVenture.id, 'campaigns'))}
+                              aria-label="Open Outreach"
+                              aria-current={outreachActive ? 'page' : undefined}
+                              style={sectionButtonStyle(outreachActive, campaignsModule.accent)}
+                            >
+                              <span style={{ color: campaignsModule.accent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>{campaignsModule.icon}</span>
+                              <span style={{ fontSize: 13, color: outreachActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: outreachActive ? 700 : 600 }}>Outreach</span>
+                            </motion.button>
+
+                            {/* CRM — single button, routes to /crm */}
+                            <motion.button
+                              whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                              onClick={() => router.push(moduleHref(activeVenture.id, 'crm'))}
+                              aria-label="Open CRM"
+                              aria-current={crmActive ? 'page' : undefined}
+                              style={sectionButtonStyle(crmActive, crmModule.accent)}
+                            >
+                              <span style={{ color: crmModule.accent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>{crmModule.icon}</span>
+                              <span style={{ fontSize: 13, color: crmActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: crmActive ? 700 : 600 }}>CRM</span>
+                            </motion.button>
+                          </div>
+                        )
                       })()}
                     </>
                   )}
