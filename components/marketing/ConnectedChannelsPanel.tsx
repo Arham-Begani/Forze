@@ -600,10 +600,12 @@ function MonitorCard({
   asset,
   onUpdated,
   onRemoved,
+  onReconnect,
 }: {
   asset: MarketingAsset
   onUpdated: (asset: MarketingAsset) => void
   onRemoved: (assetId: string) => void
+  onReconnect?: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [removing, setRemoving] = useState(false)
@@ -1293,6 +1295,30 @@ export function ConnectedChannelsPanel({
     }
   }
 
+  async function handleReconnectInstagram() {
+    setBusyProvider('instagram')
+    setError(null)
+    try {
+      // Best-effort disconnect first so the next connect produces a fresh row
+      // with the latest scopes. We swallow disconnect errors because the goal
+      // is the consent re-prompt, not strict cleanup.
+      await fetch('/api/integrations/instagram/disconnect', { method: 'POST' }).catch(() => null)
+      const res = await fetch('/api/integrations/instagram/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnTo: window.location.pathname, forceReauth: true }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { authUrl?: string; error?: string }
+      if (!res.ok || !data.authUrl) {
+        throw new Error(data.error || 'Failed to start Instagram reconnect')
+      }
+      window.location.href = data.authUrl
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to reconnect Instagram')
+      setBusyProvider(null)
+    }
+  }
+
   async function handleConnectGmail() {
     setGmailBusy(true)
     setError(null)
@@ -1642,6 +1668,7 @@ export function ConnectedChannelsPanel({
                   asset={asset}
                   onUpdated={handleAssetUpdated}
                   onRemoved={handleAssetRemoved}
+                  onReconnect={handleReconnectInstagram}
                 />
               ) : (
                 <div key={asset.id} style={monitorCardStyle}>
