@@ -100,7 +100,6 @@ export default function CampaignsPage() {
         ventureId={ventureId}
         ventureName={ventureName}
         subtitle="Outreach Campaigns"
-        activeTab="campaigns"
       />
 
       <div className="flex-1 overflow-y-auto no-scrollbar">

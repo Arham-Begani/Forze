@@ -3,14 +3,12 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Info, Palette, Rocket, Globe, ShieldCheck, Mail } from 'lucide-react'
+import { Info, Palette, Rocket, Globe, ShieldCheck } from 'lucide-react'
 import type { ModuleId } from '@/components/ui/ResultCard'
 
-export type VentureTabId = ModuleId | 'campaigns'
+export type VentureTabId = ModuleId
 
-type TabDef =
-  | { id: ModuleId; label: string; icon: React.ReactNode; color: string; kind: 'module' }
-  | { id: 'campaigns'; label: string; icon: React.ReactNode; color: string; kind: 'campaigns' }
+type TabDef = { id: ModuleId; label: string; icon: React.ReactNode; color: string; kind: 'module' }
 
 export const VENTURE_TABS: TabDef[] = [
   { id: 'research', label: 'Research', icon: <Info size={16} />, color: '#5A8C6E', kind: 'module' },
@@ -18,14 +16,14 @@ export const VENTURE_TABS: TabDef[] = [
   { id: 'marketing', label: 'Marketing', icon: <Rocket size={16} />, color: '#8C5A7A', kind: 'module' },
   { id: 'landing', label: 'Landing', icon: <Globe size={16} />, color: '#8C7A5A', kind: 'module' },
   { id: 'feasibility', label: 'Feasibility', icon: <ShieldCheck size={16} />, color: '#7A5A8C', kind: 'module' },
-  { id: 'campaigns', label: 'Campaigns', icon: <Mail size={16} />, color: '#C07A3A', kind: 'campaigns' },
 ]
 
 interface VentureHeaderProps {
   ventureId: string
   ventureName: string
   subtitle?: string
-  activeTab: VentureTabId
+  /** Currently active tab. Omit on standalone pages (like Outreach) where no tab should be highlighted. */
+  activeTab?: VentureTabId
   /** Called when a module tab is clicked. If omitted, navigates to /dashboard/venture/[id]?tab=<id>. */
   onModuleTabClick?: (id: ModuleId) => void
   /** Optional action slot rendered on the right side of the header (e.g. Export PDF). */
@@ -43,10 +41,6 @@ export function VentureHeader({
   const router = useRouter()
 
   const handleTabClick = (tab: TabDef) => {
-    if (tab.kind === 'campaigns') {
-      router.push(`/dashboard/venture/${ventureId}/campaigns`)
-      return
-    }
     if (onModuleTabClick) {
       onModuleTabClick(tab.id)
       return
