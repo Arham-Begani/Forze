@@ -32,6 +32,7 @@ export function Hero() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [streamVisible, setStreamVisible] = useState<boolean[]>([false, false, false, false])
   const [mouse, setMouse] = useState({ x: 0, y: 0 })
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -78,6 +79,18 @@ export function Hero() {
   }, [])
 
   useEffect(() => {
+    const sync = () => setIsMobile(window.innerWidth < 768)
+    sync()
+    window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [])
+
+  useEffect(() => {
+    // Skip mouse parallax on touch devices — coarse pointers can't drive it
+    // meaningfully and the listener wastes cycles on every touch event.
+    if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
+      return
+    }
     const onMove = (e: MouseEvent) => {
       setMouse({
         x: (e.clientX / window.innerWidth - 0.5) * 30,
@@ -109,9 +122,9 @@ export function Hero() {
         <div style={{
           position: 'absolute',
           top: '10%',
-          right: '-5%',
-          width: '600px',
-          height: '600px',
+          right: isMobile ? '-20%' : '-5%',
+          width: isMobile ? '280px' : '600px',
+          height: isMobile ? '280px' : '600px',
           borderRadius: '50%',
           background: 'radial-gradient(circle, hsla(28,62%,42%,0.13) 0%, transparent 70%)',
           animation: 'blob-float 14s ease-in-out infinite',
@@ -122,9 +135,9 @@ export function Hero() {
         <div style={{
           position: 'absolute',
           bottom: '5%',
-          left: '-8%',
-          width: '700px',
-          height: '700px',
+          left: isMobile ? '-15%' : '-8%',
+          width: isMobile ? '320px' : '700px',
+          height: isMobile ? '320px' : '700px',
           borderRadius: '50%',
           background: 'radial-gradient(circle, hsla(210,50%,50%,0.07) 0%, transparent 70%)',
           animation: 'blob-float 18s ease-in-out infinite reverse',
