@@ -6,6 +6,7 @@ import { CampaignList } from '@/components/venture/CampaignList'
 import { CreateCampaignFlow } from '@/components/venture/CreateCampaignFlow'
 import { DirectMailFlow } from '@/components/venture/DirectMailFlow'
 import { ConnectedChannelsPanel } from '@/components/marketing/ConnectedChannelsPanel'
+import { RoutinesPanel } from '@/components/venture/RoutinesPanel'
 import type { Campaign } from '@/lib/schemas/campaign'
 
 type VentureSummary = {
@@ -21,7 +22,7 @@ export default function CampaignsPage() {
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [view, setView] = useState<'list' | 'create' | 'direct'>('list')
-  const [tab, setTab] = useState<'campaigns' | 'direct' | 'social'>('campaigns')
+  const [tab, setTab] = useState<'campaigns' | 'direct' | 'social' | 'routines'>('campaigns')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [venture, setVenture] = useState<VentureSummary | null>(null)
@@ -174,6 +175,16 @@ export default function CampaignsPage() {
                 >
                   Social
                 </button>
+                <button
+                  onClick={() => setTab('routines')}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    tab === 'routines'
+                      ? 'bg-[var(--accent)] text-white'
+                      : 'text-[var(--text-soft)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  Routines
+                </button>
               </div>
 
               {tab === 'campaigns' ? (
@@ -194,12 +205,14 @@ export default function CampaignsPage() {
                   onDelete={handleDelete}
                   onArchive={handleArchive}
                 />
-              ) : (
+              ) : tab === 'social' ? (
                 <ConnectedChannelsPanel
                   ventureId={ventureId}
                   ventureName={ventureName}
                   billing={null}
                 />
+              ) : (
+                <RoutinesPanel ventureId={ventureId} campaigns={campaigns} />
               )}
             </div>
           )}
