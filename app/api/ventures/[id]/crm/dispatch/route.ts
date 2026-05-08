@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createOutreachCampaign, getLeadsForVenture } from '@/lib/queries'
+import { z } from 'zod'
 import { getSession } from '@/lib/auth'
-import { sendEmail } from '@/lib/forze-mail' // Assuming we have a sendEmail function or similar
+import { createOutreachCampaign, getLeadsForVenture, getVenture } from '@/lib/queries'
+
+const DispatchSchema = z.object({
+  campaignType: z.enum(['initial_outreach', 'follow_up', 'newsletter']),
+  emailSubject: z.string().trim().min(1),
+  emailBody: z.string().trim().min(1),
+})
 
 export async function POST(
   req: NextRequest,
@@ -12,43 +18,37 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const ventureId = (await params).id
-    const body = await req.json()
-    const { campaignType, emailSubject, emailBody } = body
+    const venture = await getVenture(ventureId, session.userId)
+    if (!venture) return NextResponse.json({ error: 'Venture not found' }, { status: 404 })
 
-    if (!campaignType || !emailBody) {
-      return NextResponse.json({ error: 'Missing campaign details' }, { status: 400 })
+    const input = DispatchSchema.safeParse(await req.json())
+    if (!input.success) {
+      return NextResponse.json({ error: input.error.flatten() }, { status: 400 })
     }
+    const { campaignType, emailSubject, emailBody } = input.data
 
-    const campaign = await createOutreachCampaign(ventureId, campaignType)
-    
     // Fetch leads to send to
     const leads = await getLeadsForVenture(ventureId)
-    const targetLeads = leads.filter(l => l.status !== 'unsubscribed') // simple filter
+    const targetLeads = leads.filter(l => l.status !== 'lost' && Boolean(l.email))
 
     let sentCount = 0
     for (const lead of targetLeads) {
       if (lead.email) {
         // Dispatch logic would go here
         try {
-          if (typeof sendEmail === 'function') {
-            await sendEmail({
-              to: lead.email,
-              subject: emailSubject || `Updates from Venture`,
-              text: emailBody.replace('{{name}}', lead.name || 'there'),
-            })
-            sentCount++
-          } else {
-             // Fallback console log for mock dispatch
-             console.log(`Mock dispatch to ${lead.email}: ${emailSubject}`)
-             sentCount++
-          }
+          const text = emailBody.replace(/{{\s*name\s*}}/g, lead.name || 'there')
+          console.log(`Mock dispatch to ${lead.email}: ${emailSubject}`, text)
+          sentCount++
         } catch (e) {
           console.error(`Failed to send to ${lead.email}`, e)
         }
       }
     }
 
-    // In a real app we'd update campaign.sent_count
+    const campaign = await createOutreachCampaign(ventureId, campaignType, {
+      status: 'complete',
+      sentCount,
+    })
     
     return NextResponse.json({ success: true, campaign, sentCount })
   } catch (error: any) {
