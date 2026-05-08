@@ -284,8 +284,11 @@ Generate a COMPLETE, production-quality landing page as a single React functiona
 - Email input with field validation (basic regex)
 - Submit button with loading state
 - Success state with checkmark animation and confirmation message
-- Form submits to "#" with preventDefault (demo mode)
-- Store submissions in component state with success feedback
+- Form MUST submit a POST request to \`/api/ventures/\${ventureId}/leads\` with JSON body \`{ email: string, source: 'landing_page' }\`. Resolve ventureId in this exact order — DO NOT hardcode the venture name: \`const ventureId = (typeof window !== 'undefined' && window.__VENTURE_ID__) || (typeof window !== 'undefined' ? (window.location.pathname.split('/v/')[1] || '').split(/[/?#]/)[0] : '') || '';\`. If ventureId is empty, abort the submission and show an error — never POST to an empty or non-UUID id.
+- Handle loading and errors gracefully.
+
+**Analytics Tracking:**
+- Include a \`useEffect\` that sends a POST request to \`/api/ventures/\${ventureId}/track\` with JSON body \`{ event_type: 'pageview', metadata: { source: 'landing_page' } }\` when the component mounts. Resolve ventureId the same way as the lead form (prefer \`window.__VENTURE_ID__\`); skip the request if ventureId is empty.
 
 **Forze Watermark (Required — always include this):**
 Include a fixed-position "Built with Forze" badge in the bottom-right corner. Place it as the LAST element inside the returned JSX, before the final closing tag. Use these exact inline styles: position fixed, bottom 20px, right 20px, zIndex 9999, display flex, alignItems center, gap 6px, background rgba(0,0,0,0.85), color white, fontSize 11px, fontWeight 500, padding 7px 14px, borderRadius 20px, textDecoration none, backdropFilter blur(10px), boxShadow 0 2px 12px rgba(0,0,0,0.3). The link should open https://tryForze.ai in a new tab. The label should be "⚡ Built with Forze".
@@ -699,7 +702,7 @@ Output the complete PipelineOutput JSON.`
         // Post-process: wire deployment and flags
         validated.deploymentUrl = await deployLandingPage(venture.ventureId, validated)
         validated.leadCaptureActive = true
-        validated.analyticsActive = false // wire later
+        validated.analyticsActive = true // wire later
 
         await onComplete(validated)
     }
