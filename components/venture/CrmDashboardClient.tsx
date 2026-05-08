@@ -25,10 +25,17 @@ type SocialBreakdown = {
   platform: string
   count: number
   leads: number
+  engagement?: number
+  likes?: number
+  comments?: number
+  views?: number
+  posts?: number
 }
 
 type CrmAnalytics = {
   visitors: number
+  landingPageviews?: number
+  socialReach?: number
   leads: number
   conversionRate: string
   rawAnalytics: AnalyticsEvent[]
@@ -223,12 +230,14 @@ export function CrmDashboardClient({ venture }: { venture: VentureSummary }) {
       setInbox((prev) => ({ ...prev, loading: true, error: null }))
       setSocialLeads((prev) => ({ ...prev, loading: true, error: null }))
       setCampaigns((prev) => ({ ...prev, loading: true, error: null }))
+      setEmailLeads((prev) => ({ ...prev, loading: true, error: null }))
 
-      const [analyticsResult, inboxResult, socialLeadsResult, campaignsResult] = await Promise.allSettled([
+      const [analyticsResult, inboxResult, socialLeadsResult, campaignsResult, emailLeadsResult] = await Promise.allSettled([
         fetch(`/api/ventures/${venture.id}/crm/analytics`),
         fetch(`/api/ventures/${venture.id}/crm/inbox`),
         fetch(`/api/ventures/${venture.id}/crm/leads`),
         fetch(`/api/campaigns?venture_id=${encodeURIComponent(venture.id)}`),
+        fetch(`/api/ventures/${venture.id}/crm/leads/email`),
       ])
 
       if (cancelled) return
@@ -252,16 +261,17 @@ export function CrmDashboardClient({ venture }: { venture: VentureSummary }) {
         const data = await readJson<{ campaigns?: CampaignSummary[] }>(res)
         setCampaigns({ data: data.campaigns ?? [], loading: false, error: null })
       }, (message) => setCampaigns({ data: [], loading: false, error: message }))
+
+      await applyResponse(emailLeadsResult, 'Failed to load email leads', async (res) => {
+        const data = await readJson<{ leads?: EmailLead[] }>(res)
+        setEmailLeads({ data: data.leads ?? [], loading: false, error: null })
+      }, (message) => setEmailLeads({ data: [], loading: false, error: message }))
     }
 
     loadCrmData()
     return () => {
       cancelled = true
     }
-  }, [venture.id])
-
-  useEffect(() => {
-    void loadEmailLeads()
   }, [venture.id])
 
   async function applyResponse(
@@ -550,9 +560,17 @@ function OverviewTab({
   return (
     <div style={stackStyle}>
       <section style={panelStyle}>
-        <SectionHeader title="Conversion funnel" detail="Visitors to captured leads." />
+        <SectionHeader title="Conversion funnel" detail="Landing-page pageviews + social reach to captured leads." />
         <div style={funnelStyle}>
-          <MetricCard label="Visitors" value={(data?.visitors ?? 0).toLocaleString()} />
+          <MetricCard
+            label="Visitors"
+            value={(data?.visitors ?? 0).toLocaleString()}
+            sublabel={
+              data
+                ? `${(data.landingPageviews ?? 0).toLocaleString()} landing · ${(data.socialReach ?? 0).toLocaleString()} social`
+                : undefined
+            }
+          />
           <ArrowConnector />
           <MetricCard label="Leads" value={(data?.leads ?? 0).toLocaleString()} />
           <ArrowConnector />
@@ -561,12 +579,21 @@ function OverviewTab({
       </section>
 
       <section style={panelStyle}>
-        <SectionHeader title="Traffic source attribution" detail="Reach, clicks, and generated leads by source." />
+        <SectionHeader title="Social engagement by platform" detail="Likes, comments, and views from connected social accounts." />
         <div style={grid3Style}>
           {(data?.socialBreakdown ?? []).map((source) => (
             <div key={source.platform} style={sourceCardStyle}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>{source.platform}</div>
-              <div style={{ color: 'var(--text-soft)', fontSize: 12 }}>{source.count.toLocaleString()} reach/clicks</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>{source.platform}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700 }}>
+                  {(source.posts ?? 0).toLocaleString()} {source.posts === 1 ? 'post' : 'posts'}
+                </div>
+              </div>
+              <div style={socialMetricRowStyle}>
+                <SocialMetric label="Views" value={source.views ?? source.count ?? 0} />
+                <SocialMetric label="Likes" value={source.likes ?? 0} />
+                <SocialMetric label="Comments" value={source.comments ?? 0} />
+              </div>
               <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 700 }}>{source.leads.toLocaleString()} leads generated</div>
             </div>
           ))}
@@ -981,7 +1008,7 @@ function ConfirmModal({
   )
 }
 
-function MetricCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function MetricCard({ label, value, accent = false, sublabel }: { label: string; value: string; accent?: boolean; sublabel?: string }) {
   return (
     <div style={{
       padding: '16px 18px',
@@ -992,6 +1019,18 @@ function MetricCard({ label, value, accent = false }: { label: string; value: st
     }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: accent ? 'var(--accent)' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontSize: 28, fontWeight: 900, color: accent ? 'var(--accent)' : 'var(--text)', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>{value}</div>
+      {sublabel && (
+        <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginTop: 4 }}>{sublabel}</div>
+      )}
+    </div>
+  )
+}
+
+function SocialMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{value.toLocaleString()}</div>
     </div>
   )
 }
@@ -1157,11 +1196,20 @@ const grid4Style: CSSProperties = {
 const sourceCardStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 5,
+  gap: 10,
   padding: 14,
   borderRadius: 14,
   border: '1px solid var(--border)',
   background: 'var(--sidebar)',
+}
+
+const socialMetricRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 10,
+  padding: '10px 0',
+  borderTop: '1px solid var(--border)',
+  borderBottom: '1px solid var(--border)',
 }
 
 const twoColumnStyle: CSSProperties = {
