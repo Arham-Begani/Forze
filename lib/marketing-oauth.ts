@@ -18,6 +18,10 @@ const LINKEDIN_SCOPES = [
 ]
 
 const META_SCOPES = [
+  'instagram_basic',
+  'instagram_manage_comments',
+  'pages_show_list',
+  'pages_read_engagement',
   'instagram_business_basic',
   'instagram_business_content_publish',
   // Required to read comments via /{media-id}/comments — without this the

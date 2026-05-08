@@ -22,7 +22,7 @@ export interface InstagramPostInsights {
   caption: string | null
   comments: InstagramComment[]
   // Reason the comments array is shorter than commentsCount. Most common:
-  // missing instagram_business_manage_comments scope on the connected account.
+  // missing instagram_manage_comments/instagram_business_manage_comments scope on the connected account.
   commentsFetchError: string | null
   fetchedAt: string
 }
@@ -199,7 +199,9 @@ export async function fetchInstagramPostInsights(
     // Non-fatal — we'll still attempt the comments fetch below.
   }
   const storedScopes = Array.isArray(connection.scopes) ? connection.scopes.filter((s): s is string => typeof s === 'string') : []
-  const hasManageComments = storedScopes.includes('instagram_business_manage_comments')
+  const hasManageComments =
+    storedScopes.includes('instagram_business_manage_comments') ||
+    storedScopes.includes('instagram_manage_comments')
 
   // Comments — limit to the most recent 25 so we don't overwhelm Gemini.
   let comments: InstagramComment[] = []
@@ -222,7 +224,7 @@ export async function fetchInstagramPostInsights(
     if (comments.length === 0 && typeof asNumber(media.comments_count) === 'number' && (asNumber(media.comments_count) ?? 0) > 0) {
       const reasons: string[] = []
       if (!hasManageComments) {
-        reasons.push(`the stored access token is missing the instagram_business_manage_comments scope (granted scopes: ${storedScopes.join(', ') || 'none'})`)
+        reasons.push(`the stored access token is missing the instagram_manage_comments/instagram_business_manage_comments scope (granted scopes: ${storedScopes.join(', ') || 'none'})`)
       }
       if (diagAccountType && diagAccountType.toUpperCase() === 'PERSONAL') {
         reasons.push(`the connected Instagram account "${diagAccountUsername ?? 'unknown'}" is a PERSONAL account — only BUSINESS or CREATOR accounts expose comments via the Graph API`)
@@ -234,7 +236,7 @@ export async function fetchInstagramPostInsights(
         reasons.push(
           `scope appears granted (${storedScopes.join(', ')}) and account type is ${diagAccountType ?? 'unknown'}, but Meta still returned 0 comments. ` +
           `This usually means the Meta App is in Development Mode and the connected Instagram user is not added as a tester/role on the app, ` +
-          `or the instagram_business_manage_comments permission has not been submitted for App Review yet.`
+          `or the instagram_manage_comments permission has not been submitted for Meta App Review yet.`
         )
       }
       commentsFetchError =
@@ -292,7 +294,7 @@ export async function generateValidationReport(input: {
         .map((c, i) => `${i + 1}. @${c.username ?? 'unknown'}: ${c.text}`)
         .join('\n')
     : commentsUnreachable
-      ? `(Instagram reports ${insights.commentsCount} comment${insights.commentsCount === 1 ? '' : 's'} on this post but Forze could not read them — likely missing instagram_business_manage_comments permission. ${insights.commentsFetchError ?? ''})`
+      ? `(Instagram reports ${insights.commentsCount} comment${insights.commentsCount === 1 ? '' : 's'} on this post but Forze could not read them — likely missing instagram_manage_comments permission. ${insights.commentsFetchError ?? ''})`
       : '(no comments yet)'
 
   const systemPrompt = [
@@ -405,7 +407,7 @@ export async function generateAggregateValidationReport(input: {
     const comments = m.comments.length > 0
       ? m.comments.slice(0, 25).map((c, i) => `    ${i + 1}. @${c.username ?? 'unknown'}: ${c.text}`).join('\n')
       : unreachable
-        ? `    (Instagram reports ${m.commentsCount} comment${m.commentsCount === 1 ? '' : 's'} on this post but Forze could not read them — likely missing instagram_business_manage_comments permission. ${m.commentsFetchError ?? ''})`
+        ? `    (Instagram reports ${m.commentsCount} comment${m.commentsCount === 1 ? '' : 's'} on this post but Forze could not read them — likely missing instagram_manage_comments permission. ${m.commentsFetchError ?? ''})`
         : '    (no comments)'
     return [
       `--- POST ${index + 1} (assetId: ${post.assetId}) ---`,
@@ -509,3 +511,4 @@ export async function generateAggregateValidationReport(input: {
   }
   return parsed.data
 }
+
