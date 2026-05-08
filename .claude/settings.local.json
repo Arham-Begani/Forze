@@ -46,7 +46,21 @@
       "Bash(then echo:*)",
       "Bash(echo \"EXIT=$?\")",
       "Bash(git fsck *)",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"feat\\(crm\\): add connection pills + Inbox/Leads/Pipeline tab shell\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"feat\\(crm\\): add leads API + Leads tab table\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"feat\\(crm\\): add Pipeline tab with campaign metrics aggregation\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"feat\\(social\\): add Gmail status state + on-mount fetch in panel\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"feat\\(social\\): add Gmail card with popup OAuth + disconnect\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"feat\\(instagram\\): add reconnect handler + onReconnect prop on MonitorCard\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"fix\\(landing\\): clamp Hero blob sizes on mobile and skip parallax on touch\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"fix\\(landing\\): wrap projections table in horizontal scroll container\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"refactor\\(venture\\): remove Campaigns tab from Overview header strip\")",
+      "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"refactor\\(outreach\\): drop VentureHeader on campaigns pages, use standalone header\")",
+      "Bash(sed -n '47,53p' lib/routine-executor.ts)",
+      "Bash(awk 'NR>=49 && NR<=51' lib/routine-executor.ts)",
+      "Bash(xxd)"
     ]
-  }
+  },
+  "model": "opus"
 }
