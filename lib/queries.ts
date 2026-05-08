@@ -811,6 +811,18 @@ export async function getLeadsForVenture(ventureId: string): Promise<Lead[]> {
   return data ?? []
 }
 
+export async function getLeadById(leadId: string): Promise<Lead | null> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('leads')
+    .select('*')
+    .eq('id', leadId)
+    .single()
+
+  if (error) return null
+  return data
+}
+
 export async function updateLeadStatus(leadId: string, status: string): Promise<void> {
   const db = await createDb()
   const { error } = await db
@@ -819,6 +831,16 @@ export async function updateLeadStatus(leadId: string, status: string): Promise<
     .eq('id', leadId)
 
   if (error) throw new Error(`updateLeadStatus failed: ${error.message}`)
+}
+
+export async function deleteLead(leadId: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('leads')
+    .delete()
+    .eq('id', leadId)
+
+  if (error) throw new Error(`deleteLead failed: ${error.message}`)
 }
 
 export async function createAnalyticsEvent(ventureId: string, eventType: string, metadata: Record<string, unknown> = {}): Promise<AnalyticsEvent> {
@@ -847,12 +869,21 @@ export async function getAnalyticsForVenture(ventureId: string): Promise<Analyti
   return data ?? []
 }
 
-export async function createOutreachCampaign(ventureId: string, type: string): Promise<OutreachCampaign> {
+export async function createOutreachCampaign(
+  ventureId: string,
+  type: string,
+  options: { status?: OutreachCampaign['status']; sentCount?: number } = {}
+): Promise<OutreachCampaign> {
   return withRetry(async () => {
     const db = await createDb()
     const { data, error } = await db
       .from('outreach_campaigns')
-      .insert({ venture_id: ventureId, type })
+      .insert({
+        venture_id: ventureId,
+        type,
+        status: options.status,
+        sent_count: options.sentCount,
+      })
       .select()
       .single()
 
