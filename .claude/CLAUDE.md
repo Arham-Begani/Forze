@@ -127,3 +127,8 @@ Feasibility:      #7A5A8C
 - Never include Marketing in Full Launch
 - Never trust unvalidated agent JSON output
 - Never deploy without running npm run build first
+
+## Github commiting rules
+ - Always make sure the user gets the most amount of commits
+ - Make sure the commits are always to arhambegani2@gmail.com
+ - make sure there are no co-authors in the commit
