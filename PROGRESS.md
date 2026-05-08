@@ -12,6 +12,12 @@ This file is the Agent's memory between sessions.
 **Last updated:** May 8, 2026
 
 ### Latest Session (May 8 2026)
+- Implemented backend CRM fixes from `backend-crm-fixes.md`: added migration `022_crm_email_tracking.sql` for `outreach_campaigns.thread_ids` and `outreach_messages`, added outreach message query helpers, switched CRM dispatch from mock logging to authenticated Gmail sends via the user's connected Gmail, stored Gmail message/thread IDs, and added `GET /api/ventures/[id]/crm/replies` to read non-SENT replies from tracked Gmail threads.
+- Updated Instagram validation backend behavior: requested the Meta comment-reading scopes from the plan, preserved existing Instagram Business scopes, and updated comment-permission diagnostics to recognize `instagram_manage_comments` and `instagram_business_manage_comments`.
+- Reworked `GET /api/ventures/[id]/crm/analytics` so the funnel top metric now uses social reach/impressions from published marketing assets instead of local pageview counts; conversion is now leads divided by social reach while retaining the frontend-compatible `visitors`, `leads`, `conversionRate`, `rawAnalytics`, and `socialBreakdown` response shape.
+- Verification: targeted backend CRM TypeScript check passes. Full `npm run build` remains blocked by the pre-existing unrelated parse error in `agents/pipeline.ts` at line 287.
+
+### Previous Session (May 8 2026)
 - Shipped the CRM dashboard plan for `/dashboard/venture/[id]/crm`: `CrmDashboardClient.tsx` is now the single CRM UI with Overview, Inbox, Leads, Outreach, and Pipeline tabs using Forze CSS variables and inline styles. Added KPI cards, conversion funnel, source attribution, 7-day SVG sparkline, filtered inbox, email/social lead segments, editable lead status, hard delete, CSV export, outreach preview + confirmation modal, and campaign pipeline totals.
 - Added CRM email-lead APIs: `GET /api/ventures/[id]/crm/leads/email`, `PATCH/DELETE /api/ventures/[id]/crm/leads/[leadId]`, and `GET /api/ventures/[id]/crm/leads/export?type=email|social`. Added `getLeadById` and `deleteLead` helpers in `lib/queries.ts`. Hardened dispatch validation and ownership checks so outreach sends only to email leads with status not `lost`.
 - Verification: targeted CRM TypeScript check passes. Full `npm run build` is blocked by the pre-existing unrelated parse error in `agents/pipeline.ts` at line 287.
