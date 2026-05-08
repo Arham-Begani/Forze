@@ -12,15 +12,19 @@ type SocialBreakdown = {
   count: number
   leads: number
   engagement: number
+  likes: number
+  comments: number
+  views: number
+  posts: number
   icon: string
   color: string
 }
 
 function emptyBreakdown(): SocialBreakdown[] {
   return [
-    { platform: 'Twitter (X)', count: 0, leads: 0, engagement: 0, icon: 'Twitter', color: 'text-sky-500' },
-    { platform: 'LinkedIn', count: 0, leads: 0, engagement: 0, icon: 'Linkedin', color: 'text-blue-600' },
-    { platform: 'Instagram', count: 0, leads: 0, engagement: 0, icon: 'Instagram', color: 'text-pink-600' },
+    { platform: 'Twitter (X)', count: 0, leads: 0, engagement: 0, likes: 0, comments: 0, views: 0, posts: 0, icon: 'Twitter', color: 'text-sky-500' },
+    { platform: 'LinkedIn', count: 0, leads: 0, engagement: 0, likes: 0, comments: 0, views: 0, posts: 0, icon: 'Linkedin', color: 'text-blue-600' },
+    { platform: 'Instagram', count: 0, leads: 0, engagement: 0, likes: 0, comments: 0, views: 0, posts: 0, icon: 'Instagram', color: 'text-pink-600' },
   ]
 }
 
@@ -95,8 +99,15 @@ export async function GET(
           }
         }
 
-        instagramBreakdown.count += insightReach(insights)
+        const reach = insightReach(insights)
+        const likes = insights?.likeCount ?? 0
+        const comments = insights?.commentsCount ?? 0
+        instagramBreakdown.count += reach
         instagramBreakdown.engagement += insightEngagement(insights)
+        instagramBreakdown.likes += likes
+        instagramBreakdown.comments += comments
+        instagramBreakdown.views += reach
+        instagramBreakdown.posts += 1
         for (const comment of insights?.comments ?? []) {
           allSocialComments.push({
             platform: 'Instagram',
@@ -112,13 +123,19 @@ export async function GET(
       if (asset.provider === 'linkedin') {
         const payload = asset.payload ?? {}
         const reach = numberFrom(payload.impressions) || numberFrom(payload.reach)
+        const likes = numberFrom(payload.likes)
+        const comments = numberFrom(payload.comments)
         const engagement =
-          numberFrom(payload.likes) +
-          numberFrom(payload.comments) +
+          likes +
+          comments +
           numberFrom(payload.shares) +
           numberFrom(payload.clicks)
         linkedInBreakdown.count += reach
         linkedInBreakdown.engagement += engagement
+        linkedInBreakdown.likes += likes
+        linkedInBreakdown.comments += comments
+        linkedInBreakdown.views += reach
+        linkedInBreakdown.posts += 1
       }
 
     }
@@ -132,14 +149,18 @@ export async function GET(
 
     const totalSocialReach = socialBreakdown.reduce((sum, source) => sum + source.count, 0)
     const totalEngagement = socialBreakdown.reduce((sum, source) => sum + source.engagement, 0)
+    const landingPageviews = analytics.filter((event) => event.event_type === 'pageview').length
+    const totalVisitors = landingPageviews + totalSocialReach
     const totalLeads = leads.length
-    const conversionRate = totalSocialReach > 0
-      ? ((totalLeads / totalSocialReach) * 100).toFixed(2)
+    const conversionRate = totalVisitors > 0
+      ? ((totalLeads / totalVisitors) * 100).toFixed(2)
       : '0.00'
 
     return NextResponse.json({
       success: true,
-      visitors: totalSocialReach,
+      visitors: totalVisitors,
+      landingPageviews,
+      socialReach: totalSocialReach,
       leads: totalLeads,
       conversionRate,
       rawAnalytics: analytics,
