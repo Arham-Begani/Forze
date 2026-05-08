@@ -19,6 +19,7 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
   messageId: string | null
+  threadId: string | null
   status: 'sent' | 'failed'
   error?: string
 }
@@ -87,24 +88,24 @@ export async function sendEmailViaGmail(
     })
 
     if (res.status === 429) {
-      return { messageId: null, status: 'failed', error: 'Gmail rate limit reached — try again later' }
+      return { messageId: null, threadId: null, status: 'failed', error: 'Gmail rate limit reached — try again later' }
     }
 
     if (!res.ok) {
       const body = await res.text()
-      return { messageId: null, status: 'failed', error: `Gmail API error ${res.status}: ${body}` }
+      return { messageId: null, threadId: null, status: 'failed', error: `Gmail API error ${res.status}: ${body}` }
     }
 
-    const result = (await res.json()) as { id: string }
+    const result = (await res.json()) as { id: string; threadId?: string }
 
     // Increment daily sent count (best effort)
     const db = await createDb()
     await db.rpc('increment_gmail_daily_count', { p_user_id: userId }).then(() => {}, () => {})
 
-    return { messageId: result.id, status: 'sent' }
+    return { messageId: result.id, threadId: result.threadId ?? null, status: 'sent' }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return { messageId: null, status: 'failed', error: message }
+    return { messageId: null, threadId: null, status: 'failed', error: message }
   }
 }
 

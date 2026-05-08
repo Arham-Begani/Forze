@@ -1,13 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSession } from '@/lib/auth'
-import { createOutreachCampaign, getLeadsForVenture, getVenture } from '@/lib/queries'
+import {
+  createOutreachCampaign,
+  createOutreachMessage,
+  getLeadsForVenture,
+  getVenture,
+  updateOutreachCampaign,
+} from '@/lib/queries'
+import { getGmailStatus } from '@/lib/gmail-oauth'
+import { sendEmailViaGmail } from '@/lib/gmail-sender'
 
 const DispatchSchema = z.object({
   campaignType: z.enum(['initial_outreach', 'follow_up', 'newsletter']),
   emailSubject: z.string().trim().min(1),
   emailBody: z.string().trim().min(1),
 })
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderBody(template: string, name: string | null): string {
+  const text = template.replace(/{{\s*name\s*}}/g, name?.trim() || 'there')
+  return `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111">${escapeHtml(text).replace(/\r?\n/g, '<br>')}</div>`
+}
 
 export async function POST(
   req: NextRequest,
@@ -30,27 +52,85 @@ export async function POST(
     // Fetch leads to send to
     const leads = await getLeadsForVenture(ventureId)
     const targetLeads = leads.filter(l => l.status !== 'lost' && Boolean(l.email))
+    if (targetLeads.length === 0) {
+      return NextResponse.json({ error: 'No qualified email leads to send to' }, { status: 400 })
+    }
+
+    const gmailStatus = await getGmailStatus(session.userId)
+    if (!gmailStatus.connected) {
+      return NextResponse.json(
+        {
+          error: gmailStatus.errorMessage ?? 'Gmail not connected. Connect or reconnect Gmail before sending.',
+          code: gmailStatus.state === 'needs_reauth' ? 'gmail_reauth_required' : 'gmail_not_connected',
+        },
+        { status: gmailStatus.state === 'needs_reauth' ? 401 : 412 }
+      )
+    }
+    if (!gmailStatus.canSend) {
+      return NextResponse.json(
+        { error: 'Gmail daily send limit reached or integration unhealthy.', code: 'gmail_cannot_send' },
+        { status: 412 }
+      )
+    }
+
+    const campaign = await createOutreachCampaign(ventureId, campaignType, {
+      status: 'running',
+      sentCount: 0,
+    })
 
     let sentCount = 0
+    const threadIds = new Set<string>()
+    const errors: string[] = []
+
     for (const lead of targetLeads) {
       if (lead.email) {
-        // Dispatch logic would go here
         try {
-          const text = emailBody.replace(/{{\s*name\s*}}/g, lead.name || 'there')
-          console.log(`Mock dispatch to ${lead.email}: ${emailSubject}`, text)
+          const result = await sendEmailViaGmail(session.userId, {
+            to: lead.email,
+            subject: emailSubject,
+            htmlBody: renderBody(emailBody, lead.name),
+          })
+
+          if (result.status !== 'sent' || !result.messageId || !result.threadId) {
+            errors.push(`${lead.email}: ${result.error ?? 'Gmail did not return message and thread IDs'}`)
+            continue
+          }
+
+          await createOutreachMessage({
+            campaignId: campaign.id,
+            leadId: lead.id,
+            googleMessageId: result.messageId,
+            googleThreadId: result.threadId,
+          })
+          threadIds.add(result.threadId)
           sentCount++
         } catch (e) {
+          const message = e instanceof Error ? e.message : 'unknown error'
+          errors.push(`${lead.email}: ${message}`)
           console.error(`Failed to send to ${lead.email}`, e)
         }
       }
     }
 
-    const campaign = await createOutreachCampaign(ventureId, campaignType, {
+    const updatedCampaign = await updateOutreachCampaign(campaign.id, {
       status: 'complete',
-      sentCount,
+      sent_count: sentCount,
+      thread_ids: Array.from(threadIds),
     })
-    
-    return NextResponse.json({ success: true, campaign, sentCount })
+
+    if (sentCount === 0) {
+      return NextResponse.json(
+        { error: 'All Gmail sends failed', success: false, sentCount, errors: errors.slice(0, 20) },
+        { status: 502 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      campaign: updatedCampaign,
+      sentCount,
+      ...(errors.length > 0 ? { errors: errors.slice(0, 20) } : {}),
+    })
   } catch (error: any) {
     console.error('Error dispatching outreach:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
