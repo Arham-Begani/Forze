@@ -25,12 +25,78 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let active = true
 
-    async function checkSession() {
+    async function establishRecoverySession() {
       const supabase = createClient()
+      const url = new URL(window.location.href)
+
+      // Supabase puts the recovery error / token in either the query string
+      // (PKCE flow + verify endpoint redirect) or the URL hash (legacy implicit flow).
+      const hashParams = new URLSearchParams(
+        window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash
+      )
+
+      const errorDescription =
+        url.searchParams.get('error_description') ||
+        url.searchParams.get('error') ||
+        hashParams.get('error_description') ||
+        hashParams.get('error')
+
+      if (errorDescription) {
+        if (!active) return
+        setCheckingSession(false)
+        setReady(false)
+        setError(decodeURIComponent(errorDescription).replace(/\+/g, ' '))
+        return
+      }
+
+      // PKCE flow — Supabase's /auth/v1/verify redirects here with ?code=...
+      const code = url.searchParams.get('code')
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+        if (!active) return
+        if (exchangeError) {
+          setCheckingSession(false)
+          setReady(false)
+          setError(exchangeError.message || 'This reset link is invalid or has expired. Request a new one.')
+          return
+        }
+        // Strip the code from the URL so a refresh doesn't try to re-exchange it.
+        url.searchParams.delete('code')
+        window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+        setCheckingSession(false)
+        setReady(true)
+        return
+      }
+
+      // Legacy implicit flow — tokens arrive in the URL hash.
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      const hashType = hashParams.get('type')
+      if (accessToken && refreshToken && (hashType === 'recovery' || hashType === null)) {
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+        if (!active) return
+        if (setSessionError) {
+          setCheckingSession(false)
+          setReady(false)
+          setError(setSessionError.message || 'This reset link is invalid or has expired. Request a new one.')
+          return
+        }
+        // Clear the hash so refreshing doesn't replay the token.
+        window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+        setCheckingSession(false)
+        setReady(true)
+        return
+      }
+
+      // No URL token — fall back to checking for an already-established session
+      // (e.g., user opened the link in the same tab where they're already signed in).
       await new Promise(resolve => setTimeout(resolve, 300))
-      const { data, error } = await supabase.auth.getSession()
+      const { data, error: sessionError } = await supabase.auth.getSession()
       if (!active) return
-      if (error || !data.session) {
+      if (sessionError || !data.session) {
         setCheckingSession(false)
         setReady(false)
         return
@@ -39,7 +105,7 @@ export default function ResetPasswordPage() {
       setReady(true)
     }
 
-    checkSession()
+    establishRecoverySession()
     return () => {
       active = false
     }
