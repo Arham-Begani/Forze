@@ -1,11 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalyticsForVenture, getLeadsForVenture } from '@/lib/queries'
+import { getAnalyticsForVenture, getLeadsForVenture, getVenture } from '@/lib/queries'
 import { getSession } from '@/lib/auth'
 import { listMarketingAssetsByVenture, getSocialConnectionSecretByProvider } from '@/lib/marketing-queries'
-import { fetchInstagramPostInsights } from '@/lib/instagram-insights'
+import { fetchInstagramPostInsights, type InstagramPostInsights } from '@/lib/instagram-insights'
+import type { MarketingAsset } from '@/lib/marketing.shared'
+
+type SocialPlatform = 'Twitter (X)' | 'LinkedIn' | 'Instagram'
+
+type SocialBreakdown = {
+  platform: SocialPlatform
+  count: number
+  leads: number
+  engagement: number
+  icon: string
+  color: string
+}
+
+function emptyBreakdown(): SocialBreakdown[] {
+  return [
+    { platform: 'Twitter (X)', count: 0, leads: 0, engagement: 0, icon: 'Twitter', color: 'text-sky-500' },
+    { platform: 'LinkedIn', count: 0, leads: 0, engagement: 0, icon: 'Linkedin', color: 'text-blue-600' },
+    { platform: 'Instagram', count: 0, leads: 0, engagement: 0, icon: 'Instagram', color: 'text-pink-600' },
+  ]
+}
+
+function numberFrom(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function storedInsights(asset: MarketingAsset): InstagramPostInsights | null {
+  const insights = asset.payload?.insights
+  return insights && typeof insights === 'object' ? insights as InstagramPostInsights : null
+}
+
+function insightReach(insights: InstagramPostInsights | null): number {
+  if (!insights) return 0
+  return insights.reach ?? insights.impressions ?? 0
+}
+
+function insightEngagement(insights: InstagramPostInsights | null): number {
+  if (!insights) return 0
+  return (insights.likeCount ?? 0) + (insights.commentsCount ?? 0) + (insights.saved ?? 0)
+}
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -13,79 +52,104 @@ export async function GET(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const ventureId = (await params).id
-    const analytics = await getAnalyticsForVenture(ventureId)
-    const leads = await getLeadsForVenture(ventureId)
+    const venture = await getVenture(ventureId, session.userId)
+    if (!venture) return NextResponse.json({ error: 'Venture not found' }, { status: 404 })
 
-    // Basic web aggregation
-    const visitors = analytics.filter(e => e.event_type === 'pageview').length
-    const totalLeads = leads.length
-    const conversionRate = visitors > 0 ? ((totalLeads / visitors) * 100).toFixed(2) : '0.00'
+    const [analytics, leads, marketingAssets] = await Promise.all([
+      getAnalyticsForVenture(ventureId),
+      getLeadsForVenture(ventureId),
+      listMarketingAssetsByVenture(ventureId, session.userId),
+    ])
 
-    // Real Social Data Aggregation
-    const marketingAssets = await listMarketingAssetsByVenture(ventureId, session.userId)
-    const publishedInstagramAssets = marketingAssets.filter(
-      a => a.provider === 'instagram' && a.status === 'published' && a.provider_asset_id
+    const socialBreakdown = emptyBreakdown()
+    const instagramBreakdown = socialBreakdown.find((item) => item.platform === 'Instagram')!
+    const linkedInBreakdown = socialBreakdown.find((item) => item.platform === 'LinkedIn')!
+    const twitterBreakdown = socialBreakdown.find((item) => item.platform === 'Twitter (X)')!
+    const allSocialComments: Array<{
+      platform: string
+      id: string
+      username: string | null
+      text: string
+      timestamp: string | null
+      assetTitle: string
+    }> = []
+
+    const publishedAssets = marketingAssets.filter((asset) => asset.status === 'published')
+    const publishedInstagramAssets = publishedAssets.filter(
+      (asset) => asset.provider === 'instagram' && asset.provider_asset_id
     )
 
-    let socialBreakdown = [
-      { platform: 'Twitter (X)', count: 0, leads: 0, icon: 'Twitter', color: 'text-sky-500' },
-      { platform: 'LinkedIn', count: 0, leads: 0, icon: 'Linkedin', color: 'text-blue-600' },
-      { platform: 'Instagram', count: 0, leads: 0, icon: 'Instagram', color: 'text-pink-600' }
-    ]
-
-    let allSocialComments: any[] = []
-
+    let instagramConnection = null
     if (publishedInstagramAssets.length > 0) {
-      const igConnection = await getSocialConnectionSecretByProvider(session.userId, 'instagram')
-      if (igConnection && igConnection.access_token_encrypted) {
-        for (const asset of publishedInstagramAssets) {
-          try {
-            const insights = await fetchInstagramPostInsights(asset.provider_asset_id!, igConnection)
-            const igIndex = socialBreakdown.findIndex(s => s.platform === 'Instagram')
-            if (igIndex > -1) {
-              socialBreakdown[igIndex].count += (insights.impressions || insights.reach || 0)
-            }
-            
-            if (insights.comments && insights.comments.length > 0) {
-               const mappedComments = insights.comments.map(c => ({
-                  platform: 'Instagram',
-                  id: c.id,
-                  username: c.username,
-                  text: c.text,
-                  timestamp: c.timestamp,
-                  assetTitle: asset.title
-               }))
-               allSocialComments = [...allSocialComments, ...mappedComments]
-            }
-          } catch (e) {
-            console.error(`Failed to fetch IG insights for asset ${asset.id}:`, e)
-          }
-        }
-      }
+      instagramConnection = await getSocialConnectionSecretByProvider(session.userId, 'instagram')
     }
 
-    // You can repeat similar logic for LinkedIn/Twitter when their fetchers are available.
+    for (const asset of publishedAssets) {
+      if (asset.provider === 'instagram') {
+        let insights = storedInsights(asset)
+        if (asset.provider_asset_id && instagramConnection?.access_token_encrypted) {
+          try {
+            insights = await fetchInstagramPostInsights(asset.provider_asset_id, instagramConnection)
+          } catch (error) {
+            console.error(`Failed to fetch IG insights for asset ${asset.id}:`, error)
+          }
+        }
 
-    // Calculate leads per source simply by checking the source field on leads
-    leads.forEach(lead => {
-       const source = (lead.source || '').toLowerCase()
-       if (source.includes('twitter') || source.includes('x')) socialBreakdown[0].leads++
-       if (source.includes('linkedin')) socialBreakdown[1].leads++
-       if (source.includes('instagram') || source.includes('ig')) socialBreakdown[2].leads++
-    })
+        instagramBreakdown.count += insightReach(insights)
+        instagramBreakdown.engagement += insightEngagement(insights)
+        for (const comment of insights?.comments ?? []) {
+          allSocialComments.push({
+            platform: 'Instagram',
+            id: comment.id,
+            username: comment.username,
+            text: comment.text,
+            timestamp: comment.timestamp,
+            assetTitle: asset.title,
+          })
+        }
+      }
 
-    return NextResponse.json({ 
-      success: true, 
-      visitors,
+      if (asset.provider === 'linkedin') {
+        const payload = asset.payload ?? {}
+        const reach = numberFrom(payload.impressions) || numberFrom(payload.reach)
+        const engagement =
+          numberFrom(payload.likes) +
+          numberFrom(payload.comments) +
+          numberFrom(payload.shares) +
+          numberFrom(payload.clicks)
+        linkedInBreakdown.count += reach
+        linkedInBreakdown.engagement += engagement
+      }
+
+    }
+
+    for (const lead of leads) {
+      const source = (lead.source || '').toLowerCase()
+      if (source.includes('twitter') || source.includes('x')) twitterBreakdown.leads++
+      if (source.includes('linkedin')) linkedInBreakdown.leads++
+      if (source.includes('instagram') || source.includes('ig')) instagramBreakdown.leads++
+    }
+
+    const totalSocialReach = socialBreakdown.reduce((sum, source) => sum + source.count, 0)
+    const totalEngagement = socialBreakdown.reduce((sum, source) => sum + source.engagement, 0)
+    const totalLeads = leads.length
+    const conversionRate = totalSocialReach > 0
+      ? ((totalLeads / totalSocialReach) * 100).toFixed(2)
+      : '0.00'
+
+    return NextResponse.json({
+      success: true,
+      visitors: totalSocialReach,
       leads: totalLeads,
       conversionRate,
       rawAnalytics: analytics,
       socialBreakdown,
-      socialComments: allSocialComments
+      socialComments: allSocialComments,
+      totalEngagement,
     })
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal error'
     console.error('Error fetching CRM analytics:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
-
