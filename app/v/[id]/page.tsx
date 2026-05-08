@@ -42,7 +42,7 @@ export default function VenturePreviewPage() {
 
         // Build full HTML document for the iframe
         const seo = data.landing?.seoMetadata || {};
-        const fullHtml = buildHtmlDocument(resolved, seo, data.name);
+        const fullHtml = buildHtmlDocument(resolved, seo, data.name, String(id));
         setHtml(fullHtml);
       } catch (err: any) {
         console.error("Error loading preview:", err);
@@ -206,8 +206,10 @@ export default function VenturePreviewPage() {
 function buildHtmlDocument(
   componentCode: string,
   seo: { title?: string; description?: string; keywords?: string[] },
-  ventureName: string
+  ventureName: string,
+  ventureId: string
 ): string {
+  const ventureIdJson = JSON.stringify(ventureId);
   // Detect if the code is a React component (JSX) or raw HTML
   const isReactComponent =
     componentCode.includes("export default") ||
@@ -240,8 +242,30 @@ function buildHtmlDocument(
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    window.__VENTURE_ID__ = ${ventureIdJson};
+    (function () {
+      var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      function rewrite(input) {
+        try {
+          var url = typeof input === 'string' ? input : (input && input.url) || '';
+          var m = url.match(/\\/api\\/ventures\\/([^\\/?#]+)(\\/[^?#]*)?/);
+          if (!m) return input;
+          if (UUID.test(m[1])) return input;
+          var fixed = url.replace('/api/ventures/' + m[1], '/api/ventures/' + window.__VENTURE_ID__);
+          if (typeof input === 'string') return fixed;
+          return new Request(fixed, input);
+        } catch (e) { return input; }
+      }
+      var origFetch = window.fetch.bind(window);
+      window.fetch = function (input, init) {
+        return origFetch(rewrite(input), init);
+      };
+    })();
+  <\/script>
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
+    const __VENTURE_ID__ = window.__VENTURE_ID__;
 
     ${componentCode
       .replace(/^import\s+.*$/gm, "// import removed for preview")
@@ -273,6 +297,7 @@ function buildHtmlDocument(
   <title>${escapeHtml(seo.title || ventureName || "Landing Page")}</title>
   ${seo.description ? `<meta name="description" content="${escapeHtml(seo.description)}" />` : ""}
   <script src="https://cdn.tailwindcss.com"><\/script>
+  <script>window.__VENTURE_ID__ = ${ventureIdJson};<\/script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
