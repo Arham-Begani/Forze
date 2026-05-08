@@ -9,9 +9,14 @@ This file is the Agent's memory between sessions.
 
 ## Current Status
 **Phase:** 14 — Public Blog System
-**Last updated:** April 20, 2026
+**Last updated:** May 8, 2026
 
-### Latest Session (April 20 2026)
+### Latest Session (May 8 2026)
+- Shipped the CRM dashboard plan for `/dashboard/venture/[id]/crm`: `CrmDashboardClient.tsx` is now the single CRM UI with Overview, Inbox, Leads, Outreach, and Pipeline tabs using Forze CSS variables and inline styles. Added KPI cards, conversion funnel, source attribution, 7-day SVG sparkline, filtered inbox, email/social lead segments, editable lead status, hard delete, CSV export, outreach preview + confirmation modal, and campaign pipeline totals.
+- Added CRM email-lead APIs: `GET /api/ventures/[id]/crm/leads/email`, `PATCH/DELETE /api/ventures/[id]/crm/leads/[leadId]`, and `GET /api/ventures/[id]/crm/leads/export?type=email|social`. Added `getLeadById` and `deleteLead` helpers in `lib/queries.ts`. Hardened dispatch validation and ownership checks so outreach sends only to email leads with status not `lost`.
+- Verification: targeted CRM TypeScript check passes. Full `npm run build` is blocked by the pre-existing unrelated parse error in `agents/pipeline.ts` at line 287.
+
+### Previous Session (April 20 2026)
 - Shipped the public blog system per `BLOG_SETUP_PROMPT.md`. Migration `017_blog_posts.sql` creates `blog_posts` + `blog_views` with RLS (public reads on `published = true`, authors manage own rows) and an `increment_blog_view_count(p_post_id)` SECURITY DEFINER RPC so anonymous visitors can bump the counter without UPDATE privileges. Added `lib/schemas/blog.ts` (input/row/summary Zod shapes), `lib/queries/blog-queries.ts` (Supabase list/detail/related/view helpers), three API routes under `/api/blog/posts`, `/blog` listing + `/blog/[slug]` detail pages using Next 16 `params: Promise<...>`. Added `BlogCard` + `BlogMeta` (JSON-LD `BlogPosting` + metadata helpers) and lightweight `format-date.ts` (skips adding `date-fns`). Added `.blog-content` typography block in `globals.css` since `@tailwindcss/typography` isn't installed. Seeded 3 launch posts via `db/seeds/blog-posts.sql` (idempotent via `ON CONFLICT (slug)`). `npx tsc --noEmit` clean.
 
 ### Previous Session (April 19 2026)
