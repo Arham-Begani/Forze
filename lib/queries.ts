@@ -755,3 +755,120 @@ export async function setCohortWinner(cohortId: string, winnerId: string): Promi
 
   if (error) throw new Error(`setCohortWinner failed: ${error.message}`)
 }
+
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+
+export interface Lead {
+  id: string
+  venture_id: string
+  email: string
+  name: string | null
+  status: 'new' | 'contacted' | 'qualified' | 'lost' | 'won'
+  source: string
+  created_at: string
+}
+
+export interface AnalyticsEvent {
+  id: string
+  venture_id: string
+  event_type: 'pageview' | 'cta_click' | 'form_submit' | string
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface OutreachCampaign {
+  id: string
+  venture_id: string
+  type: string
+  status: 'draft' | 'running' | 'complete'
+  sent_count: number
+  created_at: string
+}
+
+export async function createLead(ventureId: string, email: string, name?: string, source = 'landing_page'): Promise<Lead> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('leads')
+      .insert({ venture_id: ventureId, email, name, source })
+      .select()
+      .single()
+
+    if (error) throw new Error(`createLead failed: ${error.message}`)
+    return data
+  })
+}
+
+export async function getLeadsForVenture(ventureId: string): Promise<Lead[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('leads')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getLeadsForVenture failed: ${error.message}`)
+  return data ?? []
+}
+
+export async function updateLeadStatus(leadId: string, status: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('leads')
+    .update({ status })
+    .eq('id', leadId)
+
+  if (error) throw new Error(`updateLeadStatus failed: ${error.message}`)
+}
+
+export async function createAnalyticsEvent(ventureId: string, eventType: string, metadata: Record<string, unknown> = {}): Promise<AnalyticsEvent> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('analytics_events')
+      .insert({ venture_id: ventureId, event_type: eventType, metadata })
+      .select()
+      .single()
+
+    if (error) throw new Error(`createAnalyticsEvent failed: ${error.message}`)
+    return data
+  })
+}
+
+export async function getAnalyticsForVenture(ventureId: string): Promise<AnalyticsEvent[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('analytics_events')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw new Error(`getAnalyticsForVenture failed: ${error.message}`)
+  return data ?? []
+}
+
+export async function createOutreachCampaign(ventureId: string, type: string): Promise<OutreachCampaign> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('outreach_campaigns')
+      .insert({ venture_id: ventureId, type })
+      .select()
+      .single()
+
+    if (error) throw new Error(`createOutreachCampaign failed: ${error.message}`)
+    return data
+  })
+}
+
+export async function getOutreachCampaignsForVenture(ventureId: string): Promise<OutreachCampaign[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('outreach_campaigns')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getOutreachCampaignsForVenture failed: ${error.message}`)
+  return data ?? []
+}
