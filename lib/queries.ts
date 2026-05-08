@@ -782,7 +782,21 @@ export interface OutreachCampaign {
   type: string
   status: 'draft' | 'running' | 'complete'
   sent_count: number
+  thread_ids?: string[]
   created_at: string
+}
+
+export interface OutreachMessage {
+  id: string
+  campaign_id: string
+  lead_id: string
+  google_message_id: string
+  google_thread_id: string
+  sent_at: string
+}
+
+export interface OutreachMessageWithLead extends OutreachMessage {
+  lead: Lead | null
 }
 
 export async function createLead(ventureId: string, email: string, name?: string, source = 'landing_page'): Promise<Lead> {
@@ -876,20 +890,60 @@ export async function createOutreachCampaign(
 ): Promise<OutreachCampaign> {
   return withRetry(async () => {
     const db = await createDb()
+    const payload: Record<string, unknown> = {
+      venture_id: ventureId,
+      type,
+    }
+    if (options.status) payload.status = options.status
+    if (typeof options.sentCount === 'number') payload.sent_count = options.sentCount
+
     const { data, error } = await db
       .from('outreach_campaigns')
-      .insert({
-        venture_id: ventureId,
-        type,
-        status: options.status,
-        sent_count: options.sentCount,
-      })
+      .insert(payload)
       .select()
       .single()
 
     if (error) throw new Error(`createOutreachCampaign failed: ${error.message}`)
     return data
   })
+}
+
+export async function updateOutreachCampaign(
+  campaignId: string,
+  updates: Partial<Pick<OutreachCampaign, 'status' | 'sent_count' | 'thread_ids'>>
+): Promise<OutreachCampaign> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('outreach_campaigns')
+    .update(updates)
+    .eq('id', campaignId)
+    .select()
+    .single()
+
+  if (error) throw new Error(`updateOutreachCampaign failed: ${error.message}`)
+  return data
+}
+
+export async function createOutreachMessage(input: {
+  campaignId: string
+  leadId: string
+  googleMessageId: string
+  googleThreadId: string
+}): Promise<OutreachMessage> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('outreach_messages')
+    .insert({
+      campaign_id: input.campaignId,
+      lead_id: input.leadId,
+      google_message_id: input.googleMessageId,
+      google_thread_id: input.googleThreadId,
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(`createOutreachMessage failed: ${error.message}`)
+  return data
 }
 
 export async function getOutreachCampaignsForVenture(ventureId: string): Promise<OutreachCampaign[]> {
@@ -902,4 +956,32 @@ export async function getOutreachCampaignsForVenture(ventureId: string): Promise
 
   if (error) throw new Error(`getOutreachCampaignsForVenture failed: ${error.message}`)
   return data ?? []
+}
+
+export async function getOutreachMessagesForVenture(ventureId: string): Promise<OutreachMessageWithLead[]> {
+  const campaigns = await getOutreachCampaignsForVenture(ventureId)
+  const campaignIds = campaigns.map((campaign) => campaign.id)
+  if (campaignIds.length === 0) return []
+
+  const [leads, messagesResult] = await Promise.all([
+    getLeadsForVenture(ventureId),
+    (async () => {
+      const db = await createDb()
+      return db
+        .from('outreach_messages')
+        .select('*')
+        .in('campaign_id', campaignIds)
+        .order('sent_at', { ascending: false })
+    })(),
+  ])
+
+  if (messagesResult.error) {
+    throw new Error(`getOutreachMessagesForVenture failed: ${messagesResult.error.message}`)
+  }
+
+  const leadById = new Map(leads.map((lead) => [lead.id, lead]))
+  return ((messagesResult.data ?? []) as OutreachMessage[]).map((message) => ({
+    ...message,
+    lead: leadById.get(message.lead_id) ?? null,
+  }))
 }
