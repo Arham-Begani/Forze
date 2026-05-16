@@ -44,6 +44,7 @@ export interface Venture {
   user_id: string
   project_id: string | null
   name: string
+  subdomain: string | null
   context: VentureContext
   created_at: string
   updated_at: string
@@ -199,9 +200,46 @@ export async function deleteProject(id: string): Promise<void> {
 
 // ─── Ventures ─────────────────────────────────────────────────────────────────
 
+export function slugifyVentureName(name: string): string {
+  const slug = (name ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-+|-+$)/g, '')
+    .slice(0, 32)
+  return slug || 'venture'
+}
+
+// Returns a unique subdomain, or null if the `subdomain` column doesn't
+// exist yet (migration 023 not applied) — caller treats null as "skip".
+async function generateUniqueSubdomain(name: string): Promise<string | null> {
+  const db = await createDb()
+  const base = slugifyVentureName(name)
+  let candidate = base
+  let attempt = 0
+
+  while (attempt < 8) {
+    const { data, error } = await db
+      .from('ventures')
+      .select('id')
+      .ilike('subdomain', candidate)
+      .limit(1)
+      .maybeSingle()
+
+    // Column missing → migration not run. Skip subdomain assignment silently.
+    if (error && /subdomain/i.test(error.message || '')) return null
+    if (!data) return candidate
+
+    attempt++
+    const suffix = Math.random().toString(36).slice(2, 7)
+    candidate = `${base.slice(0, 26)}-${suffix}`
+  }
+  return `${base.slice(0, 24)}-${Date.now().toString(36)}`
+}
+
 export async function createVenture(userId: string, name: string, projectId?: string): Promise<Venture> {
   return withRetry(async () => {
     const db = await createDb()
+    const subdomain = await generateUniqueSubdomain(name)
     const insertData: Record<string, unknown> = {
       user_id: userId,
       name,
@@ -217,6 +255,7 @@ export async function createVenture(userId: string, name: string, projectId?: st
         mvpScalpel: null,
       },
     }
+    if (subdomain) insertData.subdomain = subdomain
     if (projectId) insertData.project_id = projectId
 
     const { data, error } = await db
@@ -224,6 +263,16 @@ export async function createVenture(userId: string, name: string, projectId?: st
       .insert(insertData)
       .select()
       .single()
+
+    // If the DB still complains about the subdomain column (e.g. column was
+    // dropped or the schema cache is stale), retry once without it so venture
+    // creation never blocks on a half-applied migration.
+    if (error && /subdomain/i.test(error.message || '')) {
+      delete insertData.subdomain
+      const retry = await db.from('ventures').insert(insertData).select().single()
+      if (retry.error) throw new Error(`createVenture failed: ${retry.error.message}`)
+      return retry.data
+    }
 
     if (error) throw new Error(`createVenture failed: ${error.message}`)
     return data
@@ -496,6 +545,36 @@ export async function getVenturePublic(id: string): Promise<Venture | null> {
 
   if (error) return null
   return data
+}
+
+// Public venture lookup by subdomain — used for wildcard subdomain routing.
+// Returns null on any error (including the column not existing yet) so the
+// /sites/[subdomain] route shows a clean 404 instead of a 500.
+export async function getVentureBySubdomain(subdomain: string): Promise<Venture | null> {
+  if (!subdomain) return null
+  try {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('ventures')
+      .select('*')
+      .ilike('subdomain', subdomain)
+      .maybeSingle()
+
+    if (error) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+export async function updateVentureSubdomain(id: string, subdomain: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('ventures')
+    .update({ subdomain, updated_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (error) throw new Error(`updateVentureSubdomain failed: ${error.message}`)
 }
 
 // ─── Timeline ─────────────────────────────────────────────────────────────────
