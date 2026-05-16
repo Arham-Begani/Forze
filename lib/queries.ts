@@ -279,12 +279,48 @@ export async function createVenture(userId: string, name: string, projectId?: st
   })
 }
 
-export async function getVenturesByUser(userId: string): Promise<Venture[]> {
+function isMissingRelationError(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false
+  if (err.code === '42P01') return true
+  const msg = (err.message || '').toLowerCase()
+  return msg.includes('venture_members') && (msg.includes('does not exist') || msg.includes('relation'))
+}
+
+async function getVenturesByUserLegacy(userId: string): Promise<Venture[]> {
   const db = await createDb()
   const { data, error } = await db
     .from('ventures')
     .select('*')
     .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`getVenturesByUser legacy fallback failed: ${error.message}`)
+  return data ?? []
+}
+
+export async function getVenturesByUser(userId: string): Promise<Venture[]> {
+  const db = await createDb()
+
+  // Get all venture IDs the user is a member of
+  const { data: members, error: membersError } = await db
+    .from('venture_members')
+    .select('venture_id')
+    .eq('user_id', userId)
+
+  // If venture_members table doesn't exist yet (migration 024 not applied),
+  // fall back to the legacy ventures.user_id lookup so the app still works.
+  if (membersError) {
+    if (isMissingRelationError(membersError)) return getVenturesByUserLegacy(userId)
+    throw new Error(`getVenturesByUser members fetch failed: ${membersError.message}`)
+  }
+
+  if (!members || members.length === 0) return []
+
+  const ventureIds = members.map(m => m.venture_id)
+
+  const { data, error } = await db
+    .from('ventures')
+    .select('*')
+    .in('id', ventureIds)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(`getVenturesByUser failed: ${error.message}`)
@@ -305,15 +341,44 @@ export async function getVenturesByProject(projectId: string): Promise<Venture[]
 
 export async function getVenture(id: string, userId: string): Promise<Venture | null> {
   const db = await createDb()
+
+  // Verify access via venture_members (with legacy fallback to ventures.user_id)
+  const role = await getVentureAccess(id, userId)
+  if (!role) return null
+
   const { data, error } = await db
     .from('ventures')
     .select('*')
     .eq('id', id)
-    .eq('user_id', userId)
     .single()
 
   if (error) return null
   return data
+}
+
+export async function getVentureAccess(ventureId: string, userId: string): Promise<'owner' | 'admin' | 'editor' | 'viewer' | null> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('venture_members')
+    .select('role')
+    .eq('venture_id', ventureId)
+    .eq('user_id', userId)
+    .single()
+
+  if (data && !error) return data.role as 'owner' | 'admin' | 'editor' | 'viewer'
+
+  // Legacy fallback: if venture_members table doesn't exist (migration 024
+  // not applied), treat the venture's user_id as the owner.
+  if (error && isMissingRelationError(error)) {
+    const { data: legacy } = await db
+      .from('ventures')
+      .select('user_id')
+      .eq('id', ventureId)
+      .single()
+    if (legacy && legacy.user_id === userId) return 'owner'
+  }
+
+  return null
 }
 
 export async function updateVentureName(id: string, name: string): Promise<void> {
