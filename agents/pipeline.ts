@@ -10,6 +10,7 @@ import {
 } from '@/lib/gemini'
 import { resolveLandingComponent, isRenderableLandingComponent } from '@/lib/landing-page'
 import { sanitize, sanitizeLabel } from '@/lib/sanitize'
+import { getVenturePublic } from '@/lib/queries'
 
 // ── PipelineOutput Zod Schema ────────────────────────────────────────────────
 
@@ -186,7 +187,19 @@ function mergePatch(existing: PipelineOutput, patch: PipelineEditPatch): Pipelin
 // ── Deployment Stub ──────────────────────────────────────────────────────────
 
 async function deployLandingPage(ventureId: string, result: PipelineOutput): Promise<string> {
-    // Return a local preview URL
+    // Prefer the venture's wildcard subdomain (e.g. https://feedflow.forze.in)
+    // and fall back to the legacy /v/[id] path if no subdomain is set or the
+    // app URL is unavailable.
+    const venture = await getVenturePublic(ventureId).catch(() => null)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+    if (venture?.subdomain && appUrl) {
+        try {
+            const url = new URL(appUrl)
+            return `${url.protocol}//${venture.subdomain}.${url.host}`
+        } catch {
+            // fall through to legacy
+        }
+    }
     return `/v/${ventureId}`
 }
 
