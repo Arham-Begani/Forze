@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { LoadingScreen } from '@/components/ui/LoadingScreen'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
 import { ToastProvider, useToast } from '@/components/ui/Toast'
+import { PlatformFeedbackButton } from '@/components/ui/PlatformFeedbackButton'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     // shared /[module] workspace used for agent runs.
     if (moduleId === 'campaigns') return `/dashboard/venture/${ventureId}/campaigns`
     if (moduleId === 'crm') return `/dashboard/venture/${ventureId}/crm`
+    if (moduleId === 'testimonials') return `/dashboard/venture/${ventureId}/testimonials`
     return `/dashboard/venture/${ventureId}/${moduleId}`
   }
 
@@ -313,6 +315,9 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     }
     if (moduleId === 'crm') {
       return pathname.startsWith(`/dashboard/venture/${ventureId}/crm`)
+    }
+    if (moduleId === 'testimonials') {
+      return pathname.startsWith(`/dashboard/venture/${ventureId}/testimonials`)
     }
     return pathname === `/dashboard/venture/${ventureId}/${moduleId}`
   }
@@ -942,6 +947,24 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                               <span style={{ color: crmModule.accent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>{crmModule.icon}</span>
                               <span style={{ fontSize: 13, color: crmActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: crmActive ? 700 : 600 }}>CRM</span>
                             </motion.button>
+
+                            {/* Testimonials — sibling feature (not an agent module) */}
+                            {(() => {
+                              const testimonialsAccent = '#B86A8E'
+                              const testimonialsActive = isModuleActive(activeVenture.id, 'testimonials')
+                              return (
+                                <motion.button
+                                  whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                                  onClick={() => router.push(moduleHref(activeVenture.id, 'testimonials'))}
+                                  aria-label="Open Testimonials"
+                                  aria-current={testimonialsActive ? 'page' : undefined}
+                                  style={sectionButtonStyle(testimonialsActive, testimonialsAccent)}
+                                >
+                                  <span style={{ color: testimonialsAccent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>❝</span>
+                                  <span style={{ fontSize: 13, color: testimonialsActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: testimonialsActive ? 700 : 600 }}>Testimonials</span>
+                                </motion.button>
+                              )
+                            })()}
                           </div>
                         )
                       })()}
@@ -1015,6 +1038,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                       </svg>
                       Manage Projects
                     </motion.button>
+                    <PlatformFeedbackButton />
                   </div>
 
                   {/* Analytics + Settings */}
