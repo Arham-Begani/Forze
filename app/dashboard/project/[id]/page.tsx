@@ -351,6 +351,17 @@ export default function ProjectDetailPage() {
                         </svg>
                       </motion.button>
                       <motion.button
+                        onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/venture/${v.id}/team`) }}
+                        style={{ padding: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', borderRadius: 4, display: 'flex', alignItems: 'center', flexShrink: 0, opacity: isHovered ? 1 : 0, transition: 'opacity 150ms' }}
+                        whileHover={{ scale: 1.1, color: '#3b82f6' }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Invite teammates"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
+                        </svg>
+                      </motion.button>
+                      <motion.button
                         onClick={(e) => { e.stopPropagation(); handleDeleteVenture(v.id) }}
                         style={{ padding: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', borderRadius: 4, display: 'flex', alignItems: 'center', flexShrink: 0, opacity: isHovered ? 1 : 0, transition: 'opacity 150ms' }}
                         whileHover={{ scale: 1.1, color: '#e05252' }}

@@ -1086,6 +1086,37 @@ export default function ModulePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <motion.button
+            type="button"
+            onClick={() => router.push(`/dashboard/venture/${ventureId}/team`)}
+            title="Invite teammates to collaborate on this venture"
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontFamily: 'inherit',
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '5px 10px',
+              borderRadius: 999,
+              border: 'none',
+              background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+              color: '#ffffff',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="22" y1="11" x2="16" y2="11" />
+            </svg>
+            Invite Teammates
+          </motion.button>
           {ventureSubdomain && (
             <motion.a
               href={buildVentureSiteUrl(ventureSubdomain, ventureId)}

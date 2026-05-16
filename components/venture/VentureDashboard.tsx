@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ResultCard, ModuleId } from "../ui/ResultCard";
-import { FileText, Download, Share2 } from "lucide-react";
+import { FileText, Download, UserPlus } from "lucide-react";
 import { downloadPDFFromResult } from "@/lib/client-pdf";
 import { VentureHeader, VENTURE_TABS } from "./VentureHeader";
 
@@ -32,6 +32,7 @@ function isModuleTabId(value: string | null): value is ModuleId {
 
 export function VentureDashboard({ venture }: VentureDashboardProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialTab = useMemo<ModuleId>(() => {
     const fromQuery = searchParams?.get("tab");
     return isModuleTabId(fromQuery) ? fromQuery : "research";
@@ -81,10 +82,13 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
+        onClick={() => router.push(`/dashboard/venture/${venture.id}/team`)}
         className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-xl whitespace-nowrap"
+        title="Invite teammates to collaborate on this venture"
       >
-        <Share2 size={16} />
-        <span className="hidden sm:inline">Share</span>
+        <UserPlus size={16} />
+        <span className="hidden sm:inline">Invite Teammates</span>
+        <span className="sm:hidden">Invite</span>
       </motion.button>
     </>
   );

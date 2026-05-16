@@ -49,7 +49,13 @@ export default function SignInPage() {
         body: JSON.stringify({ event: 'login' }),
       }).catch(() => null);
 
-      window.location.href = "/dashboard";
+      // Honor ?next= for post-login redirects (e.g. invite acceptance).
+      // Only allow same-origin relative paths to prevent open-redirect abuse.
+      const nextParam = new URLSearchParams(window.location.search).get('next');
+      const safeNext = nextParam && /^\/[^/].*/.test(nextParam) && !nextParam.startsWith('//')
+        ? nextParam
+        : '/dashboard';
+      window.location.href = safeNext;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
       let message: string;
