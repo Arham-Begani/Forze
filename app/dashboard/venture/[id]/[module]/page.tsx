@@ -474,6 +474,7 @@ export default function ModulePage() {
   const suggestions = SUGGESTIONS[activeModule] ?? SUGGESTIONS['research']
 
   const [ventureName, setVentureName] = useState<string>('...')
+  const [ventureSubdomain, setVentureSubdomain] = useState<string | null>(null)
   const [ventureProjectId, setVentureProjectId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationEntry[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
@@ -694,6 +695,7 @@ export default function ModulePage() {
         const data = await res.json()
         setVentureName(data.name ?? 'Venture')
         setVentureProjectId(data.project_id ?? null)
+        setVentureSubdomain(data.subdomain ?? null)
 
         const moduleConvos: ConversationEntry[] = (
           data.conversations?.[activeModule] ?? []
@@ -1084,6 +1086,28 @@ export default function ModulePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {ventureSubdomain && (
+            <motion.a
+              href={buildVentureSiteUrl(ventureSubdomain, ventureId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open published site"
+              style={{
+                fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
+                fontSize: 10,
+                padding: '4px 8px',
+                borderRadius: 999,
+                border: '1px solid var(--border)',
+                background: 'var(--card)',
+                color: 'var(--text-soft)',
+                textDecoration: 'none',
+                letterSpacing: '0.01em',
+              }}
+              whileHover={{ scale: 1.04, borderColor: mod.accent }}
+            >
+              {ventureSubdomain}.{(() => { try { return new URL(process.env.NEXT_PUBLIC_APP_URL || '').host } catch { return 'forze.in' } })()}
+            </motion.a>
+          )}
           <motion.span
             style={agentBadgeStyle(mod.accent)}
             whileHover={{ scale: 1.04 }}
@@ -1762,6 +1786,7 @@ export default function ModulePage() {
           onToggleCode={() => setPreviewShowCode(v => !v)}
           onClose={() => setReadingPanelOpen(false)}
           ventureId={ventureId}
+          ventureSubdomain={ventureSubdomain}
         />
       )}
       </div> {/* End content area flex */}
@@ -2627,6 +2652,20 @@ function ReadingPanel({ moduleId, result, accent, onClose }: {
 
 // ─── Landing Preview Panel ───────────────────────────────────────────────────
 
+// Build the public URL for a venture's published landing page.
+// Prefers the subdomain form (https://<subdomain>.<host>) using
+// NEXT_PUBLIC_APP_URL as the base; falls back to the legacy /v/[id] path.
+function buildVentureSiteUrl(subdomain: string | null, ventureId: string): string {
+  if (!subdomain) return `/v/${ventureId}`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  try {
+    const url = new URL(appUrl)
+    return `${url.protocol}//${subdomain}.${url.host}`
+  } catch {
+    return `/v/${ventureId}`
+  }
+}
+
 function escapeHtmlForPreview(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
@@ -2707,7 +2746,7 @@ function buildPreviewHtml(
 </html>`
 }
 
-function LandingPreviewPanel({ componentCode, result, ventureName, accent, device, showCode, onDeviceChange, onToggleCode, onClose, ventureId }: {
+function LandingPreviewPanel({ componentCode, result, ventureName, accent, device, showCode, onDeviceChange, onToggleCode, onClose, ventureId, ventureSubdomain }: {
   componentCode: string
   result: Record<string, any>
   ventureName: string
@@ -2718,6 +2757,7 @@ function LandingPreviewPanel({ componentCode, result, ventureName, accent, devic
   onToggleCode: () => void
   onClose: () => void
   ventureId: string
+  ventureSubdomain: string | null
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoading, setIframeLoading] = useState(true)
@@ -2887,7 +2927,7 @@ function LandingPreviewPanel({ componentCode, result, ventureName, accent, devic
 
           {/* Open in new tab */}
           <motion.button
-            onClick={() => window.open(`/v/${ventureId}`, '_blank')}
+            onClick={() => window.open(buildVentureSiteUrl(ventureSubdomain, ventureId), '_blank')}
             style={actionBtnSmall}
             whileHover={{ scale: 1.04, borderColor: accent }}
             whileTap={{ scale: 0.96 }}
