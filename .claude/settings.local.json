@@ -59,7 +59,8 @@
       "Bash(git -c user.email=arhambegani2@gmail.com commit -m \"refactor\\(outreach\\): drop VentureHeader on campaigns pages, use standalone header\")",
       "Bash(sed -n '47,53p' lib/routine-executor.ts)",
       "Bash(awk 'NR>=49 && NR<=51' lib/routine-executor.ts)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(git config *)"
     ]
   },
   "model": "opus"
