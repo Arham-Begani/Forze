@@ -985,3 +985,163 @@ export async function getOutreachMessagesForVenture(ventureId: string): Promise<
     lead: leadById.get(message.lead_id) ?? null,
   }))
 }
+
+// ─── Testimonials & Platform Feedback ────────────────────────────────────────
+
+export type TestimonialKind = 'testimonial' | 'feedback'
+
+export interface Testimonial {
+  id: string
+  venture_id: string
+  lead_id: string | null
+  name: string
+  email: string
+  quote: string
+  kind: TestimonialKind
+  featured: boolean
+  archived: boolean
+  source: string | null
+  created_at: string
+}
+
+export interface TestimonialFilters {
+  kind?: TestimonialKind
+  featured?: boolean
+  archived?: boolean
+}
+
+export async function createTestimonial(
+  ventureId: string,
+  input: { name: string; email: string; quote: string; kind?: TestimonialKind; source?: string | null }
+): Promise<Testimonial> {
+  return withRetry(async () => {
+    const db = await createDb()
+
+    // Best-effort lead-link: if a lead already exists for (venture, email) attach it.
+    let leadId: string | null = null
+    try {
+      const { data: existing } = await db
+        .from('leads')
+        .select('id')
+        .eq('venture_id', ventureId)
+        .ilike('email', input.email)
+        .limit(1)
+        .maybeSingle()
+      if (existing && (existing as { id?: string }).id) {
+        leadId = (existing as { id: string }).id
+      }
+    } catch {
+      // Non-fatal — the testimonial inserts even if lookup fails.
+    }
+
+    const { data, error } = await db
+      .from('testimonials')
+      .insert({
+        venture_id: ventureId,
+        lead_id: leadId,
+        name: input.name,
+        email: input.email,
+        quote: input.quote,
+        kind: input.kind ?? 'testimonial',
+        source: input.source ?? null,
+      })
+      .select()
+      .single()
+
+    if (error) throw new Error(`createTestimonial failed: ${error.message}`)
+    return data as Testimonial
+  })
+}
+
+export async function listTestimonials(
+  ventureId: string,
+  filters: TestimonialFilters = {}
+): Promise<Testimonial[]> {
+  const db = await createDb()
+  let query = db
+    .from('testimonials')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: false })
+
+  if (filters.kind) query = query.eq('kind', filters.kind)
+  if (typeof filters.featured === 'boolean') query = query.eq('featured', filters.featured)
+  if (typeof filters.archived === 'boolean') query = query.eq('archived', filters.archived)
+
+  const { data, error } = await query
+  if (error) throw new Error(`listTestimonials failed: ${error.message}`)
+  return (data ?? []) as Testimonial[]
+}
+
+export async function getTestimonialById(id: string): Promise<Testimonial | null> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('testimonials')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) return null
+  return data as Testimonial
+}
+
+export async function setTestimonialFeatured(id: string, featured: boolean): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('testimonials')
+    .update({ featured })
+    .eq('id', id)
+  if (error) throw new Error(`setTestimonialFeatured failed: ${error.message}`)
+}
+
+export async function setTestimonialArchived(id: string, archived: boolean): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('testimonials')
+    .update({ archived })
+    .eq('id', id)
+  if (error) throw new Error(`setTestimonialArchived failed: ${error.message}`)
+}
+
+export async function deleteTestimonial(id: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db
+    .from('testimonials')
+    .delete()
+    .eq('id', id)
+  if (error) throw new Error(`deleteTestimonial failed: ${error.message}`)
+}
+
+export type PlatformFeedbackCategory = 'bug' | 'feature' | 'praise' | 'other'
+
+export interface PlatformFeedback {
+  id: string
+  user_id: string
+  user_email: string
+  category: PlatformFeedbackCategory
+  message: string
+  page_url: string | null
+  created_at: string
+}
+
+export async function createPlatformFeedback(
+  userId: string,
+  userEmail: string,
+  input: { category: PlatformFeedbackCategory; message: string; pageUrl?: string | null }
+): Promise<PlatformFeedback> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('platform_feedback')
+      .insert({
+        user_id: userId,
+        user_email: userEmail,
+        category: input.category,
+        message: input.message,
+        page_url: input.pageUrl ?? null,
+      })
+      .select()
+      .single()
+    if (error) throw new Error(`createPlatformFeedback failed: ${error.message}`)
+    return data as PlatformFeedback
+  })
+}
