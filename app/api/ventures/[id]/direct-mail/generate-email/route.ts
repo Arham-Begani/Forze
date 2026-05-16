@@ -34,7 +34,9 @@ export async function POST(
     const generated = await generateCampaignEmail(
       input.data.ventureDescription,
       input.data.targetAudience,
-      input.data.exampleLeads
+      input.data.exampleLeads,
+      input.data.intent,
+      input.data.intentDetails
     )
 
     return NextResponse.json({ generated })

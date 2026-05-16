@@ -246,7 +246,7 @@ function DirectMailPanel({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text)]">Direct Mail</h2>
-          <p className="text-sm text-[var(--muted)]">Mail anyone — users, customers, anyone you already know.</p>
+          <p className="text-sm text-[var(--muted)]">Announcements, product updates, and asks to people who already know you — not cold prospecting.</p>
         </div>
         <button
           onClick={onCompose}
@@ -260,7 +260,7 @@ function DirectMailPanel({
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
           <p className="text-sm font-medium text-[var(--text-soft)]">No direct mail sends yet</p>
           <p className="text-xs text-[var(--muted)] max-w-md">
-            Paste emails, Forze auto-detects names from the addresses, and your message goes out from your own Gmail — with the same opens/clicks/replies monitoring as cold campaigns.
+            Pick an intent — announcement, update, thank-you, re-engagement, or ask — paste your audience, and Forze drafts an on-brand message in your voice. Send goes out from your own Gmail with full open/click/reply tracking.
           </p>
           <button
             onClick={onCompose}

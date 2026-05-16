@@ -1,22 +1,53 @@
 import 'server-only'
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { GeneratedEmail, ReplyAnalysis } from '@/lib/schemas/campaign'
+import type { GeneratedEmail, ReplyAnalysis, DirectMailIntentValue } from '@/lib/schemas/campaign'
 
-function getModel() {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set')
-  const genai = new GoogleGenerativeAI(apiKey)
-  return genai.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction: `You are a GTM specialist. Generate cold email subject lines and bodies that:
+const COLD_SYSTEM_INSTRUCTION = `You are a GTM specialist. Generate cold email subject lines and bodies that:
 1. Are personalized using {{firstName}}, {{company}}, {{jobTitle}} template variables
 2. Lead with the prospect's problem, not the product's features
 3. Are short and conversational — 2-4 sentences max
 4. Include a clear, low-friction call-to-action
 5. Match the brand voice and positioning
-Always respond with valid JSON only — no markdown, no explanation.`,
+Always respond with valid JSON only — no markdown, no explanation.`
+
+// Used for Direct Mail — the recipient already knows the sender, so the voice
+// is collegial and informative, not prospecting. No problem-led framing, no
+// pitch — just clear, human writing for an existing audience.
+const WARM_SYSTEM_INSTRUCTION = `You are writing on behalf of a founder to people who ALREADY KNOW THEM — customers, users, beta testers, or warm contacts. Generate subject lines and bodies that:
+1. Are personalized using {{firstName}} only (don't fabricate company/title context — these are warm contacts, not prospects)
+2. Sound like a real human writing to someone they know — never a marketing blast
+3. Lead with what the recipient cares about given the email's INTENT, not with a pitch
+4. Are short — 2-5 sentences, no preamble, no "I hope this email finds you well"
+5. End with a clear, friendly next step appropriate to the intent
+Always respond with valid JSON only — no markdown, no explanation.`
+
+function getModel(systemInstruction: string = COLD_SYSTEM_INSTRUCTION) {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set')
+  const genai = new GoogleGenerativeAI(apiKey)
+  return genai.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    systemInstruction,
   })
+}
+
+// Human-readable directives appended to the user prompt so the model knows
+// what kind of message the operator wants. Each intent reframes the entire
+// email — subject, opening line, CTA — so the resulting drafts feel like
+// distinct lifecycle messages rather than reskinned cold emails.
+const INTENT_DIRECTIVES: Record<DirectMailIntentValue, string> = {
+  announcement:
+    'INTENT: ANNOUNCEMENT. Share newsworthy information (launch, milestone, new offering, change). Lead with the news in the first sentence. The CTA should invite them to learn more, try it, or reply with thoughts.',
+  product_update:
+    'INTENT: PRODUCT UPDATE. Tell them what is new or improved since they last engaged. Be concrete — name the feature or fix. The CTA should invite them to try it or share feedback.',
+  thank_you:
+    'INTENT: THANK YOU. Express genuine appreciation for something specific (signing up, joining the beta, providing feedback, sticking around). No ask. The CTA, if any, is an open-ended invitation to reply.',
+  re_engagement:
+    'INTENT: RE-ENGAGEMENT. The recipient has gone quiet. Acknowledge that gently without guilt-tripping. Surface one specific reason they might want to come back. The CTA is a single low-friction action.',
+  ask: 'INTENT: ASK. Make a clear, respectful request (feedback, a quick call, a referral, a beta test). Be specific about what you need and how little time it costs them.',
+  custom:
+    'INTENT: CUSTOM. Match the tone of the additional details provided. If no details are provided, default to a brief, friendly update.',
 }
 
 // ─── Email generation ─────────────────────────────────────────────────────────
@@ -35,12 +66,17 @@ function sanitizeForPrompt(input: string, max: number): string {
 export async function generateCampaignEmail(
   ventureDescription: string,
   targetAudience: string,
-  exampleLeads: Array<{ firstName: string; company?: string; jobTitle?: string }>
+  exampleLeads: Array<{ firstName: string; company?: string; jobTitle?: string }>,
+  intent?: DirectMailIntentValue,
+  intentDetails?: string
 ): Promise<GeneratedEmail> {
-  const model = getModel()
+  // Direct Mail (intent provided) uses the warm system prompt; cold outreach
+  // keeps the original GTM specialist instruction unchanged.
+  const model = getModel(intent ? WARM_SYSTEM_INSTRUCTION : COLD_SYSTEM_INSTRUCTION)
 
   const safeVenture = sanitizeForPrompt(ventureDescription, 2000)
   const safeAudience = sanitizeForPrompt(targetAudience, 500)
+  const safeIntentDetails = intentDetails ? sanitizeForPrompt(intentDetails, 1000) : ''
 
   const leadsText = exampleLeads.length > 0
     ? exampleLeads
@@ -48,6 +84,23 @@ export async function generateCampaignEmail(
         .map((l) => `- ${sanitizeForPrompt(l.firstName, 100)}${l.jobTitle ? `, ${sanitizeForPrompt(l.jobTitle, 200)}` : ''}${l.company ? ` at ${sanitizeForPrompt(l.company, 200)}` : ''}`)
         .join('\n')
     : '- (no examples provided)'
+
+  const intentBlock = intent
+    ? `
+
+${INTENT_DIRECTIVES[intent]}
+
+===USER DATA: INTENT DETAILS===
+${safeIntentDetails || '(no extra details provided)'}
+===END INTENT DETAILS===`
+    : ''
+
+  // Cold outreach uses {{firstName}}, {{company}}, {{jobTitle}}. Warm Direct
+  // Mail only has {{firstName}} reliably — company/title are not collected for
+  // pasted recipients, so the warm prompt restricts the model to firstName.
+  const personalizationGuidance = intent
+    ? '(use {{firstName}} where natural — do NOT use {{company}} or {{jobTitle}}, those are not available for this audience)'
+    : '(use {{firstName}}, {{company}}, {{jobTitle}} where natural)'
 
   // All user inputs live inside ===USER DATA=== fences. The model is told to
   // treat anything inside the fences as data, never instructions — this blunts
@@ -65,12 +118,12 @@ ${safeAudience}
 
 ===USER DATA: EXAMPLE LEADS===
 ${leadsText}
-===END EXAMPLE LEADS===
+===END EXAMPLE LEADS===${intentBlock}
 
 Generate:
 1. Main subject line (no template variables in subject)
 2. Two variant subject lines
-3. Main email body (use {{firstName}}, {{company}}, {{jobTitle}} where natural)
+3. Main email body ${personalizationGuidance}
 4. One variant email body
 
 Respond ONLY in this JSON structure:

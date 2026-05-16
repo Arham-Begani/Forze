@@ -163,6 +163,19 @@ export const UploadLeadsSchema = z.object({
     .max(2000),
 })
 
+// Direct Mail intents — only relevant when writing to people who already know
+// you (customers, users, warm contacts). Cold outreach has no relationship to
+// draw on, so it doesn't accept an intent.
+export const DirectMailIntent = z.enum([
+  'announcement',
+  'product_update',
+  'thank_you',
+  're_engagement',
+  'ask',
+  'custom',
+])
+export type DirectMailIntentValue = z.infer<typeof DirectMailIntent>
+
 export const GenerateEmailSchema = z.object({
   ventureDescription: z.string().min(1).max(2000),
   targetAudience: z.string().min(1).max(500),
@@ -177,6 +190,8 @@ export const GenerateEmailSchema = z.object({
     .max(10)
     .optional()
     .default([]),
+  intent: DirectMailIntent.optional(),
+  intentDetails: z.string().max(1000).optional(),
 })
 
 // ─── TypeScript interfaces ─────────────────────────────────────────────────────

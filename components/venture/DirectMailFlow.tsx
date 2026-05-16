@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { ArrowLeft, Loader2, Send, AlertCircle, CheckCircle, Mail, Sparkles } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, AlertCircle, CheckCircle, Mail, Sparkles, Megaphone, Package, Heart, RotateCcw, HelpCircle, PenLine } from 'lucide-react'
 import { deriveFirstNameFromEmail } from '@/lib/auto-name'
 
 interface DirectMailFlowProps {
@@ -26,6 +26,70 @@ interface ParsedRecipient {
   override: string
 }
 
+// Intent options drive the AI prompt, the body skeleton, and the send button
+// label. They are what makes Direct Mail feel different from Cold Outreach —
+// each one reframes the message as a specific lifecycle moment with a known
+// audience, not a prospecting blast to strangers.
+type DirectMailIntent = 'announcement' | 'product_update' | 'thank_you' | 're_engagement' | 'ask' | 'custom'
+
+const INTENT_OPTIONS: Array<{
+  id: DirectMailIntent
+  label: string
+  description: string
+  Icon: typeof Megaphone
+  bodySkeleton: string
+  sendVerb: string
+}> = [
+  {
+    id: 'announcement',
+    label: 'Announcement',
+    description: 'Share news with your audience',
+    Icon: Megaphone,
+    bodySkeleton: 'Hi {{firstName}},\n\nQuick news — ',
+    sendVerb: 'Announce to',
+  },
+  {
+    id: 'product_update',
+    label: 'Product update',
+    description: 'Tell users what shipped',
+    Icon: Package,
+    bodySkeleton: 'Hi {{firstName}},\n\nA few things just shipped — ',
+    sendVerb: 'Update',
+  },
+  {
+    id: 'thank_you',
+    label: 'Thank you',
+    description: 'Acknowledge customers genuinely',
+    Icon: Heart,
+    bodySkeleton: 'Hi {{firstName}},\n\nJust wanted to say thank you for ',
+    sendVerb: 'Thank',
+  },
+  {
+    id: 're_engagement',
+    label: 'Re-engagement',
+    description: 'Reach out to quiet users',
+    Icon: RotateCcw,
+    bodySkeleton: 'Hi {{firstName}},\n\nIt has been a while — ',
+    sendVerb: 'Reach out to',
+  },
+  {
+    id: 'ask',
+    label: 'Ask',
+    description: 'Request feedback, time, or a referral',
+    Icon: HelpCircle,
+    bodySkeleton: 'Hi {{firstName}},\n\nQuick favor — ',
+    sendVerb: 'Ask',
+  },
+  {
+    id: 'custom',
+    label: 'Custom',
+    description: 'Write something else',
+    Icon: PenLine,
+    bodySkeleton: 'Hi {{firstName}},\n\n',
+    sendVerb: 'Send to',
+  },
+]
+
 // Accepts commas, newlines, semicolons, or whitespace between emails. Keeps
 // the flow forgiving so the operator can paste from any source (sheet, notes,
 // chat) without reformatting.
@@ -48,6 +112,9 @@ export function DirectMailFlow({
   onComplete,
   onCancel,
 }: DirectMailFlowProps) {
+  const [intent, setIntent] = useState<DirectMailIntent | null>(null)
+  const [intentDetails, setIntentDetails] = useState('')
+  const [bodyDirty, setBodyDirty] = useState(false)
   const [name, setName] = useState('')
   const [rawEmails, setRawEmails] = useState('')
   const [overrides, setOverrides] = useState<Record<string, string>>({})
@@ -60,6 +127,22 @@ export function DirectMailFlow({
   const [connectingGmail, setConnectingGmail] = useState(false)
   const [showOverrides, setShowOverrides] = useState(false)
   const [generatingAi, setGeneratingAi] = useState(false)
+
+  const selectedIntent = useMemo(
+    () => (intent ? INTENT_OPTIONS.find((o) => o.id === intent) ?? null : null),
+    [intent]
+  )
+
+  // Picking an intent swaps in its body skeleton — but only if the operator
+  // hasn't already started writing. Once they've edited the body, we leave
+  // their text alone so a stray click doesn't wipe their draft.
+  const handleSelectIntent = (next: DirectMailIntent) => {
+    setIntent(next)
+    const opt = INTENT_OPTIONS.find((o) => o.id === next)
+    if (opt && !bodyDirty) {
+      setBody(opt.bodySkeleton)
+    }
+  }
 
   const recipients: ParsedRecipient[] = useMemo(() => {
     const emails = dedupe(extractEmails(rawEmails).map((e) => e.toLowerCase()))
@@ -148,6 +231,8 @@ export function DirectMailFlow({
           ventureDescription: descFallback,
           targetAudience: 'existing contacts, customers, and warm leads',
           exampleLeads,
+          ...(intent ? { intent } : {}),
+          ...(intentDetails.trim() ? { intentDetails: intentDetails.trim() } : {}),
         }),
       })
 
@@ -176,6 +261,7 @@ export function DirectMailFlow({
 
       setSubject(generated.subject_line)
       setBody(generated.email_body)
+      setBodyDirty(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate email')
     } finally {
@@ -269,6 +355,7 @@ export function DirectMailFlow({
 
   const insertToken = (token: string) => {
     setBody((prev) => prev + token)
+    setBodyDirty(true)
   }
 
   return (
@@ -279,7 +366,7 @@ export function DirectMailFlow({
         </button>
         <div>
           <h2 className="text-lg font-semibold text-[var(--text)]">Direct Mail</h2>
-          <p className="text-sm text-[var(--muted)]">{ventureName} — mail anyone, no cold-outreach assumptions</p>
+          <p className="text-sm text-[var(--muted)]">{ventureName} — write to people who already know you</p>
         </div>
       </div>
 
@@ -327,6 +414,66 @@ export function DirectMailFlow({
           </div>
         )}
 
+        {/* Intent picker — the core differentiator from Cold Outreach. Each
+            option reframes the email as a specific lifecycle moment with a
+            known audience. */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-soft)]">
+            What kind of message? *
+          </label>
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            Pick the intent so the draft, tone, and AI suggestions match what you actually want to say.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {INTENT_OPTIONS.map((opt) => {
+              const Icon = opt.Icon
+              const active = intent === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => handleSelectIntent(opt.id)}
+                  className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors ${
+                    active
+                      ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+                      : 'border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon size={14} className={active ? 'text-[var(--accent)]' : 'text-[var(--text-soft)]'} />
+                    <span className={`text-sm font-medium ${active ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+                      {opt.label}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[var(--muted)]">{opt.description}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {selectedIntent && (
+            <div className="mt-3">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-soft)]">
+                Anything specific to mention? <span className="text-[var(--muted)]">(optional — helps AI write a better draft)</span>
+              </label>
+              <input
+                type="text"
+                value={intentDetails}
+                onChange={(e) => setIntentDetails(e.target.value)}
+                placeholder={
+                  selectedIntent.id === 'announcement' ? 'e.g. launching paid plans next Monday'
+                  : selectedIntent.id === 'product_update' ? 'e.g. new bulk export + Slack integration'
+                  : selectedIntent.id === 'thank_you' ? 'e.g. for joining the closed beta'
+                  : selectedIntent.id === 're_engagement' ? 'e.g. new templates since they last logged in'
+                  : selectedIntent.id === 'ask' ? 'e.g. 15-min feedback call this week'
+                  : 'e.g. tone, topic, or anything else'
+                }
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
+              />
+            </div>
+          )}
+        </div>
+
         {/* Name */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-soft)]">Send name *</label>
@@ -334,7 +481,7 @@ export function DirectMailFlow({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. April user update"
+            placeholder={selectedIntent ? `e.g. April ${selectedIntent.label.toLowerCase()}` : 'e.g. April user update'}
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
           />
         </div>
@@ -396,7 +543,11 @@ export function DirectMailFlow({
               className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-soft)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors disabled:opacity-50"
             >
               {generatingAi ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              {generatingAi ? 'Generating...' : 'Generate with AI'}
+              {generatingAi
+                ? 'Generating...'
+                : selectedIntent
+                ? `Draft ${selectedIntent.label.toLowerCase()} with AI`
+                : 'Generate with AI'}
             </button>
           </div>
           <input
@@ -413,7 +564,7 @@ export function DirectMailFlow({
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-soft)]">Message *</label>
           <textarea
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => { setBody(e.target.value); setBodyDirty(true) }}
             rows={10}
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text)] focus:border-[var(--accent)] focus:outline-none resize-y"
           />
@@ -456,7 +607,9 @@ export function DirectMailFlow({
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            {loading ? 'Sending...' : `Send to ${validCount || 0} recipient${validCount === 1 ? '' : 's'}`}
+            {loading
+              ? 'Sending...'
+              : `${selectedIntent?.sendVerb ?? 'Send to'} ${validCount || 0} ${validCount === 1 ? 'person' : 'people'}`}
           </button>
         </div>
       </div>
