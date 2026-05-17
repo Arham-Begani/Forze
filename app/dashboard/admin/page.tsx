@@ -148,6 +148,12 @@ export default function AdminAnalyticsPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <a
+            href='/dashboard/admin/grants'
+            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--accent-glow)', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
+          >
+            Grant Pro
+          </a>
+          <a
             href='/dashboard/admin/blog'
             style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--glass-bg)', color: 'var(--text)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}
           >
