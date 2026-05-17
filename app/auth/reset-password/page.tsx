@@ -49,7 +49,35 @@ export default function ResetPasswordPage() {
         return
       }
 
-      // PKCE flow — Supabase's /auth/v1/verify redirects here with ?code=...
+      // Preferred path: token_hash + type=recovery. The Supabase email template
+      // links here directly, and the one-time token is only verified when this
+      // page runs `verifyOtp` in the browser — so email security scanners
+      // (Gmail, Outlook Safe Links, etc.) can prefetch the URL without
+      // consuming the token. This is what fixes the "always expired" issue.
+      const tokenHash = url.searchParams.get('token_hash')
+      const type = url.searchParams.get('type')
+      if (tokenHash && (type === 'recovery' || type === null)) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'recovery',
+        })
+        if (!active) return
+        if (verifyError) {
+          setCheckingSession(false)
+          setReady(false)
+          setError(verifyError.message || 'This reset link is invalid or has expired. Request a new one.')
+          return
+        }
+        url.searchParams.delete('token_hash')
+        url.searchParams.delete('type')
+        window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+        setCheckingSession(false)
+        setReady(true)
+        return
+      }
+
+      // Legacy PKCE flow — Supabase's /auth/v1/verify redirects here with ?code=...
+      // Kept for any in-flight emails that were sent before the template change.
       const code = url.searchParams.get('code')
       if (code) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
