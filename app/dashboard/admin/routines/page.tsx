@@ -20,10 +20,27 @@ interface PerRoutineResult {
   durationMs: number
 }
 
+interface ActiveRoutine {
+  id: string
+  name: string
+  channel: string
+  status: string
+  cadence: string
+  send_hour: number
+  send_minute: number
+  timezone: string
+  next_run_at: string
+  last_run_at: string | null
+  last_error: string | null
+  run_count: number
+  campaign_id: string | null
+}
+
 interface FireResponse {
   ok: boolean
   stage?: string
   error?: string
+  serverNowUtc?: string
   summary?: {
     dueBeforeClaim: number
     claimed: number
@@ -33,7 +50,23 @@ interface FireResponse {
     durationMs: number
   }
   dueBeforeClaim?: DueRoutine[]
+  allActive?: ActiveRoutine[]
   results?: PerRoutineResult[]
+}
+
+function formatRelative(iso: string, nowUtc: string | undefined): string {
+  if (!iso || !nowUtc) return iso
+  const diff = Date.parse(iso) - Date.parse(nowUtc)
+  const abs = Math.abs(diff)
+  const minutes = Math.round(abs / 60_000)
+  const hours = Math.round(abs / 3_600_000)
+  const days = Math.round(abs / 86_400_000)
+  let rel: string
+  if (abs < 60_000) rel = 'now'
+  else if (minutes < 60) rel = `${minutes}m`
+  else if (hours < 48) rel = `${hours}h`
+  else rel = `${days}d`
+  return diff < 0 ? `${rel} ago` : `in ${rel}`
 }
 
 export default function AdminRoutinesPage() {
@@ -107,6 +140,58 @@ export default function AdminRoutinesPage() {
           </div>
         )}
       </section>
+
+      {response?.allActive && response.allActive.length > 0 && (
+        <section style={panelStyle}>
+          <h2 style={panelTitleStyle}>All active / paused routines</h2>
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+            Server time (UTC): <code>{response.serverNowUtc}</code> · Your local time: <code>{new Date().toString()}</code>
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {response.allActive.map((r) => {
+              const isPaused = r.status !== 'active'
+              const isDue = !isPaused && Date.parse(r.next_run_at) <= Date.parse(response.serverNowUtc || new Date().toISOString())
+              return (
+                <div key={r.id} style={{ ...rowStyle, borderColor: isPaused ? '#fcd34d' : isDue ? '#86efac' : 'var(--border)' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>
+                      {r.name}{' '}
+                      <span style={{ color: 'var(--muted)', fontWeight: 600 }}>· {r.channel} · {r.cadence}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+                      <div>
+                        <strong>Status:</strong>{' '}
+                        <span style={{ color: isPaused ? '#92400e' : '#16a34a', fontWeight: 800 }}>{r.status}</span>
+                        {isPaused && ' (will not fire — only active routines are picked up by cron)'}
+                      </div>
+                      <div>
+                        <strong>Schedule:</strong> {String(r.send_hour).padStart(2, '0')}:{String(r.send_minute).padStart(2, '0')} <code>{r.timezone}</code> · {r.cadence}
+                      </div>
+                      <div>
+                        <strong>next_run_at:</strong> <code>{r.next_run_at}</code>{' '}
+                        <span style={{ color: isDue ? '#16a34a' : 'var(--muted)' }}>({formatRelative(r.next_run_at, response.serverNowUtc)})</span>
+                      </div>
+                      {r.last_run_at && (
+                        <div>
+                          <strong>last_run_at:</strong> <code>{r.last_run_at}</code> ({formatRelative(r.last_run_at, response.serverNowUtc)})
+                        </div>
+                      )}
+                      <div>
+                        <strong>run_count:</strong> {r.run_count}
+                      </div>
+                      {r.last_error && (
+                        <div style={{ color: '#dc2626', marginTop: 4, fontWeight: 700 }}>
+                          <strong>Last error:</strong> {r.last_error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {response?.dueBeforeClaim && response.dueBeforeClaim.length > 0 && (
         <section style={panelStyle}>

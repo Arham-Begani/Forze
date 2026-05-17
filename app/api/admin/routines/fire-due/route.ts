@@ -34,13 +34,23 @@ export async function POST() {
     // Pre-claim snapshot: count active routines and how many are due. This
     // tells us whether the executor is the bottleneck or the claim function
     // is silently returning zero.
+    const nowIso = new Date().toISOString()
     const { data: dueSnapshot } = await adminDb
       .from('routines')
       .select('id, name, next_run_at, last_run_at, last_error, status', { count: 'exact' })
       .eq('status', 'active')
-      .lte('next_run_at', new Date().toISOString())
+      .lte('next_run_at', nowIso)
       .order('next_run_at', { ascending: true })
       .limit(50)
+
+    // Also pull every active routine's full schedule so we can spot a
+    // "next_run_at is unexpectedly in the future" or timezone misconfig.
+    const { data: allActive } = await adminDb
+      .from('routines')
+      .select('id, name, channel, status, cadence, send_hour, send_minute, timezone, next_run_at, last_run_at, last_error, run_count, campaign_id')
+      .neq('status', 'archived')
+      .order('next_run_at', { ascending: true })
+      .limit(100)
 
     let claimed: ClaimedRoutine[]
     try {
@@ -90,8 +100,10 @@ export async function POST() {
 
     return NextResponse.json({
       ok: true,
+      serverNowUtc: nowIso,
       summary,
       dueBeforeClaim: dueSnapshot ?? [],
+      allActive: allActive ?? [],
       results,
     })
   } catch (e) {
