@@ -1,4 +1,4 @@
-import { getConversationsByModule, getVenturePublic } from '@/lib/queries'
+import { getLandingConversationsPublic, getVenturePublic } from '@/lib/queries'
 import { isRenderableLandingComponent, resolveLandingComponent } from '@/lib/landing-page'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -15,7 +15,7 @@ export async function GET(
 
     const context = venture.context as Record<string, any> | null
     const contextLanding = context?.landing
-    const landingConversations = await getConversationsByModule(id, 'landing').catch(() => [])
+    const landingConversations = await getLandingConversationsPublic(id)
     const latestLandingConversation = landingConversations.find((conversation) => {
         const result = conversation.result as Record<string, any> | null
         const candidate = result?.landing || result

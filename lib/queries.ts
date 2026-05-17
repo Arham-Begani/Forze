@@ -1,5 +1,16 @@
 // lib/queries.ts
 import { createDb } from '@/lib/db'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+// Service-role client used for explicitly-public lookups (subdomain previews,
+// `/v/[id]` previews, public feedback pages). The default `createDb()` client
+// is cookie-scoped and respects RLS — so on a tenant subdomain like
+// `<slug>.forze.in`, the user's auth cookie isn't sent and every read returns
+// zero rows. Routes that must work for anonymous visitors should call the
+// `*Public` helpers below, which use the admin client and bypass RLS.
+function createPublicClient() {
+  return createAdminClient()
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -599,36 +610,76 @@ export async function setUserIdea(userId: string, ideaText: string): Promise<voi
   })
 }
 
-// Public venture lookup (no auth required — used for /v/[id] live preview)
+// Public venture lookup (no auth required — used for /v/[id] live preview,
+// the public feedback form, and the deployment-URL resolver). Uses the
+// service-role admin client to bypass RLS, because anonymous visitors on the
+// public preview routes have no Supabase auth cookie.
 export async function getVenturePublic(id: string): Promise<Venture | null> {
-  const db = await createDb()
-  const { data, error } = await db
-    .from('ventures')
-    .select('*')
-    .eq('id', id)
-    .single()
+  try {
+    const db = createPublicClient()
+    const { data, error } = await db
+      .from('ventures')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
 
-  if (error) return null
-  return data
+    if (error) {
+      console.error('[getVenturePublic] query failed:', error.message)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('[getVenturePublic] admin client unavailable:', err instanceof Error ? err.message : err)
+    return null
+  }
 }
 
 // Public venture lookup by subdomain — used for wildcard subdomain routing.
-// Returns null on any error (including the column not existing yet) so the
-// /sites/[subdomain] route shows a clean 404 instead of a 500.
+// Uses the service-role admin client to bypass RLS so requests on a tenant
+// subdomain (where the user's auth cookie isn't sent) can resolve to a row.
 export async function getVentureBySubdomain(subdomain: string): Promise<Venture | null> {
   if (!subdomain) return null
   try {
-    const db = await createDb()
+    const db = createPublicClient()
     const { data, error } = await db
       .from('ventures')
       .select('*')
       .ilike('subdomain', subdomain)
       .maybeSingle()
 
-    if (error) return null
+    if (error) {
+      console.error('[getVentureBySubdomain] query failed:', error.message)
+      return null
+    }
     return data
-  } catch {
+  } catch (err) {
+    console.error('[getVentureBySubdomain] admin client unavailable:', err instanceof Error ? err.message : err)
     return null
+  }
+}
+
+// Read landing conversations for a venture using the service-role client —
+// for use ONLY by public preview routes that must work without auth cookies.
+// Returns [] on any error so callers can degrade to context.landing.
+export async function getLandingConversationsPublic(ventureId: string): Promise<Conversation[]> {
+  try {
+    const db = createPublicClient()
+    const storedModuleId = CONVERSATION_MODULE_FALLBACK['landing']
+    const { data, error } = await db
+      .from('conversations')
+      .select('*')
+      .eq('venture_id', ventureId)
+      .eq('module_id', storedModuleId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('[getLandingConversationsPublic] query failed:', error.message)
+      return []
+    }
+    return (data ?? []).map(normalizeConversation).filter(c => c.module_id === 'landing')
+  } catch (err) {
+    console.error('[getLandingConversationsPublic] admin client unavailable:', err instanceof Error ? err.message : err)
+    return []
   }
 }
 
