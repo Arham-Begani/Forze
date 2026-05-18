@@ -17,11 +17,12 @@ const LINKEDIN_SCOPES = [
   'w_member_social',
 ]
 
+// Instagram Business Login (https://www.instagram.com/oauth/authorize) only
+// accepts `instagram_business_*` scopes. Mixing in legacy Facebook-Login
+// scopes (`instagram_basic`, `instagram_manage_comments`, `pages_*`) is
+// what Meta rejects with the generic "Invalid platform app" error — the
+// flow can't validate scopes that belong to a different product.
 const META_SCOPES = [
-  'instagram_basic',
-  'instagram_manage_comments',
-  'pages_show_list',
-  'pages_read_engagement',
   'instagram_business_basic',
   'instagram_business_content_publish',
   // Required to read comments via /{media-id}/comments — without this the
