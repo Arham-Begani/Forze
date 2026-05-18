@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { Buffer } from 'node:buffer'
-import { decryptSecret, encryptSecret } from '@/lib/marketing-crypto'
+import { decryptSecret, encryptSecret, isSecretDecryptError } from '@/lib/marketing-crypto'
 import { generatePostImage, prepareInstagramImageUrl } from '@/lib/marketing-image-gen'
 import {
   markSocialConnectionStatus,
@@ -113,8 +113,27 @@ export class MarketingProviderError extends Error {
   }
 }
 
+async function safeDecryptForReauth(
+  encrypted: string | null | undefined,
+  connection: SocialConnectionSecretRecord,
+  providerLabel: string
+): Promise<string | null> {
+  try {
+    return decryptSecret(encrypted)
+  } catch (err) {
+    if (isSecretDecryptError(err)) {
+      await markSocialConnectionStatus(connection.id, 'reauth_required')
+      throw new MarketingProviderError(
+        `${providerLabel} connection needs to be reconnected (stored token cannot be decrypted)`,
+        { retryable: false, requiresReauth: true }
+      )
+    }
+    throw err
+  }
+}
+
 async function refreshYouTubeAccessToken(connection: SocialConnectionSecretRecord): Promise<string> {
-  const refreshToken = decryptSecret(connection.refresh_token_encrypted)
+  const refreshToken = await safeDecryptForReauth(connection.refresh_token_encrypted, connection, 'YouTube')
   if (!refreshToken) {
     await markSocialConnectionStatus(connection.id, 'reauth_required')
     throw new MarketingProviderError('YouTube connection needs to be reauthorized', {
@@ -159,7 +178,7 @@ async function refreshYouTubeAccessToken(connection: SocialConnectionSecretRecor
 }
 
 async function refreshLinkedInAccessToken(connection: SocialConnectionSecretRecord): Promise<string> {
-  const refreshToken = decryptSecret(connection.refresh_token_encrypted)
+  const refreshToken = await safeDecryptForReauth(connection.refresh_token_encrypted, connection, 'LinkedIn')
   if (!refreshToken) {
     await markSocialConnectionStatus(connection.id, 'reauth_required')
     throw new MarketingProviderError('LinkedIn connection needs to be reauthorized', {
@@ -206,7 +225,7 @@ async function refreshLinkedInAccessToken(connection: SocialConnectionSecretReco
 }
 
 async function refreshInstagramAccessToken(connection: SocialConnectionSecretRecord): Promise<string> {
-  const currentToken = decryptSecret(connection.access_token_encrypted)
+  const currentToken = await safeDecryptForReauth(connection.access_token_encrypted, connection, 'Instagram')
   if (!currentToken) {
     await markSocialConnectionStatus(connection.id, 'reauth_required')
     throw new MarketingProviderError('Instagram connection needs to be reauthorized', {
@@ -247,7 +266,23 @@ async function refreshInstagramAccessToken(connection: SocialConnectionSecretRec
 }
 
 async function getAccessToken(connection: SocialConnectionSecretRecord): Promise<string> {
-  const token = decryptSecret(connection.access_token_encrypted)
+  let token: string | null
+  try {
+    token = decryptSecret(connection.access_token_encrypted)
+  } catch (err) {
+    if (isSecretDecryptError(err)) {
+      // MARKETING_TOKEN_ENCRYPTION_KEY has changed (rotated or never set on
+      // this environment). The stored token can't be recovered — flag the
+      // connection so the UI prompts a reconnect instead of looping forever
+      // on the cryptic Node crypto error.
+      await markSocialConnectionStatus(connection.id, 'reauth_required')
+      throw new MarketingProviderError(
+        `${connection.provider} connection needs to be reconnected (stored token cannot be decrypted)`,
+        { retryable: false, requiresReauth: true }
+      )
+    }
+    throw err
+  }
   const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null
   const isExpired = expiresAt !== null && expiresAt <= Date.now() + 60_000
 
