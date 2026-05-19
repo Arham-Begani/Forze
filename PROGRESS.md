@@ -8,10 +8,19 @@ This file is the Agent's memory between sessions.
 ---
 
 ## Current Status
-**Phase:** 15 — Testimonials & Platform Feedback
-**Last updated:** May 16, 2026
+**Phase:** 16 — Routines Reliability
+**Last updated:** May 19, 2026
 
-### Latest Session (May 16 2026)
+### Latest Session (May 19 2026)
+- Fixed "routines only fire when I press the admin button." Root cause: Vercel Cron was scheduled hourly (`0 * * * *`) AND `/api/cron/run-routines` 401'd whenever `CRON_SECRET` wasn't set in the Vercel project env, so even when the schedule ticked the request was rejected — and the hourly cadence itself was too slow to match the user's expectation of "fires at the time I set."
+- Tightened scheduler precision: `vercel.json` cron for `/api/cron/run-routines` is now `* * * * *` (every minute), so routines fire within ~60 seconds of `next_run_at`. Updated the panel's "When do routines fire?" notice from the old "hourly tick at HH:30 IST" lag table to a one-line "ticks every minute" reassurance.
+- Hardened cron auth in `app/api/cron/run-routines/route.ts` so it also accepts the `x-vercel-cron` header. Vercel sets that header internally on every cron invocation and strips it from inbound external requests at the edge — safe enough that the cron now Just Works on first deploy without the user having to configure `CRON_SECRET`. Existing `Bearer <CRON_SECRET>` / `Bearer <ROUTINES_CRON_SECRET>` / `x-routines-cron-secret` paths preserved for curl + tests.
+- Added a defensive second firing path so the experience never depends on platform cron alone: migration `026_routines_per_user_claim.sql` adds `claim_due_routines_for_user(uuid, int)` (same `FOR UPDATE SKIP LOCKED` CTE + `UPDATE…RETURNING` semantics as `claim_due_routines`, but the candidate set is filtered to a single `user_id`). New helper `claimDueRoutinesForUser` in `lib/queries/routine-queries.ts` wraps the RPC. New auth'd endpoint `POST /api/routines/fire-mine` (Node runtime, `maxDuration=300`) claims and executes only the calling user's due routines and returns a `{ claimed, succeeded, failed, skipped }` summary.
+- Wired `components/venture/RoutinesPanel.tsx` to call `/api/routines/fire-mine` (a) silently on panel mount per `ventureId`, (b) silently after `onCreated` so a routine whose first `next_run_at` is already past fires immediately, and (c) visibly via a new "Run due now" header button next to "New routine." Added a `FireResultBanner` that summarizes the last manual fire and can be dismissed. The on-mount sweep is now belt-and-suspenders behind the every-minute cron — kept for resilience when Vercel cron is paused/throttled.
+- Verification: `npx tsc --noEmit -p .` clean. End-to-end confirmed by the user: a routine fired at its scheduled time post-deploy. Migration `026` must be applied to Supabase before the per-user claim endpoint can succeed in production.
+- Shipped as six surgical commits (per repo rule on commit granularity): `f88cd7c` migration, `5b9587a` query helper, `b8ebb49` fire-mine route, `5555675` cron auth fallback, `a341178` minute schedule, `ba56a3f` panel wiring.
+
+### Previous Session (May 16 2026)
 - Shipped the testimonials & feedback system per `C:\Users\arham\.claude\plans\we-have-to-now-quizzical-tome.md`. Migration `025_testimonials.sql` adds `testimonials` (venture-scoped, FK to ventures, optional `lead_id` FK to `leads`, `kind` discriminator for testimonial/feedback, featured/archived booleans, indexes by venture and lead) and `platform_feedback` (user-scoped, category check constraint, page_url + user_id/email).
 - Extended `lib/queries.ts` with `createTestimonial` (best-effort lead-link via case-insensitive email lookup on the venture's leads), `listTestimonials` with filters, `getTestimonialById`, `setTestimonialFeatured`, `setTestimonialArchived`, `deleteTestimonial`, and `createPlatformFeedback`. All inserts go through the existing `withRetry()` helper. New types `Testimonial`, `TestimonialKind`, `TestimonialFilters`, `PlatformFeedback`, `PlatformFeedbackCategory` exported.
 - Built the public submission flow: `app/feedback/[ventureId]/page.tsx` (server, public, robots:noindex, pulls venture name + brand accent via `getVenturePublic`), `app/feedback/[ventureId]/FeedbackForm.tsx` (client, segmented testimonial/feedback toggle, inline success state), and `app/api/ventures/[id]/feedback/route.ts` (mirrors the leads route — CORS+OPTIONS, UUID regex on ventureId, name/email/quote validation, length guards 10–2000 on quote).
