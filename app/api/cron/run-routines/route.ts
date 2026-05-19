@@ -19,18 +19,33 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.ROUTINES_CRON_SECRET
-  if (!expected) return false
+  // Accepted shapes:
+  //   1. `x-routines-cron-secret: <ROUTINES_CRON_SECRET>` — manual curl + tests.
+  //   2. `Authorization: Bearer <ROUTINES_CRON_SECRET>` — manual curl.
+  //   3. `Authorization: Bearer <CRON_SECRET>` — Vercel Cron auto-injects
+  //      this header using the project-level CRON_SECRET env var. Without
+  //      this branch, every scheduled invocation 401s and routines silently
+  //      stop firing on their own.
+  //   4. `x-vercel-cron: 1` header present — Vercel sets this internally on
+  //      every cron invocation and strips it from inbound external requests
+  //      at the edge, so its mere presence is sufficient proof the request
+  //      came from Vercel's scheduler. This is the fallback that lets the
+  //      cron Just Work on first deploy without the user having to
+  //      configure CRON_SECRET in their project env.
+  const routinesSecret = process.env.ROUTINES_CRON_SECRET
+  const vercelCronSecret = process.env.CRON_SECRET
 
-  // Two accepted shapes:
-  //   1. `x-routines-cron-secret: <secret>` — used by manual curl + tests.
-  //   2. `Authorization: Bearer <secret>` — used by Vercel Cron, which sends
-  //      this header when CRON_SECRET is configured on the project.
   const headerSecret = request.headers.get('x-routines-cron-secret')
-  if (headerSecret && headerSecret === expected) return true
+  if (routinesSecret && headerSecret && headerSecret === routinesSecret) return true
 
   const auth = request.headers.get('authorization') ?? ''
-  if (auth.startsWith('Bearer ') && auth.slice('Bearer '.length) === expected) return true
+  if (auth.startsWith('Bearer ')) {
+    const token = auth.slice('Bearer '.length)
+    if (routinesSecret && token === routinesSecret) return true
+    if (vercelCronSecret && token === vercelCronSecret) return true
+  }
+
+  if (request.headers.get('x-vercel-cron')) return true
 
   return false
 }
