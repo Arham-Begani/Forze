@@ -28,11 +28,20 @@ const CHANNEL_LABEL: Record<RoutineChannel, string> = {
   instagram: 'Instagram',
 }
 
+interface FireMineSummary {
+  claimed: number
+  succeeded: number
+  failed: number
+  skipped: number
+}
+
 export function RoutinesPanel({ ventureId, campaigns }: RoutinesPanelProps) {
   const [routines, setRoutines] = useState<Routine[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'create'>('list')
+  const [firing, setFiring] = useState(false)
+  const [lastFire, setLastFire] = useState<FireMineSummary | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -51,13 +60,53 @@ export function RoutinesPanel({ ventureId, campaigns }: RoutinesPanelProps) {
     }
   }, [ventureId])
 
+  // User-scoped fire trigger. Calls the same executor path as the hourly
+  // cron, but only for this user's due routines. We run it on mount so
+  // opening the Routines tab actually delivers any overdue sends — the
+  // cron is a backup, not the only path.
+  const fireMine = useCallback(
+    async ({ silent }: { silent: boolean }) => {
+      if (firing) return
+      setFiring(true)
+      try {
+        const res = await fetch('/api/routines/fire-mine', { method: 'POST' })
+        if (!res.ok) return
+        const data = (await res.json()) as { ok: boolean; summary?: FireMineSummary }
+        if (!data.summary) return
+        if (!silent) setLastFire(data.summary)
+        // Only refetch if something actually changed — keeps the list
+        // flicker-free when there was nothing due.
+        if (data.summary.claimed > 0) {
+          await load()
+        }
+      } catch {
+        // Background sweep — swallowing the error is fine; the user can
+        // still create / pause / delete routines independently.
+      } finally {
+        setFiring(false)
+      }
+    },
+    [firing, load]
+  )
+
   useEffect(() => {
     void load()
-  }, [load])
+    // Kick off due-routines firing in parallel with the list fetch. Silent
+    // because most opens won't have anything due and we don't want to flash
+    // a banner saying "0 fired."
+    void fireMine({ silent: true })
+    // Intentionally only on mount per venture — re-firing on every render
+    // would hammer the executor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ventureId])
 
   const onCreated = (created: Routine) => {
     setRoutines((prev) => [created, ...prev])
     setView('list')
+    // A freshly-created routine whose send time is "now or in the past"
+    // (e.g. user picked 09:00 in their tz and it's already 09:05) should
+    // fire on creation, not wait for the next cron tick.
+    void fireMine({ silent: true })
   }
 
   const onTogglePause = async (routine: Routine) => {
@@ -126,12 +175,22 @@ export function RoutinesPanel({ ventureId, campaigns }: RoutinesPanelProps) {
             Auto-fire emails or social posts on a fixed cadence — content is generated fresh from this venture every run.
           </p>
         </div>
-        <button
-          onClick={() => setView('create')}
-          className="flex items-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-        >
-          New routine
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fireMine({ silent: false })}
+            disabled={firing}
+            title="Fire any routines whose scheduled time has already passed"
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-soft)] hover:text-[var(--text)] disabled:cursor-wait disabled:opacity-60"
+          >
+            {firing ? 'Firing…' : 'Run due now'}
+          </button>
+          <button
+            onClick={() => setView('create')}
+            className="flex items-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          >
+            New routine
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -139,6 +198,12 @@ export function RoutinesPanel({ ventureId, campaigns }: RoutinesPanelProps) {
           {error}
         </div>
       )}
+
+      {lastFire && (
+        <FireResultBanner summary={lastFire} onDismiss={() => setLastFire(null)} />
+      )}
+
+      <RoutineTimingNotice />
 
       {routines.length === 0 ? (
         <EmptyState onCreate={() => setView('create')} />
@@ -565,6 +630,59 @@ function ChannelChip({
       </span>
       <span className="text-xs text-[var(--muted)]">{sub}</span>
     </button>
+  )
+}
+
+function FireResultBanner({
+  summary,
+  onDismiss,
+}: {
+  summary: FireMineSummary
+  onDismiss: () => void
+}) {
+  const nothing = summary.claimed === 0
+  const allOk = summary.failed === 0 && summary.claimed > 0
+  const tone = nothing
+    ? 'border-[var(--border)] bg-[var(--card)] text-[var(--text-soft)]'
+    : allOk
+      ? 'border-green-500/40 bg-green-500/5 text-green-700 dark:text-green-400'
+      : 'border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400'
+
+  return (
+    <div className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-sm ${tone}`}>
+      <span>
+        {nothing ? (
+          <>Nothing was due — every routine&apos;s next run is still ahead.</>
+        ) : (
+          <>
+            Fired {summary.claimed} routine{summary.claimed === 1 ? '' : 's'} just now —{' '}
+            <strong>{summary.succeeded} succeeded</strong>
+            {summary.failed > 0 && <>, <strong>{summary.failed} failed</strong></>}
+            {summary.skipped > 0 && <>, {summary.skipped} skipped</>}.
+          </>
+        )}
+      </span>
+      <button
+        onClick={onDismiss}
+        className="text-xs font-medium text-current opacity-70 hover:opacity-100"
+      >
+        Dismiss
+      </button>
+    </div>
+  )
+}
+
+function RoutineTimingNotice() {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-sm">
+      <div className="flex items-start gap-2">
+        <span aria-hidden className="mt-0.5 text-[var(--accent)]">⏱</span>
+        <span className="flex-1 text-[var(--text-soft)]">
+          The scheduler ticks <strong>every minute</strong>. Your routine fires within ~60 seconds
+          of its scheduled time — no manual triggering needed.
+        </span>
+      </div>
+    </div>
   )
 }
 
