@@ -1136,7 +1136,7 @@ export default function ModulePage() {
               }}
               whileHover={{ scale: 1.04, borderColor: mod.accent }}
             >
-              {ventureSubdomain}.{(() => { try { return new URL(process.env.NEXT_PUBLIC_APP_URL || '').host } catch { return 'forze.in' } })()}
+              {ventureSubdomain}.{(() => { try { const h = new URL(process.env.NEXT_PUBLIC_APP_URL || '').host; return h.startsWith('www.') ? h.slice(4) : h } catch { return 'forze.in' } })()}
             </motion.a>
           )}
           <motion.span
@@ -2691,7 +2691,8 @@ function buildVentureSiteUrl(subdomain: string | null, ventureId: string): strin
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
   try {
     const url = new URL(appUrl)
-    return `${url.protocol}//${subdomain}.${url.host}`
+    const host = url.host.startsWith('www.') ? url.host.slice(4) : url.host
+    return `${url.protocol}//${subdomain}.${host}`
   } catch {
     return `/v/${ventureId}`
   }
