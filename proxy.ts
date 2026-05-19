@@ -15,11 +15,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 function getBaseHost(): string {
   const raw = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  let host: string
   try {
-    return new URL(raw).host.split(':')[0].toLowerCase()
+    host = new URL(raw).host.split(':')[0].toLowerCase()
   } catch {
-    return raw.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').split(':')[0]
+    host = raw.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').split(':')[0]
   }
+  // Treat the apex as the canonical base so wildcard tenants like
+  // `feedflow.forze.in` are recognized even when NEXT_PUBLIC_APP_URL is set
+  // to `https://www.forze.in`.
+  return host.startsWith('www.') ? host.slice(4) : host
 }
 
 function extractSubdomain(hostHeader: string): string | null {
