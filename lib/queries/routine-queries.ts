@@ -203,6 +203,24 @@ export async function claimDueRoutines(
   return (data ?? []) as ClaimedRoutine[]
 }
 
+// Per-user atomic claim. Used by the user-triggered "fire mine" endpoint so
+// opening the Routines panel runs only the caller's due routines — never
+// touching another tenant's queue. Mirrors claim_due_routines's SKIP LOCKED
+// semantics so two overlapping requests for the same user can't double-fire.
+export async function claimDueRoutinesForUser(
+  userId: string,
+  limit = 25,
+  db?: DbClient
+): Promise<ClaimedRoutine[]> {
+  const client = resolveAdminDb(db)
+  const { data, error } = await client.rpc('claim_due_routines_for_user', {
+    p_user_id: userId,
+    p_limit: limit,
+  })
+  if (error) throw new Error(`claimDueRoutinesForUser failed: ${error.message}`)
+  return (data ?? []) as ClaimedRoutine[]
+}
+
 export async function advanceRoutineNextRun(
   routineId: string,
   clearError = true,
