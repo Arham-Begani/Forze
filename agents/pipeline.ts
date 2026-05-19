@@ -195,7 +195,8 @@ async function deployLandingPage(ventureId: string, result: PipelineOutput): Pro
     if (venture?.subdomain && appUrl) {
         try {
             const url = new URL(appUrl)
-            return `${url.protocol}//${venture.subdomain}.${url.host}`
+            const host = url.host.startsWith('www.') ? url.host.slice(4) : url.host
+            return `${url.protocol}//${venture.subdomain}.${host}`
         } catch {
             // fall through to legacy
         }
