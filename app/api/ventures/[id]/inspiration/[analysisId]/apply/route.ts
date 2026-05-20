@@ -42,7 +42,10 @@ export async function POST(
             )
         }
 
-        await setVentureInspirationTokens(ventureId, session.userId, row.tokens)
+        // clearLanding=true forces the next /run landing call into a fresh
+        // generation that actually consumes the inspiration briefing instead
+        // of running surgical edit mode against the previous component.
+        await setVentureInspirationTokens(ventureId, session.userId, row.tokens, { clearLanding: true })
         await updateInspirationAnalysis(analysisId, session.userId, {
             applied_at: new Date().toISOString(),
         })
