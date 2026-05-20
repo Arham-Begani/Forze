@@ -12,7 +12,9 @@ import {
     DesignTokensSchema,
     InspirationTokenPatchSchema,
 } from '@/lib/schemas/inspiration'
-import { applyAdjustments, defaultTokens } from '@/lib/inspiration/tokens'
+import { applyAdjustments, defaultTokens, mergeTokens } from '@/lib/inspiration/tokens'
+import { validateAccessibility } from '@/lib/inspiration/accessibility'
+import { scoreTokens } from '@/lib/inspiration/scoring'
 import {
     getInspirationAnalysis,
     updateInspirationAnalysis,
@@ -61,6 +63,19 @@ export async function GET(
                 createdAt: row.created_at,
                 appliedAt: row.applied_at,
                 errorMessage: row.error_message,
+                // ── Migration 028 evidence (may be null on older rows) ──
+                accessibilityReport: row.accessibility_report ?? null,
+                hasContrastIssues: row.has_contrast_issues ?? null,
+                requiresManualReview: row.requires_manual_review ?? null,
+                qualityScore: row.quality_score ?? null,
+                recommendations: row.recommendations ?? [],
+                detectedSections: row.detected_sections ?? null,
+                interactionStates: row.interaction_states ?? null,
+                contextRelevance: row.context_relevance ?? null,
+                pass2Components: row.pass2_components ?? null,
+                pass3Antipatterns: row.pass3_antipatterns ?? null,
+                mergeWeights: row.merge_weights ?? null,
+                extractedAt: row.extracted_at ?? null,
             },
         })
     } catch (e) {
@@ -93,7 +108,7 @@ export async function PATCH(
                 { status: 400 },
             )
         }
-        const { adjustments, lockedPaths } = parsed.data
+        const { adjustments, lockedPaths, mergeWeights } = parsed.data
 
         const existing = await getInspirationAnalysis(analysisId, session.userId)
         if (!existing || existing.venture_id !== ventureId) {
@@ -106,10 +121,34 @@ export async function PATCH(
             )
         }
 
+        // If mergeWeights changed, replay the merge from raw_vision so the
+        // per-color "highest weighted confidence wins" logic gets a fresh
+        // shot. Otherwise start from the previously-saved tokens.
+        let baseTokens
+        try {
+            if (mergeWeights && existing.raw_vision && typeof existing.raw_vision === 'object') {
+                const perUrl = (existing.raw_vision as { perUrl?: Array<{ tokens?: unknown }> }).perUrl ?? []
+                const parsedPerUrl = perUrl
+                    .map((entry) => {
+                        try { return DesignTokensSchema.parse(entry.tokens) } catch { return null }
+                    })
+                    .filter((t): t is ReturnType<typeof DesignTokensSchema.parse> => t !== null)
+                if (parsedPerUrl.length > 0) {
+                    baseTokens = mergeTokens(parsedPerUrl, mergeWeights)
+                } else {
+                    baseTokens = DesignTokensSchema.parse(existing.tokens ?? defaultTokens())
+                }
+            } else {
+                baseTokens = DesignTokensSchema.parse(existing.tokens ?? defaultTokens())
+            }
+        } catch (parseErr) {
+            const msg = parseErr instanceof Error ? parseErr.message : 'Invalid token shape'
+            return NextResponse.json({ error: `Token validation failed: ${msg}` }, { status: 400 })
+        }
+
         let updatedTokens
         try {
-            const base = DesignTokensSchema.parse(existing.tokens ?? defaultTokens())
-            updatedTokens = applyAdjustments(base, adjustments, lockedPaths)
+            updatedTokens = applyAdjustments(baseTokens, adjustments, lockedPaths)
         } catch (parseErr) {
             const msg = parseErr instanceof Error ? parseErr.message : 'Invalid token shape'
             return NextResponse.json({ error: `Token validation failed: ${msg}` }, { status: 400 })
@@ -122,11 +161,24 @@ export async function PATCH(
             ...adjustments,
         }
 
+        // Recompute accessibility + score every time tokens change so the UI
+        // never shows stale evidence for a token configuration that doesn't
+        // exist anymore.
+        const accessibility = validateAccessibility(updatedTokens)
+        const scoring = scoreTokens(updatedTokens, accessibility)
+
         const row = await updateInspirationAnalysis(analysisId, session.userId, {
             tokens: updatedTokens,
             user_adjustments: mergedAdjustments,
             locked_paths: lockedPaths,
             confidence: updatedTokens.confidenceByCategory as unknown as Record<string, number>,
+            mood: updatedTokens.brand.mood,
+            accessibility_report: accessibility as unknown as Record<string, unknown>,
+            has_contrast_issues: accessibility.hasContrastIssues,
+            requires_manual_review: accessibility.requiresManualReview,
+            quality_score: scoring.score as unknown as Record<string, unknown>,
+            recommendations: scoring.recommendations,
+            ...(mergeWeights ? { merge_weights: mergeWeights } : {}),
         })
 
         return NextResponse.json({
@@ -135,6 +187,10 @@ export async function PATCH(
                 tokens: row?.tokens ?? updatedTokens,
                 userAdjustments: row?.user_adjustments ?? mergedAdjustments,
                 lockedPaths: row?.locked_paths ?? lockedPaths,
+                accessibilityReport: accessibility,
+                qualityScore: scoring.score,
+                recommendations: scoring.recommendations,
+                mergeWeights: mergeWeights ?? row?.merge_weights ?? null,
             },
         })
     } catch (e) {
