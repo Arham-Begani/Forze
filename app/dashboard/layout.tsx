@@ -306,6 +306,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     if (moduleId === 'campaigns') return `/dashboard/venture/${ventureId}/campaigns`
     if (moduleId === 'crm') return `/dashboard/venture/${ventureId}/crm`
     if (moduleId === 'testimonials') return `/dashboard/venture/${ventureId}/testimonials`
+    if (moduleId === 'inspiration') return `/dashboard/venture/${ventureId}/inspiration`
     return `/dashboard/venture/${ventureId}/${moduleId}`
   }
 
@@ -318,6 +319,9 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     }
     if (moduleId === 'testimonials') {
       return pathname.startsWith(`/dashboard/venture/${ventureId}/testimonials`)
+    }
+    if (moduleId === 'inspiration') {
+      return pathname.startsWith(`/dashboard/venture/${ventureId}/inspiration`)
     }
     return pathname === `/dashboard/venture/${ventureId}/${moduleId}`
   }
@@ -962,6 +966,26 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                                 >
                                   <span style={{ color: testimonialsAccent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>❝</span>
                                   <span style={{ fontSize: 13, color: testimonialsActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: testimonialsActive ? 700 : 600 }}>Testimonials</span>
+                                </motion.button>
+                              )
+                            })()}
+
+                            {/* Generate from Inspiration — design-token extraction studio.
+                                Lives in the BUILD section because the tokens it produces feed
+                                the landing-page agent on the next run. */}
+                            {(() => {
+                              const inspirationAccent = '#9C7B5A'
+                              const inspirationActive = isModuleActive(activeVenture.id, 'inspiration')
+                              return (
+                                <motion.button
+                                  whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                                  onClick={() => router.push(moduleHref(activeVenture.id, 'inspiration'))}
+                                  aria-label="Open Inspiration Studio"
+                                  aria-current={inspirationActive ? 'page' : undefined}
+                                  style={sectionButtonStyle(inspirationActive, inspirationAccent)}
+                                >
+                                  <span style={{ color: inspirationAccent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>✦</span>
+                                  <span style={{ fontSize: 13, color: inspirationActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: inspirationActive ? 700 : 600 }}>Inspiration</span>
                                 </motion.button>
                               )
                             })()}
