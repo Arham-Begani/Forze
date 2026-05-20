@@ -124,19 +124,33 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
   const [saving, setSaving] = useState(false)
   const [appliedAnalysisId, setAppliedAnalysisId] = useState<string | null>(null)
   const [rateLimit, setRateLimit] = useState<{ perVentureRemaining: number; perUserRemaining: number; allowed: boolean } | null>(null)
+  // Generation progress (after Apply triggers a landing-page run)
+  const [generating, setGenerating] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState<string | null>(null)
+  const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null)
 
   const patchDebounceRef = useRef<number | null>(null)
+  const pollAbortRef = useRef<{ aborted: boolean } | null>(null)
 
   // ── Initial history fetch ───────────────────────────────────────────────
+  // If a previous session applied tokens, pick that row as the active one so
+  // the "Remove from Landing" toggle and apply state work on page reload.
   const refreshHistory = useCallback(async () => {
     try {
       const res = await fetch(`/api/ventures/${venture.id}/inspiration`)
       if (!res.ok) return
       const data = await res.json()
-      setHistory(data.analyses ?? [])
+      const rows: AnalysisSummary[] = data.analyses ?? []
+      setHistory(rows)
       setRateLimit(data.rateLimit ?? null)
-      const appliedRow = (data.analyses ?? []).find((a: AnalysisSummary) => a.appliedAt)
-      if (appliedRow) setAppliedAnalysisId(appliedRow.id)
+      const appliedRow = rows.find((a) => a.appliedAt)
+      if (appliedRow) {
+        setAppliedAnalysisId(appliedRow.id)
+        // Keep activeAnalysisId aligned with applied when nothing else is
+        // selected — otherwise the apply/unapply controls disable themselves
+        // even though there IS an applied row to act on.
+        setActiveAnalysisId((prev) => prev ?? appliedRow.id)
+      }
     } catch {
       // network — leave history empty
     }
@@ -158,6 +172,14 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
       }
     }
   }, [appliedTokens, tokens])
+
+  // Cancel any in-flight poll on unmount so we don't keep hammering /api after
+  // the user navigates away mid-generation.
+  useEffect(() => {
+    return () => {
+      if (pollAbortRef.current) pollAbortRef.current.aborted = true
+    }
+  }, [])
 
   // ── URL list management ─────────────────────────────────────────────────
   const updateUrlAt = (idx: number, val: string) => {
@@ -255,34 +277,109 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
   }
 
   // ── Apply / unapply tokens to venture ───────────────────────────────────
+  // Apply is a two-step flow:
+  //   1. POST /apply  — writes tokens to venture.context.inspirationTokens
+  //      and clears the existing landing page so the next run is a fresh
+  //      generation (not a surgical edit-mode patch).
+  //   2. POST /run    — kicks off the landing-page agent. We then poll the
+  //      venture endpoint every 2.5s until context.landing.deploymentUrl
+  //      shows up, at which point we surface a "View site" CTA.
+  //
+  // The whole flow surfaces errors aggressively — silent failures are how
+  // the previous version was useless: the button "saved" but nothing visibly
+  // happened, and there was no error path to surface why.
   const applyToVenture = async () => {
-    if (!activeAnalysisId) return
+    if (!activeAnalysisId) {
+      setError('No active analysis to apply. Pick one from history or run a new analysis first.')
+      return
+    }
+    if (!tokens) {
+      setError('Tokens are still loading.')
+      return
+    }
+    setError(null)
     setSaving(true)
+    setDeploymentUrl(null)
+    setGenerationStatus(null)
     try {
-      const res = await fetch(`/api/ventures/${venture.id}/inspiration/${activeAnalysisId}/apply`, {
-        method: 'POST',
-      })
-      if (res.ok) {
-        setAppliedAnalysisId(activeAnalysisId)
-        await refreshHistory()
+      const applyRes = await fetch(
+        `/api/ventures/${venture.id}/inspiration/${activeAnalysisId}/apply`,
+        { method: 'POST' },
+      )
+      if (!applyRes.ok) {
+        const errBody = await applyRes.json().catch(() => null)
+        throw new Error(errBody?.error ?? `Apply failed (HTTP ${applyRes.status})`)
       }
+      setAppliedAnalysisId(activeAnalysisId)
+      await refreshHistory()
+
+      // Kick off the landing-page generation. The pipeline agent reads
+      // venture.context.inspirationTokens and applies the design briefing.
+      setGenerating(true)
+      setGenerationStatus('Briefing the landing-page agent…')
+      const runRes = await fetch(`/api/ventures/${venture.id}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          moduleId: 'landing',
+          prompt: `Generate a landing page that adopts the applied inspiration design tokens and design briefing exactly. Match the inspiration's feel — surfaces, motion, density, gradient strategy — not just its colors.`,
+        }),
+      })
+      if (!runRes.ok) {
+        const errBody = await runRes.json().catch(() => null)
+        throw new Error(
+          errBody?.error
+            ? `Landing run failed: ${errBody.error}`
+            : `Landing run failed (HTTP ${runRes.status})`,
+        )
+      }
+      const runData = await runRes.json()
+      const conversationId: string | undefined = runData?.conversationId
+      if (!conversationId) throw new Error('Landing run did not return a conversationId')
+
+      setGenerationStatus('Generating landing page (this usually takes 30–60s)…')
+      pollAbortRef.current = { aborted: false }
+      const abortToken = pollAbortRef.current
+      const deployed = await pollForDeployment(venture.id, abortToken, (msg) => {
+        if (!abortToken.aborted) setGenerationStatus(msg)
+      })
+      if (abortToken.aborted) return
+      if (deployed) {
+        setDeploymentUrl(deployed)
+        setGenerationStatus('Landing page generated.')
+      } else {
+        setGenerationStatus(
+          'Generation finished but no deployment URL was returned. Open the Landing module to inspect.',
+        )
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Apply failed')
+      setGenerationStatus(null)
     } finally {
       setSaving(false)
+      setGenerating(false)
     }
   }
 
   const unapplyFromVenture = async () => {
     if (!appliedAnalysisId) return
+    setError(null)
     setSaving(true)
     try {
       const res = await fetch(
         `/api/ventures/${venture.id}/inspiration/${appliedAnalysisId}/apply`,
         { method: 'DELETE' },
       )
-      if (res.ok) {
-        setAppliedAnalysisId(null)
-        await refreshHistory()
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null)
+        throw new Error(errBody?.error ?? `Unapply failed (HTTP ${res.status})`)
       }
+      setAppliedAnalysisId(null)
+      setDeploymentUrl(null)
+      setGenerationStatus(null)
+      await refreshHistory()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unapply failed')
     } finally {
       setSaving(false)
     }
@@ -500,7 +597,7 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
               {isAppliedActive ? (
                 <button
                   onClick={unapplyFromVenture}
-                  disabled={saving}
+                  disabled={saving || generating}
                   style={{ ...ghostButtonStyle, color: '#dc2626', borderColor: '#dc262630' }}
                 >
                   {saving ? 'Removing…' : 'Remove from Landing'}
@@ -508,10 +605,14 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
               ) : (
                 <button
                   onClick={applyToVenture}
-                  disabled={saving || !activeAnalysisId}
-                  style={primaryButtonStyle(saving)}
+                  disabled={saving || generating || !activeAnalysisId}
+                  style={primaryButtonStyle(saving || generating)}
                 >
-                  {saving ? 'Applying…' : 'Apply to Landing Page'}
+                  {generating
+                    ? (generationStatus ?? 'Generating…')
+                    : saving
+                      ? 'Applying…'
+                      : 'Apply & Generate Landing Page'}
                 </button>
               )}
               <button
@@ -522,6 +623,66 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
               </button>
             </div>
           </div>
+
+          {/* Apply + generation progress / result panel. Shown only while the
+              flow is active or has just produced a deployment URL. */}
+          {(generating || generationStatus || deploymentUrl) && (
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid var(--border)',
+                background: deploymentUrl ? 'var(--accent-soft)' : 'var(--stream-bg)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              {generating && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      border: '2px solid var(--border)',
+                      borderTopColor: 'var(--accent)',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                    }}
+                  />
+                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                  <span style={{ fontSize: 13, color: 'var(--text)' }}>
+                    {generationStatus ?? 'Working…'}
+                  </span>
+                </div>
+              )}
+              {!generating && generationStatus && !deploymentUrl && (
+                <div style={{ fontSize: 13, color: 'var(--text-soft)' }}>{generationStatus}</div>
+              )}
+              {deploymentUrl && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text)' }}>
+                    <strong>✓ Landing page generated</strong> — your inspiration tokens are now live on this venture's site.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <a
+                      href={deploymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ ...primaryButtonStyle(false), textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+                    >
+                      View Site →
+                    </a>
+                    <button
+                      onClick={() => router.push(`/dashboard/venture/${venture.id}/landing`)}
+                      style={ghostButtonStyle}
+                    >
+                      Edit in Landing Module
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -1103,5 +1264,44 @@ function normalizeHex(value: string): string {
   }
   if (/^#([0-9a-fA-F]{8})$/.test(value)) return value.slice(0, 7)
   return '#000000'
+}
+
+// Poll the venture endpoint until landing.deploymentUrl appears or we hit a
+// generous timeout (90s — pipeline agents typically finish in 30–60s). The
+// abortToken lets unmount cancel cleanly instead of leaking timers.
+async function pollForDeployment(
+  ventureId: string,
+  abortToken: { aborted: boolean },
+  onStatus: (msg: string) => void,
+): Promise<string | null> {
+  const startedAt = Date.now()
+  const maxMs = 120_000
+  const intervalMs = 2_500
+  let attempts = 0
+
+  while (!abortToken.aborted && Date.now() - startedAt < maxMs) {
+    attempts += 1
+    try {
+      const res = await fetch(`/api/ventures/${ventureId}`)
+      if (res.ok) {
+        const data = await res.json()
+        const landing = data?.venture?.context?.landing as
+          | { deploymentUrl?: string; fullComponent?: string }
+          | undefined
+        if (landing?.deploymentUrl) return landing.deploymentUrl
+        if (landing?.fullComponent && landing.fullComponent.length > 200) {
+          // Pipeline finished but deployment URL not surfaced — fall back to
+          // the venture's own subdomain via the preview route.
+          return `/v/${ventureId}`
+        }
+      }
+    } catch {
+      // ignore transient network errors and keep polling
+    }
+    const elapsed = Math.round((Date.now() - startedAt) / 1000)
+    onStatus(`Generating landing page… ${elapsed}s elapsed (poll #${attempts})`)
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return null
 }
 
