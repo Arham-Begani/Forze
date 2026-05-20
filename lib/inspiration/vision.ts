@@ -112,6 +112,16 @@ fields lower (40–60) when you are guessing.
     "mood": "modern-minimal" | "corporate-formal" | "playful-energetic" | "luxury-premium" | "startup-bold" | "editorial-serif" | "tech-dark",
     "personality": "Two- or three-sentence description of the brand voice."
   },
+  "designSignals": {
+    "aesthetic": "1-2 sentences describing the overall feel. Think 'what would you tell a designer to make this site feel right?' Be specific — 'dense gradient-heavy SaaS' beats 'modern'.",
+    "surface": "flat" | "glassmorphism" | "gradient" | "noise-textured" | "depth-shadow" | "neumorphism",
+    "motion": "none" | "subtle" | "elegant" | "energetic" | "glitchy" | "parallax-heavy",
+    "density": "compact" | "comfortable" | "spacious" | "editorial",
+    "heroTreatment": "How the hero section feels. e.g. 'centered headline with large display font, gradient background, product mockup below' or 'split layout, headline left + interactive demo right'.",
+    "notableInteractions": ["specific hover/scroll behaviors you would expect on this site, e.g. 'magnetic cursor on CTA', 'staggered fade-in on cards', 'animated gradient text', 'parallax scroll on hero blobs'"],
+    "gradientStyle": "none" | "subtle-radial" | "bold-linear" | "mesh" | "iridescent" | "duotone",
+    "cornerStyle": "sharp" | "soft" | "rounded" | "pill"
+  },
   "confidenceByCategory": {
     "colors": 0-100, "typography": 0-100, "spacing": 0-100, "components": 0-100, "overall": 0-100
   }
