@@ -12,7 +12,7 @@ import { resolveLandingComponent, isRenderableLandingComponent } from '@/lib/lan
 import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 import { getVenturePublic } from '@/lib/queries'
 import { DesignTokensSchema } from '@/lib/schemas/inspiration'
-import { tokensToPromptDigest, tokensToCssVarBlock } from '@/lib/inspiration/tokens'
+import { tokensToPromptDigest, tokensToCssVarBlock, tokensToDesignBriefing } from '@/lib/inspiration/tokens'
 
 // ── PipelineOutput Zod Schema ────────────────────────────────────────────────
 
@@ -535,22 +535,38 @@ export async function runPipelineAgent(
     // Inspiration tokens — when the founder has analyzed reference URLs and
     // pushed the resulting DesignTokens onto the venture (see
     // /api/ventures/[id]/inspiration/[analysisId]/apply), the pipeline agent
-    // treats those as a HARD design directive that overrides the branding
-    // agent's palette/typography choices on the landing page only.
+    // treats those as the PRIMARY design directive that overrides the
+    // branding agent's palette and visual style on the landing page.
+    //
+    // The block we inject has three layers:
+    //   1. A long-form design briefing (mood → concrete patterns) so the LLM
+    //      knows HOW the inspiration should feel, not just its colors.
+    //   2. A digest of the actual tokens (hex values, font names, sizes).
+    //   3. A CSS custom-property declaration block so future token edits
+    //      cascade through var(--insp-*) references instead of regenerating
+    //      the whole component.
+    let inspirationBlock: string | null = null
     if (venture.context.inspirationTokens) {
         try {
             const tokens = DesignTokensSchema.parse(venture.context.inspirationTokens)
+            const briefing = tokensToDesignBriefing(tokens)
             const digest = tokensToPromptDigest(tokens)
             const cssBlock = tokensToCssVarBlock(tokens)
-            contextParts.push(
-                `## Inspiration Design Tokens (HARD overrides — apply EXACTLY)\n` +
-                `The founder analyzed one or more inspiration websites and locked in these tokens. ` +
-                `When they conflict with the branding palette, the INSPIRATION tokens win for this landing page.\n\n` +
-                digest +
-                `\n\nApply these as CSS custom properties at the top of your inline <style> tag:\n\`\`\`css\n${cssBlock}\n\`\`\`\n` +
-                `Use var(--insp-color-primary) etc. throughout the component so future token edits cascade cleanly. ` +
-                `Match the brand mood "${tokens.brand.mood}" in your visual treatment (spacing, weight, density).`,
-            )
+            inspirationBlock =
+                `## Inspiration Design Directive (HIGHEST PRIORITY — overrides branding palette)\n\n` +
+                `The founder pasted one or more inspiration URLs (e.g. Stripe, Vercel, Linear) and locked in these design choices. ` +
+                `For THIS landing page, the inspiration tokens AND aesthetic briefing below take precedence over the branding agent's color palette and any default styling instincts. ` +
+                `Match the inspiration's FEEL, not just its colors — that means surfaces, density, motion, gradients, and corner treatment all need to match the briefing.\n\n` +
+                briefing +
+                `\n\n### Exact token values\n${digest}\n\n` +
+                `### CSS custom properties — paste THIS BLOCK at the top of your inline <style> tag, then use var(--insp-*) throughout the component:\n` +
+                `\`\`\`css\n${cssBlock}\n\`\`\`\n\n` +
+                `### Implementation rules\n` +
+                `- ALL background, text, border, and accent colors must reference the CSS vars above. No hardcoded hex outside the <style> block.\n` +
+                `- The "Aesthetic North Star" line above is the single sentence that should describe how this page feels — write code that earns it.\n` +
+                `- If the anti-patterns list above conflicts with your default landing-page instincts, the anti-patterns win.\n` +
+                `- Brand mood is "${tokens.brand.mood}" — every section's visual treatment must read as that mood. A "luxury-premium" mood should NOT have bouncy hover states. A "tech-dark" mood should NOT have light cream backgrounds. Be consistent.`
+            contextParts.push(inspirationBlock)
         } catch {
             // Bad shape on disk — ignore silently and fall back to branding-only.
         }
@@ -613,7 +629,15 @@ Output the complete PipelineOutput JSON.`
                 fullComponent: componentPreview,
             }
 
-            const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Landing Page Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+            // If inspiration tokens were applied since the existing landing was
+            // generated, fold the briefing into the edit message so the LLM
+            // restyles surfaces / motion / typography to match the inspiration
+            // instead of just doing a copy-only patch.
+            const editInspirationBlock = inspirationBlock
+                ? `\n\n${inspirationBlock}\n\nIf the existing component does not yet match this directive (e.g. wrong gradient strategy, wrong card surface, wrong typography rhythm), output the FULL updated fullComponent so the page actually adopts the inspiration's feel — not just a surgical copy edit.`
+                : ''
+
+            const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Landing Page Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`${editInspirationBlock}\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
 
             let fullText = ''
             await streamPrompt(
