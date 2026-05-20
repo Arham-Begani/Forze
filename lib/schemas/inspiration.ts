@@ -169,6 +169,29 @@ export const DesignTokensSchema = z.object({
         personality: z.string().default(''),
     }).default({}),
 
+    // designSignals — the qualitative side of the inspiration. Tokens alone
+    // ("color is #635bff, radius is 8px") don't capture WHY Stripe feels like
+    // Stripe. These free-form / enum fields give the pipeline agent concrete
+    // directives about surface treatment, motion character, and density so
+    // the generated component matches the inspiration's *feel*, not just its
+    // palette. Every field defaults so a thin Gemini response still parses.
+    designSignals: z.object({
+        aesthetic: z.string().default(''), // 1-2 sentence overall description
+        surface: z
+            .enum(['flat', 'glassmorphism', 'gradient', 'noise-textured', 'depth-shadow', 'neumorphism'])
+            .default('flat'),
+        motion: z
+            .enum(['none', 'subtle', 'elegant', 'energetic', 'glitchy', 'parallax-heavy'])
+            .default('subtle'),
+        density: z.enum(['compact', 'comfortable', 'spacious', 'editorial']).default('comfortable'),
+        heroTreatment: z.string().default(''), // e.g. "split layout with product mockup right"
+        notableInteractions: z.array(z.string()).default([]), // e.g. ["magnetic CTA", "scroll-triggered parallax"]
+        gradientStyle: z
+            .enum(['none', 'subtle-radial', 'bold-linear', 'mesh', 'iridescent', 'duotone'])
+            .default('none'),
+        cornerStyle: z.enum(['sharp', 'soft', 'rounded', 'pill']).default('soft'),
+    }).default({}),
+
     confidenceByCategory: z.object({
         colors: ConfidenceSchema.default(70),
         typography: ConfidenceSchema.default(70),
