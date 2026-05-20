@@ -94,19 +94,67 @@ type AnalysisSummary = {
   errorMessage: string | null
 }
 
-type Tab = 'colors' | 'typography' | 'spacing' | 'components' | 'preview'
+// Mirrors lib/inspiration/accessibility.ts AccessibilityReport so the UI can
+// render without a runtime import. Keep these in sync if the server adds
+// fields — the existing keys must stay stable.
+type AccessibilityFinding = {
+  id: string
+  severity: 'pass' | 'warning' | 'critical'
+  category: 'contrast' | 'typography' | 'focus' | 'spacing'
+  label: string
+  detail: string
+  suggestion?: string
+  contrastRatio?: number
+  minRequired?: number
+}
+
+type AccessibilityReportClient = {
+  score: number
+  findings: AccessibilityFinding[]
+  summary: { passes: number; warnings: number; critical: number }
+  hasContrastIssues: boolean
+  requiresManualReview: boolean
+}
+
+type QualityScoreClient = {
+  overallScore: number
+  colorConsistency: number
+  readability: number
+  responsiveness: number
+  componentCohesion: number
+  trustSignals: number
+}
+
+type RefineRationale = { path: string; before: string; after: string; why: string }
+type RefineSuggestionClient = {
+  adjustments: Record<string, unknown>
+  rationale: RefineRationale[]
+  summary: string
+}
+
+type Tab =
+  | 'colors'
+  | 'typography'
+  | 'spacing'
+  | 'components'
+  | 'preview'
+  | 'quality'
+  | 'sources'
+  | 'refine'
 
 interface Props {
   venture: { id: string; name: string }
   appliedTokens: unknown
 }
 
-const TABS: Array<{ id: Tab; label: string }> = [
+const BASE_TABS: Array<{ id: Tab; label: string }> = [
   { id: 'colors', label: 'Colors' },
   { id: 'typography', label: 'Typography' },
   { id: 'spacing', label: 'Spacing' },
   { id: 'components', label: 'Components' },
   { id: 'preview', label: 'Preview' },
+  { id: 'quality', label: 'Quality' },
+  { id: 'refine', label: 'Refine' },
 ]
 
 export function InspirationStudio({ venture, appliedTokens }: Props) {
@@ -128,6 +176,17 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
   const [generating, setGenerating] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null)
+  // Migration 028 enrichment state — populated from analyze + GET responses.
+  const [accessibility, setAccessibility] = useState<AccessibilityReportClient | null>(null)
+  const [qualityScore, setQualityScore] = useState<QualityScoreClient | null>(null)
+  const [recommendations, setRecommendations] = useState<string[]>([])
+  const [mergeWeights, setMergeWeights] = useState<Record<string, number>>({})
+  // Refine flow state — issue text, in-flight, last suggestion preview.
+  const [refineIssue, setRefineIssue] = useState('')
+  const [refineComponent, setRefineComponent] = useState<string>('overall')
+  const [refining, setRefining] = useState(false)
+  const [refineSuggestion, setRefineSuggestion] = useState<RefineSuggestionClient | null>(null)
+  const [refineError, setRefineError] = useState<string | null>(null)
 
   const patchDebounceRef = useRef<number | null>(null)
   const pollAbortRef = useRef<{ aborted: boolean } | null>(null)
@@ -225,6 +284,21 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
       setAdjustments({})
       setTab('colors')
       setRateLimit(data.rateLimit ?? null)
+      setAccessibility((data.accessibility as AccessibilityReportClient | undefined) ?? null)
+      setQualityScore((data.qualityScore as QualityScoreClient | undefined) ?? null)
+      setRecommendations(Array.isArray(data.recommendations) ? data.recommendations : [])
+      // Seed merge weights with equal shares so the Sources tab can show
+      // sliders immediately on multi-URL runs.
+      if (cleaned.length > 1) {
+        const equal = 1 / cleaned.length
+        const seed: Record<string, number> = {}
+        for (const u of cleaned) seed[hostFromUrl(u)] = Number(equal.toFixed(2))
+        setMergeWeights(seed)
+      } else {
+        setMergeWeights({})
+      }
+      setRefineSuggestion(null)
+      setRefineError(null)
       await refreshHistory()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Analysis failed')
@@ -397,6 +471,12 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
       setTokens(a.tokens as DesignTokens)
       setAdjustments(a.userAdjustments ?? {})
       setLockedPaths(a.lockedPaths ?? [])
+      setAccessibility((a.accessibilityReport as AccessibilityReportClient | null) ?? null)
+      setQualityScore((a.qualityScore as QualityScoreClient | null) ?? null)
+      setRecommendations(Array.isArray(a.recommendations) ? a.recommendations : [])
+      setMergeWeights((a.mergeWeights as Record<string, number> | null) ?? {})
+      setRefineSuggestion(null)
+      setRefineError(null)
       setTab('preview')
     } catch {
       // ignore
@@ -429,6 +509,103 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
   }
 
   const isAppliedActive = activeAnalysisId !== null && activeAnalysisId === appliedAnalysisId
+
+  // Compose tabs — 'sources' is conditional on multi-URL analyses so we don't
+  // show an empty merge-weights pane for single-URL runs.
+  const tabs: Array<{ id: Tab; label: string }> = (() => {
+    const sourceCount = tokens?.sources?.secondaryUrls?.length
+      ? tokens.sources.secondaryUrls.length + 1
+      : 1
+    if (sourceCount > 1) {
+      return [...BASE_TABS.slice(0, 5), { id: 'sources' as const, label: 'Sources' }, ...BASE_TABS.slice(5)]
+    }
+    return BASE_TABS
+  })()
+
+  // ── Merge weight slider handler ──────────────────────────────────────────
+  // Updates local state immediately, then sends a debounced PATCH with the
+  // new weights. The PATCH route replays the merge from raw_vision so the
+  // tokens visibly shift colors/mood as the founder moves sliders.
+  const updateMergeWeight = (host: string, value: number) => {
+    setMergeWeights((prev) => {
+      const next = { ...prev, [host]: value }
+      if (!activeAnalysisId) return next
+      if (patchDebounceRef.current) window.clearTimeout(patchDebounceRef.current)
+      patchDebounceRef.current = window.setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/ventures/${venture.id}/inspiration/${activeAnalysisId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adjustments: {}, lockedPaths, mergeWeights: next }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data?.analysis?.tokens) setTokens(data.analysis.tokens as DesignTokens)
+            if (data?.analysis?.accessibilityReport) setAccessibility(data.analysis.accessibilityReport)
+            if (data?.analysis?.qualityScore) setQualityScore(data.analysis.qualityScore)
+            if (Array.isArray(data?.analysis?.recommendations)) setRecommendations(data.analysis.recommendations)
+          }
+        } catch {
+          // weight changes are best-effort; the slider still moved locally
+        }
+      }, 500)
+      return next
+    })
+  }
+
+  // ── Refine submit ────────────────────────────────────────────────────────
+  const runRefine = async () => {
+    if (!activeAnalysisId) {
+      setRefineError('No active analysis to refine.')
+      return
+    }
+    if (refineIssue.trim().length < 8) {
+      setRefineError('Describe the issue in at least a few words.')
+      return
+    }
+    setRefineError(null)
+    setRefining(true)
+    try {
+      const res = await fetch(`/api/ventures/${venture.id}/inspiration/${activeAnalysisId}/refine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          issue: refineIssue.trim(),
+          affectedComponent: refineComponent,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Refine failed (HTTP ${res.status})`)
+      }
+      setRefineSuggestion(data.suggestion as RefineSuggestionClient)
+    } catch (e) {
+      setRefineError(e instanceof Error ? e.message : 'Refine failed')
+    } finally {
+      setRefining(false)
+    }
+  }
+
+  // Apply the suggested patch through the standard PATCH route so it goes
+  // through the same validation + persistence as a manual edit.
+  const acceptRefineSuggestion = async () => {
+    if (!refineSuggestion || !activeAnalysisId) return
+    const merged = { ...adjustments, ...(refineSuggestion.adjustments as Record<string, unknown>) }
+    setAdjustments(merged)
+    // Optimistically apply to local tokens so the preview updates instantly.
+    setTokens((prev) => {
+      if (!prev) return prev
+      let next: DesignTokens = prev
+      for (const [path, value] of Object.entries(refineSuggestion.adjustments)) {
+        next = setAtPath(next, path, value)
+      }
+      return next
+    })
+    persistAdjustments(merged, lockedPaths)
+    setRefineSuggestion(null)
+    setRefineIssue('')
+    setTab('preview')
+  }
 
   return (
     <div style={{ padding: '32px 24px', maxWidth: 1200, margin: '0 auto' }}>
@@ -521,8 +698,8 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
             overflow: 'hidden',
           }}
         >
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-            {TABS.map((t) => (
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
@@ -536,9 +713,28 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
                   borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
                   color: tab === t.id ? 'var(--text)' : 'var(--text-soft)',
                   cursor: 'pointer',
+                  position: 'relative',
                 }}
               >
                 {t.label}
+                {/* Critical-issue badge on the Quality tab so it doesn't go unnoticed. */}
+                {t.id === 'quality' && accessibility?.summary.critical ? (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 6,
+                      right: 8,
+                      background: '#dc2626',
+                      color: '#fff',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: 999,
+                    }}
+                  >
+                    {accessibility.summary.critical}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -567,6 +763,37 @@ export function InspirationStudio({ venture, appliedTokens }: Props) {
               <ComponentsTab tokens={tokens} onChange={setTokenPath} />
             )}
             {tab === 'preview' && <PreviewTab tokens={tokens} ventureName={venture.name} />}
+            {tab === 'quality' && (
+              <QualityTab
+                accessibility={accessibility}
+                qualityScore={qualityScore}
+                recommendations={recommendations}
+              />
+            )}
+            {tab === 'sources' && (
+              <SourcesTab
+                tokens={tokens}
+                mergeWeights={mergeWeights}
+                onChangeWeight={updateMergeWeight}
+              />
+            )}
+            {tab === 'refine' && (
+              <RefineTab
+                issue={refineIssue}
+                setIssue={setRefineIssue}
+                component={refineComponent}
+                setComponent={setRefineComponent}
+                onSubmit={runRefine}
+                refining={refining}
+                suggestion={refineSuggestion}
+                onAccept={acceptRefineSuggestion}
+                onDiscard={() => {
+                  setRefineSuggestion(null)
+                  setRefineError(null)
+                }}
+                error={refineError}
+              />
+            )}
           </div>
 
           {/* Action bar */}
@@ -1254,6 +1481,308 @@ function setAtPath<T>(target: T, path: string, value: unknown): T {
   }
   cursor[parts[parts.length - 1]] = value
   return root as unknown as T
+}
+
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return url.toLowerCase().replace(/^www\./, '')
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Quality / Accessibility / Recommendations
+// ──────────────────────────────────────────────────────────────────────────────
+
+function QualityTab({
+  accessibility,
+  qualityScore,
+  recommendations,
+}: {
+  accessibility: AccessibilityReportClient | null
+  qualityScore: QualityScoreClient | null
+  recommendations: string[]
+}) {
+  if (!accessibility && !qualityScore) {
+    return (
+      <div style={{ fontSize: 13, color: 'var(--text-soft)' }}>
+        No quality data available yet. Re-run analysis to generate accessibility and quality scoring for this set of tokens.
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: 'grid', gap: 24 }}>
+      {qualityScore && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+            Quality score
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 40, fontWeight: 800, color: 'var(--text)' }}>
+              {qualityScore.overallScore}
+              <span style={{ fontSize: 16, color: 'var(--text-soft)', fontWeight: 600 }}>/100</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-soft)', maxWidth: 480 }}>
+              Weighted across color consistency, readability, responsive design, component cohesion, and trust signals.
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <ScoreBar label="Color consistency" value={qualityScore.colorConsistency} />
+            <ScoreBar label="Readability" value={qualityScore.readability} />
+            <ScoreBar label="Responsiveness" value={qualityScore.responsiveness} />
+            <ScoreBar label="Component cohesion" value={qualityScore.componentCohesion} />
+            <ScoreBar label="Trust signals" value={qualityScore.trustSignals} />
+          </div>
+        </div>
+      )}
+
+      {accessibility && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+            Accessibility report ({accessibility.score}/100)
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <SeverityPill severity="critical" count={accessibility.summary.critical} />
+            <SeverityPill severity="warning" count={accessibility.summary.warnings} />
+            <SeverityPill severity="pass" count={accessibility.summary.passes} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {accessibility.findings.map((f) => (
+              <div
+                key={f.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  padding: 10,
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  borderLeft: `3px solid ${severityColor(f.severity)}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ fontSize: 13, color: 'var(--text)' }}>{f.label}</strong>
+                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: severityColor(f.severity) + '22', color: severityColor(f.severity), textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {f.severity}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-soft)' }}>{f.detail}</div>
+                {f.suggestion && (
+                  <div style={{ fontSize: 11, color: 'var(--accent)' }}>→ {f.suggestion}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recommendations.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+            Recommendations
+          </div>
+          <ul style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {recommendations.map((r, idx) => (
+              <li key={idx} style={{ fontSize: 13, color: 'var(--text)' }}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const color = value >= 85 ? '#16a34a' : value >= 65 ? '#d97706' : '#dc2626'
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-soft)' }}>
+        <span>{label}</span>
+        <strong style={{ color: 'var(--text)' }}>{value}</strong>
+      </div>
+      <div style={{ height: 6, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, value))}%`, height: '100%', background: color }} />
+      </div>
+    </div>
+  )
+}
+
+function SeverityPill({ severity, count }: { severity: AccessibilityFinding['severity']; count: number }) {
+  const color = severityColor(severity)
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, background: color + '18', border: '1px solid ' + color + '44' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+      <span style={{ fontSize: 11, fontWeight: 600, color }}>{count} {severity}</span>
+    </div>
+  )
+}
+
+function severityColor(severity: AccessibilityFinding['severity']): string {
+  if (severity === 'critical') return '#dc2626'
+  if (severity === 'warning') return '#d97706'
+  return '#16a34a'
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Sources / merge-weight sliders
+// ──────────────────────────────────────────────────────────────────────────────
+
+function SourcesTab({
+  tokens,
+  mergeWeights,
+  onChangeWeight,
+}: {
+  tokens: DesignTokens
+  mergeWeights: Record<string, number>
+  onChangeWeight: (host: string, value: number) => void
+}) {
+  const sources = [tokens.sources.primaryUrl, ...tokens.sources.secondaryUrls].filter(Boolean)
+  if (sources.length < 2) {
+    return (
+      <div style={{ fontSize: 13, color: 'var(--text-soft)' }}>
+        Source weighting only applies when more than one inspiration URL was analyzed. This run used a single source.
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ fontSize: 13, color: 'var(--text-soft)', maxWidth: 640 }}>
+        Drag the sliders to weight how much each source influences the merged tokens. Higher weight = that source's colors, type, and spacing win more often. Changes re-merge the tokens immediately.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {sources.map((url) => {
+          const host = hostFromUrl(url)
+          const weight = typeof mergeWeights[host] === 'number' ? mergeWeights[host] : 1 / sources.length
+          return (
+            <div key={url} style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--border)', borderRadius: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{host}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-soft)' }}>{Math.round(weight * 100)}%</div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={weight}
+                onChange={(e) => onChangeWeight(host, parseFloat(e.target.value))}
+                style={{ width: '100%' }}
+              />
+              <div style={{ fontSize: 10, color: 'var(--muted)' }}>{url}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Refine flow — describe an issue, get suggested adjustments
+// ──────────────────────────────────────────────────────────────────────────────
+
+function RefineTab({
+  issue,
+  setIssue,
+  component,
+  setComponent,
+  onSubmit,
+  refining,
+  suggestion,
+  onAccept,
+  onDiscard,
+  error,
+}: {
+  issue: string
+  setIssue: (v: string) => void
+  component: string
+  setComponent: (v: string) => void
+  onSubmit: () => void
+  refining: boolean
+  suggestion: RefineSuggestionClient | null
+  onAccept: () => void
+  onDiscard: () => void
+  error: string | null
+}) {
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 720 }}>
+      <div style={{ fontSize: 13, color: 'var(--text-soft)' }}>
+        Describe what feels off about the applied tokens — "the primary button gets lost on the features section", "headings feel too aggressive", "the card shadows are too heavy". The system will propose a minimal token patch you can accept or discard.
+      </div>
+      <div>
+        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Affected component</label>
+        <select
+          value={component}
+          onChange={(e) => setComponent(e.target.value)}
+          style={{ ...inputStyle, marginTop: 4, width: '100%' }}
+          disabled={refining}
+        >
+          <option value="overall">Overall feel</option>
+          <option value="button">Buttons / CTAs</option>
+          <option value="card">Cards</option>
+          <option value="text">Text / typography</option>
+          <option value="spacing">Spacing</option>
+          <option value="hero">Hero section</option>
+        </select>
+      </div>
+      <div>
+        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>What's wrong?</label>
+        <textarea
+          value={issue}
+          onChange={(e) => setIssue(e.target.value)}
+          placeholder="e.g. The primary button is hard to see on the features section background…"
+          rows={4}
+          disabled={refining}
+          style={{ ...inputStyle, marginTop: 4, width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
+        />
+      </div>
+      <div>
+        <button onClick={onSubmit} disabled={refining || issue.trim().length < 8} style={primaryButtonStyle(refining)}>
+          {refining ? 'Generating suggestion…' : 'Suggest a fix'}
+        </button>
+      </div>
+      {error && (
+        <div style={{ background: '#dc262612', border: '1px solid #dc262630', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#dc2626' }}>
+          {error}
+        </div>
+      )}
+      {suggestion && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--stream-bg)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+            Suggested patch
+          </div>
+          {suggestion.summary && (
+            <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 12 }}>{suggestion.summary}</div>
+          )}
+          {suggestion.rationale.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {suggestion.rationale.map((r, idx) => (
+                <div key={idx} style={{ fontSize: 12, color: 'var(--text-soft)' }}>
+                  <code style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{r.path}</code>
+                  {r.before && r.after ? (
+                    <>
+                      : <span style={{ color: 'var(--text-soft)' }}>{r.before}</span> →{' '}
+                      <strong style={{ color: 'var(--text)' }}>{r.after}</strong>
+                    </>
+                  ) : null}
+                  {r.why && <div style={{ marginTop: 2, color: 'var(--text-soft)' }}>{r.why}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {Object.keys(suggestion.adjustments).length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-soft)' }}>No concrete adjustments proposed.</div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={onAccept} style={primaryButtonStyle(false)}>Apply suggestion</button>
+              <button onClick={onDiscard} style={ghostButtonStyle}>Discard</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function normalizeHex(value: string): string {
