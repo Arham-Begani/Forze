@@ -223,50 +223,44 @@ export async function listInspirationAnalysesForVenture(
 // ── Apply tokens to venture context ───────────────────────────────────────────
 // Stores the chosen design tokens at `ventures.context.inspirationTokens`.
 // The pipeline agent reads from this key on the next landing-page run.
-// Uses the admin client so the write succeeds even if RLS would otherwise
-// reject (we double-check ownership via getVenture in the calling route).
-
+//
+// We always use the admin client here because the caller (the apply route)
+// has already verified access via getVentureAccess. Mixing cookie-scoped
+// reads with admin writes turned out to silently no-op for venture_members
+// who weren't the original owner — RLS on ventures.select returned null and
+// the helper threw "Venture not found" before getting to the update.
 export async function setVentureInspirationTokens(
     ventureId: string,
-    userId: string,
+    _userId: string,
     tokens: DesignTokens | null,
+    options: { clearLanding?: boolean } = {},
 ): Promise<void> {
-    // RLS-respecting path first. Admin fallback only if the cookie-scoped
-    // update returns zero rows — that signals we're inside a Supabase context
-    // where auth.uid() is null (e.g. a custom token path), not that the
-    // caller lacks ownership.
-    const db = await createDb()
-    const { data: venture, error: fetchError } = await db
+    const admin = createAdminClient()
+    const { data: venture, error: fetchError } = await admin
         .from('ventures')
-        .select('context, user_id')
+        .select('context')
         .eq('id', ventureId)
         .maybeSingle()
     if (fetchError) throw new Error(`setVentureInspirationTokens fetch failed: ${fetchError.message}`)
     if (!venture) throw new Error('Venture not found')
-    if (venture.user_id !== userId) {
-        // Caller is not the owner — they must be checking via venture_members,
-        // which the calling route is already responsible for verifying with
-        // requireAuth + getVenture. Allow the write through the admin client.
-        const admin = createAdminClient()
-        const updatedContext = {
-            ...(venture.context as Record<string, unknown>),
-            inspirationTokens: tokens,
-        }
-        const { error } = await admin
-            .from('ventures')
-            .update({ context: updatedContext, updated_at: new Date().toISOString() })
-            .eq('id', ventureId)
-        if (error) throw new Error(`setVentureInspirationTokens admin update failed: ${error.message}`)
-        return
-    }
 
-    const updatedContext = {
-        ...(venture.context as Record<string, unknown>),
+    const currentContext = (venture.context as Record<string, unknown>) ?? {}
+    const nextContext: Record<string, unknown> = {
+        ...currentContext,
         inspirationTokens: tokens,
     }
-    const { error } = await db
+
+    // When the founder explicitly applies (or re-applies) tokens, they want a
+    // visual redesign — not the pipeline agent's surgical edit-mode patch
+    // against the previous landing copy. Clearing landing forces a fresh
+    // generation that actually consumes the inspiration briefing.
+    if (options.clearLanding) {
+        nextContext.landing = null
+    }
+
+    const { error } = await admin
         .from('ventures')
-        .update({ context: updatedContext, updated_at: new Date().toISOString() })
+        .update({ context: nextContext, updated_at: new Date().toISOString() })
         .eq('id', ventureId)
     if (error) throw new Error(`setVentureInspirationTokens update failed: ${error.message}`)
 }
