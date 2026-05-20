@@ -87,13 +87,27 @@ export function isSafeRemoteUrl(url: string): boolean {
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
 
     const host = parsed.hostname.toLowerCase()
+    if (!host) return false
+
+    // Reject hostname forms we cannot reliably canonicalize: octal/hex/decimal
+    // IPv4 (e.g. 0x7f.0.0.1, 2130706433) bypass plain regex checks and are
+    // almost never used for legitimate marketing sites.
+    if (/^0x/i.test(host)) return false
+    if (/^[0-9]+$/.test(host)) return false
+
     if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') return false
     if (host.endsWith('.localhost') || host.endsWith('.local')) return false
+    if (/^127\./.test(host)) return false
     if (/^10\./.test(host)) return false
     if (/^192\.168\./.test(host)) return false
     if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false
     if (/^169\.254\./.test(host)) return false // AWS / GCE metadata
+    // Carrier-grade NAT (RFC 6598)
     if (/^100\.6[4-9]\./.test(host) || /^100\.[7-9]\d\./.test(host) || /^100\.1[01]\d\./.test(host) || /^100\.12[0-7]\./.test(host)) return false
+    // Azure IMDS host
+    if (host === '168.63.129.16') return false
+    // IPv6 private/link-local/ULA ranges in bracketed form
+    if (/^\[?(fe80:|fc00:|fd[0-9a-f]{2}:)/i.test(host)) return false
     return true
 }
 
@@ -120,12 +134,32 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
     const controller = new AbortController()
     const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-        return await fetch(url, {
-            ...init,
-            signal: controller.signal,
-            redirect: 'follow',
-            headers: { ...DEFAULT_HEADERS, ...(init?.headers as Record<string, string> | undefined) },
-        })
+        // Manually follow redirects so each hop can be re-checked against the
+        // SSRF allowlist. With `redirect: 'follow'` a server that initially
+        // serves a safe public host could 30x to 169.254.169.254 (cloud
+        // metadata) or 127.0.0.1 and we would happily fetch it.
+        let current = url
+        for (let hop = 0; hop < 5; hop += 1) {
+            if (!isSafeRemoteUrl(current)) {
+                throw new Error('Redirect target is not a safe public address')
+            }
+            const res = await fetch(current, {
+                ...init,
+                signal: controller.signal,
+                redirect: 'manual',
+                headers: { ...DEFAULT_HEADERS, ...(init?.headers as Record<string, string> | undefined) },
+            })
+            if (res.status >= 300 && res.status < 400) {
+                const location = res.headers.get('location')
+                if (!location) return res
+                const next = resolveUrl(location, current)
+                if (!next) return res
+                current = next
+                continue
+            }
+            return res
+        }
+        throw new Error('Too many redirects')
     } finally {
         clearTimeout(t)
     }
