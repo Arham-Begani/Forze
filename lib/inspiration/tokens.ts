@@ -106,33 +106,61 @@ export function applyAdjustments(
 
 // ── Multi-URL merge ───────────────────────────────────────────────────────────
 
+// MergeWeights: { "stripe.com": 0.6, "vercel.com": 0.3, "linear.com": 0.1 }.
+// Keys are hostnames (no protocol, no path). Weights should sum to ~1 but the
+// merge logic re-normalises so partial maps still work. A missing weight
+// defaults to the equal-share value (1 / numAnalyses).
+export type MergeWeights = Record<string, number>
+
+function hostnameOf(url: string | undefined): string {
+    if (!url) return ''
+    try {
+        return new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+    } catch {
+        return url.toLowerCase().replace(/^www\./, '')
+    }
+}
+
+function resolveWeight(weights: MergeWeights | undefined, url: string, fallback: number): number {
+    if (!weights) return fallback
+    const host = hostnameOf(url)
+    if (host && typeof weights[host] === 'number') return Math.max(0, weights[host])
+    if (url && typeof weights[url] === 'number') return Math.max(0, weights[url])
+    return fallback
+}
+
 function pickHighestConfidenceColor(
-    candidates: Array<ColorWithConfidence | undefined>,
+    candidates: Array<{ value: ColorWithConfidence | undefined; weight: number }>,
 ): ColorWithConfidence {
-    const real = candidates.filter((c): c is ColorWithConfidence => !!c && !!c.hex)
+    const real = candidates.filter((c): c is { value: ColorWithConfidence; weight: number } => !!c.value?.hex)
     if (real.length === 0) return FALLBACK_PRIMARY
-    real.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
-    return real[0]
+    real.sort((a, b) => (b.value.confidence ?? 0) * b.weight - (a.value.confidence ?? 0) * a.weight)
+    return real[0].value
 }
 
-function median(values: number[]): number {
-    if (values.length === 0) return 0
-    const sorted = [...values].sort((a, b) => a - b)
-    const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+function weightedAverage(pairs: Array<{ value: number; weight: number }>): number {
+    const valid = pairs.filter((p) => Number.isFinite(p.value) && p.weight > 0)
+    if (valid.length === 0) return 0
+    const totalWeight = valid.reduce((acc, p) => acc + p.weight, 0)
+    if (totalWeight === 0) return valid[0].value
+    return valid.reduce((acc, p) => acc + p.value * p.weight, 0) / totalWeight
 }
 
-function blendMoods(moods: DesignTokens['brand']['mood'][]): DesignTokens['brand']['mood'] {
-    const counts = new Map<DesignTokens['brand']['mood'], number>()
-    for (const m of moods) counts.set(m, (counts.get(m) ?? 0) + 1)
-    let best: { mood: DesignTokens['brand']['mood']; count: number } | null = null
-    for (const [mood, count] of counts) {
-        if (!best || count > best.count) best = { mood, count }
+function blendMoods(
+    pairs: Array<{ mood: DesignTokens['brand']['mood']; weight: number }>,
+): DesignTokens['brand']['mood'] {
+    const totals = new Map<DesignTokens['brand']['mood'], number>()
+    for (const { mood, weight } of pairs) {
+        totals.set(mood, (totals.get(mood) ?? 0) + Math.max(0, weight))
+    }
+    let best: { mood: DesignTokens['brand']['mood']; total: number } | null = null
+    for (const [mood, total] of totals) {
+        if (!best || total > best.total) best = { mood, total }
     }
     return best?.mood ?? 'modern-minimal'
 }
 
-export function mergeTokens(analyses: DesignTokens[]): DesignTokens {
+export function mergeTokens(analyses: DesignTokens[], weights?: MergeWeights): DesignTokens {
     if (analyses.length === 0) return defaultTokens()
     if (analyses.length === 1) {
         const only = analyses[0]
@@ -142,21 +170,50 @@ export function mergeTokens(analyses: DesignTokens[]): DesignTokens {
         }
     }
 
-    const primary = pickHighestConfidenceColor(analyses.map((a) => a.colors.primary))
-    const secondary = pickHighestConfidenceColor(analyses.map((a) => a.colors.secondary))
-    const accent = pickHighestConfidenceColor(analyses.map((a) => a.colors.accent))
+    // Build a normalised per-analysis weight. Equal-share default (1/N) means
+    // omitting the weights map gives the same behaviour as before.
+    const equalShare = 1 / analyses.length
+    const weighted = analyses.map((a) => ({
+        analysis: a,
+        weight: resolveWeight(weights, a.sources.primaryUrl, equalShare),
+    }))
+
+    const primary = pickHighestConfidenceColor(
+        weighted.map((w) => ({ value: w.analysis.colors.primary, weight: w.weight })),
+    )
+    const secondary = pickHighestConfidenceColor(
+        weighted.map((w) => ({ value: w.analysis.colors.secondary, weight: w.weight })),
+    )
+    const accent = pickHighestConfidenceColor(
+        weighted.map((w) => ({ value: w.analysis.colors.accent, weight: w.weight })),
+    )
 
     const first = analyses[0]
-    const headingSerif = analyses.find((a) => /serif/i.test(a.typography.headingFamily) && !/sans-serif/i.test(a.typography.headingFamily))
-    const headingFamily = headingSerif?.typography.headingFamily ?? first.typography.headingFamily
-    const bodyFamily = first.typography.bodyFamily
+    // Heading family: prefer serif if any weighted analysis is mostly-serif AND
+    // its weight is meaningful (>= 0.2). Otherwise stay with the highest-weight
+    // analysis's choice.
+    const heaviest = [...weighted].sort((a, b) => b.weight - a.weight)[0]
+    const meaningfulSerif = weighted.find(
+        (w) =>
+            w.weight >= 0.2 &&
+            /serif/i.test(w.analysis.typography.headingFamily) &&
+            !/sans-serif/i.test(w.analysis.typography.headingFamily),
+    )
+    const headingFamily =
+        meaningfulSerif?.analysis.typography.headingFamily ?? heaviest.analysis.typography.headingFamily
+    const bodyFamily = heaviest.analysis.typography.bodyFamily
 
-    // Use median of horizontal section padding when expressed in rem; fall back
-    // to first non-empty value otherwise.
-    const remValues = analyses
-        .map((a) => parseFloat(a.spacing.sectionPadding.x))
-        .filter((n) => Number.isFinite(n))
-    const sectionPaddingX = remValues.length > 0 ? `${median(remValues)}rem` : first.spacing.sectionPadding.x
+    // Weighted-average section padding when expressed in rem; fall back to
+    // heaviest analysis's value otherwise.
+    const paddingPairs = weighted
+        .map((w) => ({
+            value: parseFloat(w.analysis.spacing.sectionPadding.x),
+            weight: w.weight,
+        }))
+        .filter((p) => Number.isFinite(p.value))
+    const sectionPaddingX = paddingPairs.length
+        ? `${Number(weightedAverage(paddingPairs).toFixed(2))}rem`
+        : heaviest.analysis.spacing.sectionPadding.x
 
     const merged: DesignTokens = {
         ...first,
@@ -177,9 +234,12 @@ export function mergeTokens(analyses: DesignTokens[]): DesignTokens {
         },
         brand: {
             ...first.brand,
-            mood: blendMoods(analyses.map((a) => a.brand.mood)),
-            personality: analyses
-                .map((a) => a.brand.personality)
+            mood: blendMoods(weighted.map((w) => ({ mood: w.analysis.brand.mood, weight: w.weight }))),
+            personality: weighted
+                // Heaviest analyses lead the personality string so the LLM
+                // weighting carries through to copy generation.
+                .sort((a, b) => b.weight - a.weight)
+                .map((w) => w.analysis.brand.personality)
                 .filter(Boolean)
                 .join(' / '),
         },
