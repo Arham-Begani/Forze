@@ -82,6 +82,10 @@ export const DesignTokensSchema = z.object({
         }),
     }),
 
+    // Every nested object below carries `.default({})` so a partial Gemini
+    // response (very common — the model frequently skips weights/lineHeights/
+    // sectionPadding even when the prompt requests them) parses cleanly and
+    // the leaf defaults kick in instead of throwing.
     typography: z.object({
         headingFamily: z.string().default('Inter, system-ui, sans-serif'),
         bodyFamily: z.string().default('Inter, system-ui, sans-serif'),
@@ -92,19 +96,19 @@ export const DesignTokensSchema = z.object({
             base: SimpleScaleEntrySchema.default({ value: '1rem', confidence: 80 }),
             sm: SimpleScaleEntrySchema.default({ value: '0.875rem', confidence: 80 }),
             lg: SimpleScaleEntrySchema.default({ value: '1.125rem', confidence: 80 }),
-        }),
+        }).default({}),
         weights: z.object({
             light: z.number().default(300),
             normal: z.number().default(400),
             semibold: z.number().default(600),
             bold: z.number().default(700),
-        }),
+        }).default({}),
         lineHeights: z.object({
             tight: z.string().default('1.2'),
             normal: z.string().default('1.5'),
             relaxed: z.string().default('1.75'),
-        }),
-    }),
+        }).default({}),
+    }).default({}),
 
     spacing: z.object({
         unit: z.string().default('1rem'),
@@ -115,14 +119,14 @@ export const DesignTokensSchema = z.object({
             lg: z.string().default('2rem'),
             xl: z.string().default('3rem'),
             xxl: z.string().default('4rem'),
-        }),
+        }).default({}),
         sectionPadding: z.object({
             x: z.string().default('1.5rem'),
             y: z.string().default('4rem'),
-        }),
+        }).default({}),
         containerMaxWidth: z.string().default('80rem'),
         gridGap: z.string().default('1.5rem'),
-    }),
+    }).default({}),
 
     components: z.object({
         button: z.object({
@@ -131,7 +135,7 @@ export const DesignTokensSchema = z.object({
             fontSize: z.string().default('1rem'),
             fontWeight: z.number().default(600),
             shadow: z.string().default('0 1px 2px rgba(0,0,0,0.05)'),
-        }),
+        }).default({}),
         card: z.object({
             radius: TokenWithConfidenceSchema.default({ value: '0.75rem', confidence: 70 }),
             padding: TokenWithConfidenceSchema.default({ value: '1.5rem', confidence: 70 }),
@@ -139,31 +143,31 @@ export const DesignTokensSchema = z.object({
                 sm: z.string().default('0 1px 2px rgba(0,0,0,0.05)'),
                 md: z.string().default('0 4px 6px rgba(0,0,0,0.1)'),
                 lg: z.string().default('0 10px 25px rgba(0,0,0,0.15)'),
-            }),
+            }).default({}),
             borderWidth: z.string().default('1px'),
             borderColor: HexColorSchema.default('#e7e5e4'),
-        }),
+        }).default({}),
         input: z.object({
             radius: TokenWithConfidenceSchema.default({ value: '0.5rem', confidence: 70 }),
             padding: z.string().default('0.625rem 0.875rem'),
             borderWidth: z.string().default('1px'),
             borderColor: HexColorSchema.default('#d6d3d1'),
             focusOutlineColor: HexColorSchema.default('#3b82f6'),
-        }),
-    }),
+        }).default({}),
+    }).default({}),
 
     responsive: z.object({
         breakpoints: z.object({
             mobile: z.string().default('640px'),
             tablet: z.string().default('1024px'),
             desktop: z.string().default('1280px'),
-        }),
-    }),
+        }).default({}),
+    }).default({}),
 
     brand: z.object({
         mood: BrandMoodSchema.default('modern-minimal'),
         personality: z.string().default(''),
-    }),
+    }).default({}),
 
     confidenceByCategory: z.object({
         colors: ConfidenceSchema.default(70),
@@ -171,13 +175,13 @@ export const DesignTokensSchema = z.object({
         spacing: ConfidenceSchema.default(60),
         components: ConfidenceSchema.default(60),
         overall: ConfidenceSchema.default(65),
-    }),
+    }).default({}),
 
     sources: z.object({
         primaryUrl: z.string().default(''),
         secondaryUrls: z.array(z.string()).default([]),
         mergeStrategy: z.enum(['single', 'multi-url']).default('single'),
-    }),
+    }).default({}),
 })
 
 export type DesignTokens = z.infer<typeof DesignTokensSchema>
