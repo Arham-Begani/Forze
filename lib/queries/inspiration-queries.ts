@@ -25,6 +25,21 @@ export interface InspirationAnalysisRow {
     applied_at: string | null
     created_at: string
     updated_at: string
+    // ── Migration 028 additions ─────────────────────────────────────────────
+    pass1_design_system?: Record<string, unknown> | null
+    pass2_components?: Record<string, unknown> | null
+    pass3_antipatterns?: Record<string, unknown> | null
+    detected_sections?: Record<string, unknown> | null
+    interaction_states?: Record<string, unknown> | null
+    context_relevance?: Record<string, unknown> | null
+    accessibility_report?: Record<string, unknown> | null
+    has_contrast_issues?: boolean | null
+    requires_manual_review?: boolean | null
+    quality_score?: Record<string, unknown> | null
+    recommendations?: string[] | null
+    merge_weights?: Record<string, number> | null
+    extracted_at?: string | null
+    gemini_cost_tokens?: number | null
 }
 
 interface InspirationAnalysisInsert {
@@ -174,6 +189,21 @@ export async function updateInspirationAnalysis(
         user_adjustments: Record<string, unknown>
         locked_paths: string[]
         applied_at: string | null
+        // ── Migration 028 fields ───────────────────────────────────────────
+        pass1_design_system: Record<string, unknown> | null
+        pass2_components: Record<string, unknown> | null
+        pass3_antipatterns: Record<string, unknown> | null
+        detected_sections: Record<string, unknown> | null
+        interaction_states: Record<string, unknown> | null
+        context_relevance: Record<string, unknown> | null
+        accessibility_report: Record<string, unknown> | null
+        has_contrast_issues: boolean | null
+        requires_manual_review: boolean | null
+        quality_score: Record<string, unknown> | null
+        recommendations: string[]
+        merge_weights: Record<string, number> | null
+        extracted_at: string | null
+        gemini_cost_tokens: number | null
     }>,
 ): Promise<InspirationAnalysisRow | null> {
     const db = await createDb()
