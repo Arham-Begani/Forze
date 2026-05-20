@@ -20,6 +20,14 @@ import { InspirationAnalyzeInputSchema } from '@/lib/schemas/inspiration'
 import { captureInspirationImage, isCaptureSuccess } from '@/lib/inspiration/screenshot'
 import { analyzeImageWithGemini } from '@/lib/inspiration/vision'
 import { mergeTokens } from '@/lib/inspiration/tokens'
+import { validateAccessibility } from '@/lib/inspiration/accessibility'
+import { scoreTokens } from '@/lib/inspiration/scoring'
+import {
+    detectSections,
+    analyzeComponentPatterns,
+    analyzeAntiPatterns,
+    type PassContext,
+} from '@/lib/inspiration/passes'
 import {
     checkInspirationRateLimit,
     createInspirationAnalysis,
@@ -58,7 +66,32 @@ export async function POST(
                 { status: 400 },
             )
         }
-        const { urls, uploadedImage } = parsed.data
+        const { urls, uploadedImage, mergeWeights } = parsed.data
+
+        // Build a PassContext from venture.context.research so every Gemini
+        // call (token extraction + enrichment passes) can lean on what the
+        // founder is actually building, not just generic "extract tokens".
+        const research = (venture.context.research ?? {}) as Record<string, unknown>
+        const passContext: PassContext = {
+            ventureName: venture.name,
+            oneLiner: typeof research.oneLiner === 'string'
+                ? research.oneLiner
+                : typeof research.summary === 'string'
+                    ? research.summary
+                    : typeof research.description === 'string'
+                        ? research.description
+                        : undefined,
+            audience: typeof research.targetAudience === 'string'
+                ? research.targetAudience
+                : typeof research.audience === 'string'
+                    ? research.audience
+                    : undefined,
+            ventureType: typeof research.category === 'string'
+                ? research.category
+                : typeof research.industry === 'string'
+                    ? research.industry
+                    : undefined,
+        }
 
         // Rate-limit check before doing any expensive work.
         const limit = await checkInspirationRateLimit(session.userId, ventureId)
@@ -108,13 +141,33 @@ export async function POST(
                 )
             }
 
-            // Vision analysis per successful capture, run in parallel. Each
-            // call is internally retried + timeboxed in analyzeImageWithGemini.
-            const tokenResults = await Promise.all(
-                successes.map((capture) => analyzeImageWithGemini(capture)),
+            // Vision analysis per successful capture + enrichment passes on
+            // the primary capture, ALL in parallel. The enrichment passes
+            // (sections / components / antipatterns) only run on the first
+            // successful capture because they're describing the inspiration's
+            // design language as a whole — we don't need three parallel reads
+            // of the same conclusion.
+            const primaryCapture = successes[0]
+            const [
+                tokenResults,
+                detectedSections,
+                componentPatterns,
+                antiPatterns,
+            ] = await Promise.all([
+                Promise.all(successes.map((capture) => analyzeImageWithGemini(capture, passContext))),
+                detectSections(primaryCapture, passContext),
+                analyzeComponentPatterns(primaryCapture, passContext),
+                analyzeAntiPatterns(primaryCapture, passContext),
+            ])
+
+            const tokens = mergeTokens(
+                tokenResults.map((t) => t.tokens),
+                mergeWeights,
             )
 
-            const tokens = mergeTokens(tokenResults.map((t) => t.tokens))
+            // Deterministic post-processing — no extra Gemini calls.
+            const accessibility = validateAccessibility(tokens)
+            const scoring = scoreTokens(tokens, accessibility)
 
             await incrementInspirationRateLimit(session.userId, ventureId)
 
@@ -138,6 +191,19 @@ export async function POST(
                         sourceUrl: c.sourceUrl,
                     })),
                 },
+                // ── Migration 028 fields ────────────────────────────────────
+                detected_sections: detectedSections as unknown as Record<string, unknown> | null,
+                pass2_components: componentPatterns as unknown as Record<string, unknown> | null,
+                interaction_states: componentPatterns as unknown as Record<string, unknown> | null,
+                pass3_antipatterns: antiPatterns as unknown as Record<string, unknown> | null,
+                context_relevance: antiPatterns?.contextRelevance as unknown as Record<string, unknown> | null,
+                accessibility_report: accessibility as unknown as Record<string, unknown>,
+                has_contrast_issues: accessibility.hasContrastIssues,
+                requires_manual_review: accessibility.requiresManualReview,
+                quality_score: scoring.score as unknown as Record<string, unknown>,
+                recommendations: scoring.recommendations,
+                merge_weights: mergeWeights ?? null,
+                extracted_at: new Date().toISOString(),
             })
 
             const refreshedLimit = await checkInspirationRateLimit(session.userId, ventureId)
@@ -153,6 +219,12 @@ export async function POST(
                     tier: c.tier,
                     sourceUrl: c.sourceUrl,
                 })),
+                accessibility,
+                qualityScore: scoring.score,
+                recommendations: scoring.recommendations,
+                detectedSections,
+                componentPatterns,
+                antiPatterns,
                 rateLimit: refreshedLimit,
             })
         } catch (err) {
