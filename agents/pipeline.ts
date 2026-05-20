@@ -11,6 +11,8 @@ import {
 import { resolveLandingComponent, isRenderableLandingComponent } from '@/lib/landing-page'
 import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 import { getVenturePublic } from '@/lib/queries'
+import { DesignTokensSchema } from '@/lib/schemas/inspiration'
+import { tokensToPromptDigest, tokensToCssVarBlock } from '@/lib/inspiration/tokens'
 
 // ── PipelineOutput Zod Schema ────────────────────────────────────────────────
 
@@ -528,6 +530,30 @@ export async function runPipelineAgent(
             lines.push(`Email subjects: ${subjects.join(' | ')}`)
         }
         if (lines.length > 0) contextParts.push(`## Marketing Strategy (use these messaging angles)\n${lines.join('\n')}`)
+    }
+
+    // Inspiration tokens — when the founder has analyzed reference URLs and
+    // pushed the resulting DesignTokens onto the venture (see
+    // /api/ventures/[id]/inspiration/[analysisId]/apply), the pipeline agent
+    // treats those as a HARD design directive that overrides the branding
+    // agent's palette/typography choices on the landing page only.
+    if (venture.context.inspirationTokens) {
+        try {
+            const tokens = DesignTokensSchema.parse(venture.context.inspirationTokens)
+            const digest = tokensToPromptDigest(tokens)
+            const cssBlock = tokensToCssVarBlock(tokens)
+            contextParts.push(
+                `## Inspiration Design Tokens (HARD overrides — apply EXACTLY)\n` +
+                `The founder analyzed one or more inspiration websites and locked in these tokens. ` +
+                `When they conflict with the branding palette, the INSPIRATION tokens win for this landing page.\n\n` +
+                digest +
+                `\n\nApply these as CSS custom properties at the top of your inline <style> tag:\n\`\`\`css\n${cssBlock}\n\`\`\`\n` +
+                `Use var(--insp-color-primary) etc. throughout the component so future token edits cascade cleanly. ` +
+                `Match the brand mood "${tokens.brand.mood}" in your visual treatment (spacing, weight, density).`,
+            )
+        } catch {
+            // Bad shape on disk — ignore silently and fall back to branding-only.
+        }
     }
 
     const isContinuation = history.length > 0
