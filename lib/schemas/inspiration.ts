@@ -233,6 +233,15 @@ export const InspirationUrlSchema = z
         }
     }, 'URL must be a public https:// address')
 
+// MergeWeights map: hostname → weight (0..1). Keys do not need to sum to 1;
+// the merge logic re-normalises internally.
+export const MergeWeightsSchema = z
+    .record(z.string(), z.number().min(0).max(1))
+    .refine(
+        (w) => Object.keys(w).length <= 5,
+        'At most 5 merge weights — one per analysed URL plus headroom.',
+    )
+
 export const InspirationAnalyzeInputSchema = z.object({
     urls: z.array(InspirationUrlSchema).min(1).max(3),
     uploadedImage: z
@@ -243,6 +252,9 @@ export const InspirationAnalyzeInputSchema = z.object({
             url: z.string().optional(),
         })
         .optional(),
+    // Optional per-source merge weighting set up front. When omitted, equal
+    // shares are used (current default behaviour preserved).
+    mergeWeights: MergeWeightsSchema.optional(),
 })
 
 export const InspirationTokenPatchSchema = z.object({
@@ -250,6 +262,23 @@ export const InspirationTokenPatchSchema = z.object({
     // Patches are deep-merged into the saved tokens object.
     adjustments: z.record(z.string(), z.unknown()).default({}),
     lockedPaths: z.array(z.string()).default([]),
+    // When provided, triggers a full re-merge of raw_vision per the new weights
+    // and overwrites the persisted tokens / mood / confidence fields.
+    mergeWeights: MergeWeightsSchema.optional(),
 })
+
+// Refinement request from the post-apply "this looks off" feedback loop.
+// User describes the issue, optionally names the affected component, and the
+// refine endpoint asks Gemini for a partial DesignTokens patch.
+export const InspirationRefineInputSchema = z.object({
+    issue: z.string().min(8).max(800),
+    affectedComponent: z
+        .enum(['button', 'card', 'text', 'spacing', 'hero', 'overall'])
+        .optional(),
+    suggestion: z.string().max(400).optional(),
+})
+
+export type InspirationRefineInput = z.infer<typeof InspirationRefineInputSchema>
+export type MergeWeights = z.infer<typeof MergeWeightsSchema>
 
 export type InspirationTokenPatch = z.infer<typeof InspirationTokenPatchSchema>
