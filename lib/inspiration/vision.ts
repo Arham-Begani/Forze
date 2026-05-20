@@ -19,6 +19,7 @@ import { extractJSON, withRetry, withTimeout } from '@/lib/gemini'
 import { DesignTokens, DesignTokensSchema } from '@/lib/schemas/inspiration'
 import { defaultTokens } from '@/lib/inspiration/tokens'
 import type { CaptureResult } from '@/lib/inspiration/screenshot'
+import type { PassContext } from '@/lib/inspiration/passes'
 
 const VISION_MODEL = process.env.INSPIRATION_VISION_MODEL || 'models/gemini-3-flash-preview'
 const VISION_TIMEOUT_MS = Number(process.env.INSPIRATION_VISION_TIMEOUT_MS ?? 45_000)
@@ -141,11 +142,39 @@ export interface AnalyzeImageResult {
     rawText: string
 }
 
-export async function analyzeImageWithGemini(capture: CaptureResult): Promise<AnalyzeImageResult> {
+// Build a domain-aware preamble that biases the LLM toward signals relevant to
+// THIS venture. Without context, Gemini just dumps every visible token. With
+// context, it weighs the extraction toward trust-building patterns, CTA
+// strategy, and feature hierarchy that fit the venture's category.
+function buildContextPreamble(ctx: PassContext | undefined): string {
+    if (!ctx || (!ctx.ventureName && !ctx.oneLiner && !ctx.ventureType && !ctx.audience)) return ''
+    const lines = ['', '### Domain context for this extraction']
+    if (ctx.ventureName) lines.push(`- Venture: ${ctx.ventureName}`)
+    if (ctx.ventureType) lines.push(`- Type: ${ctx.ventureType}`)
+    if (ctx.oneLiner) lines.push(`- One-liner: ${ctx.oneLiner}`)
+    if (ctx.audience) lines.push(`- Audience: ${ctx.audience}`)
+    lines.push(
+        '',
+        'You are extracting tokens that will be applied to THIS venture\'s landing page.',
+        'Weight the extraction toward:',
+        '- Trust-building elements appropriate for this category (logos, testimonials, security badges, metric callouts)',
+        '- CTA treatment that fits the venture\'s buying flow',
+        '- Feature hierarchy that showcases what this venture actually differentiates on',
+        '- Mood selection that matches what this audience actually responds to',
+        'Pure aesthetic extraction is fine, but if you have a choice between two equally-confident readings, pick the one that serves this venture.',
+    )
+    return lines.join('\n')
+}
+
+export async function analyzeImageWithGemini(
+    capture: CaptureResult,
+    ctx?: PassContext,
+): Promise<AnalyzeImageResult> {
     const client = getClient()
+    const systemPrompt = ctx ? `${SYSTEM_PROMPT}\n${buildContextPreamble(ctx)}` : SYSTEM_PROMPT
     const model = client.getGenerativeModel({
         model: VISION_MODEL,
-        systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
     })
 
     const base64 = capture.image.data.toString('base64')
