@@ -18,6 +18,13 @@ export const runtime = 'nodejs'
 // Never serve from cache. Each invocation must hit the DB to claim due rows.
 export const dynamic = 'force-dynamic'
 
+function timingSafeStringCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
 function isAuthorized(request: NextRequest): boolean {
   // Accepted shapes:
   //   1. `x-routines-cron-secret: <ROUTINES_CRON_SECRET>` — manual curl + tests.
@@ -35,14 +42,14 @@ function isAuthorized(request: NextRequest): boolean {
   const routinesSecret = process.env.ROUTINES_CRON_SECRET
   const vercelCronSecret = process.env.CRON_SECRET
 
-  const headerSecret = request.headers.get('x-routines-cron-secret')
-  if (routinesSecret && headerSecret && headerSecret === routinesSecret) return true
+  const headerSecret = request.headers.get('x-routines-cron-secret') ?? ''
+  if (routinesSecret && headerSecret && timingSafeStringCompare(headerSecret, routinesSecret)) return true
 
   const auth = request.headers.get('authorization') ?? ''
   if (auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length)
-    if (routinesSecret && token === routinesSecret) return true
-    if (vercelCronSecret && token === vercelCronSecret) return true
+    if (routinesSecret && timingSafeStringCompare(token, routinesSecret)) return true
+    if (vercelCronSecret && timingSafeStringCompare(token, vercelCronSecret)) return true
   }
 
   if (request.headers.get('x-vercel-cron')) return true
