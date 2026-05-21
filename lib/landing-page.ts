@@ -43,6 +43,577 @@ const LANDING_PLACEHOLDER_PATTERNS = [
   /component not found/i,
 ]
 
+// Runtime safety shim injected into every landing-page iframe.
+//
+// Generated landing components routinely reference libraries that AREN'T
+// loaded in the preview runtime — most commonly `LucideIcons.Shield`,
+// `<Shield />`, `motion.div`, framer-motion, Next.js <Link>/<Image>,
+// clsx/cn. Without this shim those references crash the page with
+// "X is not defined" or "Cannot read properties of undefined (reading 'Y')".
+//
+// The shim runs BEFORE the user component code and:
+//   • Defines a generic inline-SVG icon component (`GenericIcon`).
+//   • Exposes every common icon namespace (LucideIcons, Heroicons, etc.) as
+//     a Proxy that returns GenericIcon for any property access.
+//   • Populates ~150 common PascalCase icon names as globals so bare
+//     references like `<Shield />` also resolve to GenericIcon.
+//   • Shims `motion.*` (framer-motion) to render the underlying tag with
+//     non-animation props only, and `AnimatePresence` to pass children
+//     through.
+//   • Shims `NextLink` / `NextImage` to plain <a> and <img>.
+//   • Provides `clsx` / `cn` / `classNames` as simple class joiners.
+//
+// This is defense-in-depth: the agent prompt forbids these libraries, but
+// the LLM occasionally drifts (especially in edit mode). The shim ensures
+// drift never produces a broken render.
+export const LANDING_RUNTIME_SHIM = `<script>
+(function () {
+  if (typeof window === 'undefined' || typeof React === 'undefined') return;
+
+  function GenericIcon(props) {
+    var p = props || {};
+    var size = p.size || p.width || 20;
+    var attrs = {
+      xmlns: 'http://www.w3.org/2000/svg',
+      width: size,
+      height: size,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: p.color || 'currentColor',
+      strokeWidth: p.strokeWidth || 2,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      className: p.className,
+      style: p.style,
+      'aria-hidden': 'true'
+    };
+    return React.createElement('svg', attrs,
+      React.createElement('circle', { cx: 12, cy: 12, r: 9 }),
+      React.createElement('path', { d: 'M9 12l2 2 4-4' })
+    );
+  }
+  GenericIcon.displayName = 'GenericIcon';
+
+  var iconProxy = new Proxy({}, {
+    get: function (_, prop) {
+      if (typeof prop === 'symbol') return undefined;
+      if (prop === '$$typeof' || prop === 'prototype' || prop === 'then' || prop === 'default' || prop === '__esModule') return undefined;
+      return GenericIcon;
+    }
+  });
+
+  var ICON_NAMESPACES = ['LucideIcons','Lucide','LucideReact','lucideReact','Icons','HeroIcons','Heroicons','HiIcons','FontAwesome','FaIcons','FAIcons','FontAwesomeIcon','RemixIcons','RIcons','BoxIcons','BiIcons','Feather','FeatherIcons','FiIcons','Tabler','TablerIcons','TbIcons','PhosphorIcons','PhIcons','MaterialIcons','MdIcons','IoIcons','Ionicons','GiIcons','GameIcons','SiIcons','SimpleIcons'];
+  ICON_NAMESPACES.forEach(function (name) {
+    try { if (typeof window[name] === 'undefined') window[name] = iconProxy; } catch (e) {}
+  });
+
+  var COMMON_ICONS = ['Shield','ShieldCheck','ShieldAlert','User','Users','UserPlus','UserMinus','UserCheck','UserX','Check','CheckCircle','CheckCircle2','CheckSquare','X','XCircle','XSquare','ArrowRight','ArrowLeft','ArrowUp','ArrowDown','ArrowUpRight','ArrowDownRight','ChevronDown','ChevronUp','ChevronRight','ChevronLeft','ChevronsRight','ChevronsLeft','ChevronsUp','ChevronsDown','Star','Heart','Mail','Phone','Globe','Globe2','Zap','Sparkles','Sparkle','Rocket','Lock','Unlock','Key','Settings','Settings2','Search','Menu','Plus','PlusCircle','Minus','MinusCircle','Bell','BellOff','Calendar','CalendarDays','Clock','Clock3','Clock9','Home','MessageCircle','MessageSquare','Smile','Frown','ThumbsUp','ThumbsDown','Trash','Trash2','Upload','Download','Eye','EyeOff','Edit','Edit2','Edit3','Pen','PenTool','Pencil','Camera','Image','ImageIcon','Video','Play','PlayCircle','Pause','PauseCircle','Volume','Volume1','Volume2','VolumeX','Mic','MicOff','Filter','FilterX','Briefcase','Building','Building2','Code','Code2','Database','Layers','Layers2','Layers3','Server','Box','Boxes','Package','Package2','PackageOpen','ShoppingBag','ShoppingCart','CreditCard','DollarSign','Euro','PoundSterling','TrendingUp','TrendingDown','BarChart','BarChart2','BarChart3','BarChart4','PieChart','LineChart','Activity','Award','Gift','Send','SendHorizonal','Share','Share2','Link','Link2','LinkIcon','ExternalLink','Copy','CopyCheck','Clipboard','ClipboardCheck','ClipboardCopy','Save','RefreshCw','RefreshCcw','RotateCcw','RotateCw','Power','PowerOff','LogIn','LogOut','Wifi','WifiOff','Cloud','CloudOff','CloudRain','CloudSnow','Sun','SunMedium','Moon','Stars','Cpu','HardDrive','Smartphone','Tablet','Laptop','Monitor','MonitorSmartphone','Headphones','Keyboard','Mouse','MousePointer','Battery','BatteryCharging','BatteryFull','BatteryLow','MapPin','Map','Navigation','Navigation2','Compass','Anchor','Truck','Plane','Car','Ship','Bus','Bike','Train','Coffee','Pizza','Apple','UtensilsCrossed','ChefHat','BookOpen','Book','BookmarkPlus','Bookmark','FileText','File','FilePlus','FileMinus','FileCheck','FileX','FileCode','FileSearch','Folder','FolderOpen','FolderPlus','FolderMinus','Archive','Inbox','Trophy','Medal','Crown','Flag','Flame','Wand','Wand2','Lightbulb','Grid','Grid2X2','Grid3X3','List','ListChecks','LayoutGrid','LayoutList','LayoutDashboard','LayoutTemplate','SidebarOpen','SidebarClose','PanelLeft','PanelRight','PanelTop','PanelBottom','MoreHorizontal','MoreVertical','SortAsc','SortDesc','Loader','Loader2','LoaderCircle','Hourglass','Timer','AlarmClock','Watch','Hash','AtSign','Percent','Tag','Tags','Pin','PinOff','Paperclip','Repeat','Repeat1','Shuffle','SkipBack','SkipForward','Square','Circle','CircleDot','Triangle','Diamond','Hexagon','Octagon','Pentagon','Info','AlertCircle','AlertTriangle','AlertOctagon','HelpCircle','LifeBuoy','Bug','Terminal','TerminalSquare','GitBranch','GitCommit','GitMerge','GitPullRequest','Github','Twitter','Facebook','Instagram','Linkedin','Youtube','Slack','Figma','Dribbble','Codepen','Chrome','Aperture','Pocket','Workflow','Wrench','Hammer','HardHat','Megaphone','Mic2','Crosshair','Target','Trophy','Sparkles','Banknote','Receipt','Wallet','Coins','Landmark','Scale','Gavel','Newspaper','GraduationCap','School','Backpack','Library','Telescope','Microscope','FlaskConical','Atom','Dna','Pill','Stethoscope','HeartPulse','Brain','Bone','Eye','Glasses','Sofa','Bed','Bath','ShowerHead','Lamp','Plug','Tv','Tv2','Radio','Speaker','Disc','Disc3','Cassette','GamepadIcon','Gamepad2','Joystick','Dice1','Dice2','Dice3','Dice4','Dice5','Dice6','Puzzle','Cog'];
+  COMMON_ICONS.forEach(function (name) {
+    try { if (typeof window[name] === 'undefined') window[name] = GenericIcon; } catch (e) {}
+  });
+
+  // framer-motion shim. motion.<tag>(props) renders the underlying tag,
+  // stripping animation-only props that would otherwise leak to the DOM.
+  if (typeof window.motion === 'undefined') {
+    try {
+      var MOTION_PROPS = ['animate','initial','exit','transition','whileHover','whileTap','whileFocus','whileInView','whileDrag','viewport','layout','layoutId','layoutDependency','drag','dragConstraints','dragElastic','dragMomentum','dragTransition','dragListener','onDragStart','onDragEnd','onDrag','variants','custom','inherit','transformTemplate','onAnimationStart','onAnimationComplete','onUpdate'];
+      window.motion = new Proxy({}, {
+        get: function (_, tag) {
+          if (typeof tag !== 'string') return undefined;
+          return function MotionComponent(props) {
+            var p = props || {};
+            var rest = {};
+            Object.keys(p).forEach(function (k) {
+              if (MOTION_PROPS.indexOf(k) === -1) rest[k] = p[k];
+            });
+            return React.createElement(tag, rest);
+          };
+        }
+      });
+    } catch (e) {}
+  }
+  if (typeof window.AnimatePresence === 'undefined') {
+    window.AnimatePresence = function AnimatePresence(props) {
+      return (props && props.children) || null;
+    };
+  }
+  if (typeof window.LazyMotion === 'undefined') {
+    window.LazyMotion = function LazyMotion(props) {
+      return (props && props.children) || null;
+    };
+  }
+
+  // Next.js Link / Image shims. The agent is told not to use these, but
+  // edits sometimes preserve a stray reference from an earlier output.
+  if (typeof window.NextLink === 'undefined') {
+    window.NextLink = function NextLink(props) {
+      var p = props || {};
+      var rest = {};
+      Object.keys(p).forEach(function (k) { if (k !== 'children') rest[k] = p[k]; });
+      rest.href = p.href || '#';
+      return React.createElement('a', rest, p.children);
+    };
+  }
+  if (typeof window.NextImage === 'undefined') {
+    window.NextImage = function NextImage(props) {
+      var p = props || {};
+      return React.createElement('img', {
+        src: p.src,
+        alt: p.alt || '',
+        width: p.width,
+        height: p.height,
+        className: p.className,
+        style: p.style,
+        loading: 'lazy'
+      });
+    };
+  }
+
+  function classJoin() {
+    var classes = [];
+    for (var i = 0; i < arguments.length; i++) {
+      var arg = arguments[i];
+      if (!arg) continue;
+      if (typeof arg === 'string' || typeof arg === 'number') {
+        classes.push(arg);
+      } else if (Array.isArray(arg)) {
+        var inner = classJoin.apply(null, arg);
+        if (inner) classes.push(inner);
+      } else if (typeof arg === 'object') {
+        for (var key in arg) { if (arg[key]) classes.push(key); }
+      }
+    }
+    return classes.join(' ');
+  }
+  if (typeof window.clsx === 'undefined') window.clsx = classJoin;
+  if (typeof window.cn === 'undefined') window.cn = classJoin;
+  if (typeof window.classNames === 'undefined') window.classNames = classJoin;
+  if (typeof window.twMerge === 'undefined') window.twMerge = classJoin;
+
+  // ── Error reporting bridge ──
+  // When the iframe is embedded inside the dashboard preview, errors bubble
+  // to the parent window via postMessage. Standalone visits (/v/[id],
+  // /sites/[subdomain]) have no parent — postMessage is a no-op and we
+  // fall back to React error boundary's UI / browser console.
+  function postErrorToParent(payload) {
+    try {
+      if (window.parent && window.parent !== window) {
+        var safe = {
+          type: 'forze:landing-error',
+          kind: payload.kind || 'unknown',
+          message: String(payload.message || 'Component error'),
+          stack: payload.stack ? String(payload.stack).slice(0, 4000) : '',
+          componentStack: payload.componentStack ? String(payload.componentStack).slice(0, 2000) : '',
+          filename: payload.filename || '',
+          lineno: typeof payload.lineno === 'number' ? payload.lineno : undefined,
+          colno: typeof payload.colno === 'number' ? payload.colno : undefined,
+          timestamp: Date.now()
+        };
+        window.parent.postMessage(safe, '*');
+      }
+    } catch (e) {}
+  }
+
+  // React error boundary — catches errors thrown during render / commit.
+  if (typeof window.__ForzeErrorBoundary__ === 'undefined') {
+    try {
+      var ForzeErrorBoundary = function (props) {
+        React.Component.call(this, props);
+        this.state = { error: null };
+      };
+      ForzeErrorBoundary.prototype = Object.create(React.Component.prototype);
+      ForzeErrorBoundary.prototype.constructor = ForzeErrorBoundary;
+      ForzeErrorBoundary.getDerivedStateFromError = function (error) {
+        return { error: error };
+      };
+      ForzeErrorBoundary.prototype.componentDidCatch = function (error, info) {
+        postErrorToParent({
+          kind: 'react',
+          message: (error && error.message) || String(error),
+          stack: (error && error.stack) || '',
+          componentStack: (info && info.componentStack) || ''
+        });
+        try { console.error('[Forze landing] React error caught:', error, info); } catch (e) {}
+      };
+      ForzeErrorBoundary.prototype.render = function () {
+        if (!this.state.error) return this.props.children;
+        var err = this.state.error;
+        var msg = (err && err.message) || 'Component failed to render.';
+        var stack = (err && err.stack) || '';
+        return React.createElement('div', {
+          style: {
+            minHeight: '100vh', padding: 40,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            background: '#0a0a0a', color: '#e5e5e5',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center'
+          }
+        },
+          React.createElement('div', { style: { maxWidth: 720, width: '100%', marginTop: 80 } },
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 } },
+              React.createElement('div', {
+                style: {
+                  width: 36, height: 36, borderRadius: 10,
+                  background: 'rgba(239,68,68,0.12)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }
+              },
+                React.createElement('svg', {
+                  width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none',
+                  stroke: '#ef4444', strokeWidth: 2,
+                  strokeLinecap: 'round', strokeLinejoin: 'round'
+                },
+                  React.createElement('circle', { cx: 12, cy: 12, r: 10 }),
+                  React.createElement('line', { x1: 12, y1: 8, x2: 12, y2: 12 }),
+                  React.createElement('line', { x1: 12, y1: 16, x2: 12.01, y2: 16 })
+                )
+              ),
+              React.createElement('div', null,
+                React.createElement('div', {
+                  style: { fontSize: 11, color: '#888', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }
+                }, 'Landing preview error'),
+                React.createElement('div', {
+                  style: { fontSize: 18, fontWeight: 600, color: '#f3f4f6', marginTop: 4 }
+                }, 'Component failed to render')
+              )
+            ),
+            React.createElement('div', {
+              style: { background: '#171717', border: '1px solid #262626', borderRadius: 12, padding: 16, marginBottom: 16 }
+            },
+              React.createElement('div', {
+                style: { fontFamily: 'JetBrains Mono, ui-monospace, monospace', fontSize: 13, color: '#fca5a5', marginBottom: stack ? 8 : 0, wordBreak: 'break-word' }
+              }, msg),
+              stack ? React.createElement('pre', {
+                style: { fontFamily: 'JetBrains Mono, ui-monospace, monospace', fontSize: 11, color: '#737373', whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto', margin: 0 }
+              }, stack) : null
+            ),
+            React.createElement('div', { style: { fontSize: 13, color: '#a3a3a3', lineHeight: 1.7 } },
+              'Try regenerating the landing page or describing what to change in the edit input. The error message is also visible in the dashboard preview banner.'
+            )
+          )
+        );
+      };
+      window.__ForzeErrorBoundary__ = ForzeErrorBoundary;
+    } catch (e) {}
+  }
+
+  // Catch errors that happen outside React (script parse errors, async
+  // throws, dynamic imports, etc.). These never reach the error boundary.
+  window.addEventListener('error', function (event) {
+    postErrorToParent({
+      kind: 'script',
+      message: event && event.message,
+      filename: event && event.filename,
+      lineno: event && event.lineno,
+      colno: event && event.colno,
+      stack: (event && event.error && event.error.stack) || ''
+    });
+  });
+  window.addEventListener('unhandledrejection', function (event) {
+    var reason = event && event.reason;
+    postErrorToParent({
+      kind: 'promise',
+      message: (reason && reason.message) || String(reason),
+      stack: (reason && reason.stack) || ''
+    });
+  });
+})();
+<\/script>`
+
+// ── Static validator ─────────────────────────────────────────────────────────
+//
+// Run BEFORE persisting a generated landing-page component. Catches the
+// hallucinations the runtime shim doesn't (or shouldn't) silently mask:
+//   • Forbidden imports — `lucide-react`, `framer-motion`, `next/image`,
+//     `clsx`, etc. These get stripped at render time anyway, so the
+//     references after the import line resolve to undefined.
+//   • Inline references to libraries we won't ship — `LucideIcons.X`,
+//     `motion.div`, `<NextImage>`. The runtime shim now Proxies these to
+//     safe fallbacks, but the validator still surfaces them so the founder
+//     knows the LLM drifted (and so the agent stream shows what to fix).
+//   • Runtime hazards — `process.env.X` (no Node), `eval(`, `new Function(`,
+//     `document.write(` (replaces the iframe), `dangerouslySetInnerHTML`
+//     with template literals (XSS risk).
+//   • Structural — brace / paren / bracket balance. Babel parses inside the
+//     iframe; a mismatch crashes silently and shows a blank page. We catch
+//     it here and surface the count.
+//
+// Auto-sanitization (`sanitized` field):
+//   • Imports → replaced with `// removed (Forze runtime)` comments.
+//   • `process.env.X` references → replaced with the literal string `""`.
+//   • Other issues are reported only — sanitization there would change the
+//     visual output, which is the wrong tradeoff vs. flagging the issue.
+export type LandingComponentIssueSeverity = 'error' | 'warning' | 'info'
+
+export type LandingComponentIssue = {
+  severity: LandingComponentIssueSeverity
+  message: string
+  pattern: string
+  suggestion: string
+  line?: number
+  autoFixed: boolean
+}
+
+type ValidatorRule = {
+  pattern: RegExp
+  severity: LandingComponentIssueSeverity
+  buildMessage: (match: RegExpExecArray) => string
+  suggestion: string
+  replacement?: string | ((match: string) => string)
+}
+
+const VALIDATOR_RULES: ValidatorRule[] = [
+  // ── Forbidden imports ──
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]lucide-react['"];?/gm,
+    severity: 'warning',
+    buildMessage: () => 'Imports from lucide-react (icon library is not loaded; the import is stripped)',
+    suggestion: 'Use an emoji or inline <svg> instead. The runtime shim renders a generic SVG for any LucideIcons.X reference, but the visual quality will not match the requested icon.',
+    replacement: '// removed (Forze runtime) — lucide-react not available',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]@?heroicons[\w\-/]*['"];?/gm,
+    severity: 'warning',
+    buildMessage: () => 'Imports from Heroicons (not loaded)',
+    suggestion: 'Use an emoji or inline <svg>.',
+    replacement: '// removed (Forze runtime) — Heroicons not available',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]react-icons[\w\-/]*['"];?/gm,
+    severity: 'warning',
+    buildMessage: () => 'Imports from react-icons (not loaded)',
+    suggestion: 'Use an emoji or inline <svg>.',
+    replacement: '// removed (Forze runtime) — react-icons not available',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]@?(tabler\/icons|phosphor-icons|@phosphor-icons[\w\-/]*|feather-icons|@fortawesome[\w\-/]*)['"];?/gm,
+    severity: 'warning',
+    buildMessage: () => 'Imports an icon library that is not available at runtime',
+    suggestion: 'Use an emoji or inline <svg>.',
+    replacement: '// removed (Forze runtime) — icon library not available',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]framer-motion['"];?/gm,
+    severity: 'warning',
+    buildMessage: () => 'Imports from framer-motion (not loaded)',
+    suggestion: 'Use Tailwind transitions/animations or CSS keyframes. The runtime shim renders motion.<tag> as plain <tag> with animation props stripped.',
+    replacement: '// removed (Forze runtime) — framer-motion not available',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]next\/(image|link|router|navigation|head|script|font|dynamic)['"];?/gm,
+    severity: 'warning',
+    buildMessage: (m) => `Imports from next/${m[1]} (Next.js modules are not available in the iframe)`,
+    suggestion: 'Use plain <a>, <img>, etc.',
+    replacement: '// removed (Forze runtime) — Next.js modules not available',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"](clsx|classnames|tailwind-merge|tw-merge)['"];?/gm,
+    severity: 'info',
+    buildMessage: (m) => `Imports ${m[1]} (shimmed at runtime — no import needed)`,
+    suggestion: 'The runtime exposes clsx, cn, classNames, and twMerge as globals. Drop the import.',
+    replacement: '// removed (Forze runtime) — class util is a global',
+  },
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"]@?(react-router|@reach\/router)[\w\-/]*['"];?/gm,
+    severity: 'warning',
+    buildMessage: () => 'Imports a router library (not available in the iframe)',
+    suggestion: 'Use plain anchor links — the iframe is a single static page.',
+    replacement: '// removed (Forze runtime) — router not available',
+  },
+  // Catch-all: any other ES module import that survives is bound to fail
+  // because Babel-standalone in script mode does NOT resolve specifiers.
+  {
+    pattern: /^\s*import\s+[^;\n]+from\s+['"][^'"\n]+['"];?/gm,
+    severity: 'info',
+    buildMessage: (m) => `Stripped import statement: ${m[0].trim().slice(0, 80)}`,
+    suggestion: 'Remove imports from the component. Use globals only (React, hooks, Tailwind).',
+    replacement: '// removed (Forze runtime) — imports are not resolved',
+  },
+
+  // ── Runtime hazards ──
+  {
+    pattern: /\bprocess\.env\.[A-Z_][\w]*/g,
+    severity: 'error',
+    buildMessage: (m) => `References ${m[0]} — there is no Node environment in the iframe`,
+    suggestion: 'Inline the value, fetch it from your API, or expose it via window before render.',
+    replacement: '""',
+  },
+  {
+    pattern: /\beval\s*\(/g,
+    severity: 'error',
+    buildMessage: () => 'Calls eval() — blocked by safety review',
+    suggestion: 'Inline the logic; never build code from strings.',
+  },
+  {
+    pattern: /\bnew\s+Function\s*\(/g,
+    severity: 'error',
+    buildMessage: () => 'Constructs new Function() — blocked by safety review',
+    suggestion: 'Inline the logic; never build code from strings.',
+  },
+  {
+    pattern: /\bdocument\.write\s*\(/g,
+    severity: 'error',
+    buildMessage: () => 'Calls document.write — replaces the iframe contents entirely',
+    suggestion: 'Render with React instead.',
+  },
+
+  // ── Drift detection (shim catches these, but report them) ──
+  {
+    pattern: /<LucideIcons\.([A-Z][\w$]*)/g,
+    severity: 'info',
+    buildMessage: (m) => `Renders <LucideIcons.${m[1]}> — falling back to generic SVG icon`,
+    suggestion: 'Replace with an inline <svg> or emoji for the right visual.',
+  },
+  {
+    pattern: /<motion\.([a-z][\w$]*)/g,
+    severity: 'info',
+    buildMessage: (m) => `Renders <motion.${m[1]}> — falling back to <${m[1]}> with animation props stripped`,
+    suggestion: 'Animate with Tailwind transitions/animations or CSS keyframes.',
+  },
+  {
+    pattern: /<AnimatePresence\b/g,
+    severity: 'info',
+    buildMessage: () => 'Uses <AnimatePresence> — pass-through rendered (no enter/exit animations)',
+    suggestion: 'Use CSS transitions instead.',
+  },
+]
+
+function lineNumberOf(code: string, index: number): number {
+  if (index <= 0) return 1
+  let line = 1
+  for (let i = 0; i < index && i < code.length; i++) {
+    if (code.charCodeAt(i) === 10) line++
+  }
+  return line
+}
+
+function checkBalance(code: string): { braces: number; parens: number; brackets: number } {
+  let braces = 0
+  let parens = 0
+  let brackets = 0
+  let inString: string | null = null
+  let inComment: 'line' | 'block' | null = null
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i]
+    const next = code[i + 1]
+    if (inComment === 'line') {
+      if (ch === '\n') inComment = null
+      continue
+    }
+    if (inComment === 'block') {
+      if (ch === '*' && next === '/') { inComment = null; i++ }
+      continue
+    }
+    if (inString) {
+      if (ch === '\\') { i++; continue }
+      if (ch === inString) inString = null
+      continue
+    }
+    if (ch === '/' && next === '/') { inComment = 'line'; i++; continue }
+    if (ch === '/' && next === '*') { inComment = 'block'; i++; continue }
+    if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue }
+    if (ch === '{') braces++
+    else if (ch === '}') braces--
+    else if (ch === '(') parens++
+    else if (ch === ')') parens--
+    else if (ch === '[') brackets++
+    else if (ch === ']') brackets--
+  }
+  return { braces, parens, brackets }
+}
+
+export function validateLandingComponent(code: string): {
+  issues: LandingComponentIssue[]
+  sanitized: string
+  hasErrors: boolean
+} {
+  if (typeof code !== 'string' || !code.trim()) {
+    return {
+      issues: [{
+        severity: 'error',
+        message: 'Component code is empty',
+        pattern: '',
+        suggestion: 'Regenerate the landing page.',
+        autoFixed: false,
+      }],
+      sanitized: code || '',
+      hasErrors: true,
+    }
+  }
+
+  const issues: LandingComponentIssue[] = []
+  let sanitized = code
+
+  for (const rule of VALIDATOR_RULES) {
+    const lookup = new RegExp(rule.pattern.source, rule.pattern.flags)
+    const matches: RegExpExecArray[] = []
+    let m: RegExpExecArray | null
+    while ((m = lookup.exec(code)) !== null) {
+      matches.push(m)
+      if (!lookup.global) break
+      if (m.index === lookup.lastIndex) lookup.lastIndex++
+    }
+    for (const match of matches) {
+      issues.push({
+        severity: rule.severity,
+        message: rule.buildMessage(match),
+        pattern: match[0],
+        suggestion: rule.suggestion,
+        line: lineNumberOf(code, match.index),
+        autoFixed: rule.replacement !== undefined,
+      })
+    }
+    if (rule.replacement !== undefined) {
+      const apply = new RegExp(rule.pattern.source, rule.pattern.flags)
+      sanitized = typeof rule.replacement === 'string'
+        ? sanitized.replace(apply, rule.replacement)
+        : sanitized.replace(apply, rule.replacement)
+    }
+  }
+
+  const balance = checkBalance(sanitized)
+  if (balance.braces !== 0) {
+    issues.push({
+      severity: 'error',
+      message: `Brace mismatch: ${balance.braces > 0 ? `${balance.braces} unclosed '{'` : `${Math.abs(balance.braces)} extra '}'`}`,
+      pattern: '{ }',
+      suggestion: 'Component will fail to parse. Regenerate or ask for a structural fix.',
+      autoFixed: false,
+    })
+  }
+  if (balance.parens !== 0) {
+    issues.push({
+      severity: 'error',
+      message: `Paren mismatch: ${balance.parens > 0 ? `${balance.parens} unclosed '('` : `${Math.abs(balance.parens)} extra ')'`}`,
+      pattern: '( )',
+      suggestion: 'Component will fail to parse. Regenerate or ask for a structural fix.',
+      autoFixed: false,
+    })
+  }
+  if (balance.brackets !== 0) {
+    issues.push({
+      severity: 'error',
+      message: `Bracket mismatch: ${balance.brackets > 0 ? `${balance.brackets} unclosed '['` : `${Math.abs(balance.brackets)} extra ']'`}`,
+      pattern: '[ ]',
+      suggestion: 'Component will fail to parse. Regenerate or ask for a structural fix.',
+      autoFixed: false,
+    })
+  }
+
+  const hasErrors = issues.some((issue) => issue.severity === 'error')
+  return { issues, sanitized, hasErrors }
+}
+
+export function summariseIssues(issues: LandingComponentIssue[]): string {
+  if (issues.length === 0) return 'No issues detected.'
+  const counts = { error: 0, warning: 0, info: 0 }
+  for (const issue of issues) counts[issue.severity]++
+  const parts: string[] = []
+  if (counts.error) parts.push(`${counts.error} error${counts.error === 1 ? '' : 's'}`)
+  if (counts.warning) parts.push(`${counts.warning} warning${counts.warning === 1 ? '' : 's'}`)
+  if (counts.info) parts.push(`${counts.info} info`)
+  return parts.join(', ')
+}
+
 export function stripGeneratedCodeFences(code: unknown): string {
   if (typeof code !== 'string') return ''
 
