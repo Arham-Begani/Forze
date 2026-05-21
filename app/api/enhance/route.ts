@@ -1,6 +1,7 @@
 // app/api/enhance/route.ts
 import { requireAuth, isAuthError } from '@/lib/auth'
 import { getFlashModel } from '@/lib/gemini'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -10,7 +11,15 @@ const EnhanceSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth()
+    const session = await requireAuth()
+
+    // Each call hits Gemini Flash and bills the project for tokens; cap to a
+    // sane per-hour ceiling so a logged-in user cannot rack up costs by
+    // hammering this endpoint from a script.
+    const rl = await enforceRateLimit(session.userId, 'enhance', 3600, 30)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
 
     const body = await request.json()
     const result = EnhanceSchema.safeParse(body)

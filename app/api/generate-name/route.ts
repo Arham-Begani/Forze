@@ -1,5 +1,6 @@
 import { requireAuth, isAuthError } from '@/lib/auth'
 import { getFlashModel } from '@/lib/gemini'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -9,7 +10,13 @@ const NameSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth()
+    const session = await requireAuth()
+
+    // Same Gemini-cost protection as /api/enhance.
+    const rl = await enforceRateLimit(session.userId, 'generate-name', 3600, 30)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
 
     const body = await request.json()
     const result = NameSchema.safeParse(body)
