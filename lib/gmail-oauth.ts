@@ -2,6 +2,7 @@ import 'server-only'
 
 import { encryptSecret, decryptSecret } from '@/lib/marketing-crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { randomBytes } from 'node:crypto'
 
 // ─── State signing for OAuth CSRF protection ─────────────────────────────────
 // We sign `{ userId, nonce, exp }` using the same AES-GCM key that protects
@@ -21,7 +22,7 @@ interface OAuthStatePayload {
 export function signOAuthState(userId: string): string {
   const payload: OAuthStatePayload = {
     userId,
-    nonce: Math.random().toString(36).slice(2, 14),
+    nonce: randomBytes(12).toString('base64url'),
     exp: Math.floor(Date.now() / 1000) + STATE_TTL_SEC,
   }
   const encoded = encryptSecret(JSON.stringify(payload))

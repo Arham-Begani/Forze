@@ -75,12 +75,14 @@ export async function GET(
     response.cookies.delete(cookieName)
     return response
   } catch (error) {
+    console.error('[integrations/[provider]/callback] error:', error)
     const response = NextResponse.redirect(buildRedirect(
       request,
       returnTo,
       'error',
       provider,
-      error instanceof Error ? error.message : 'Failed to connect account'
+      // Show a stable phrase to the user; the full message is in server logs.
+      'Failed to connect account'
     ))
     response.cookies.delete(cookieName)
     return response

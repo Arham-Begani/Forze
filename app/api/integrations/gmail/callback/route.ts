@@ -61,6 +61,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       severity: 'error',
       message: msg,
     })
-    return NextResponse.redirect(`${appUrl}/dashboard?gmail_error=${encodeURIComponent(msg)}`)
+    // Don't bounce raw exception text into the user's URL bar — it can leak
+    // Google client_id, internal stack details, etc. The full error is in the
+    // server log and campaign_events; show the user a stable code only.
+    return NextResponse.redirect(`${appUrl}/dashboard?gmail_error=callback_failed`)
   }
 }
