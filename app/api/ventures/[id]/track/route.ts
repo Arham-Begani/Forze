@@ -9,6 +9,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
+const EVENT_TYPE_RE = /^[a-z0-9_.\-:]{1,64}$/i
+const MAX_METADATA_BYTES = 4 * 1024 // 4 KB cap so visitors can't bloat the row
+
+function sanitizeMetadata(meta: unknown): Record<string, unknown> {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {}
+  try {
+    const json = JSON.stringify(meta)
+    if (json.length > MAX_METADATA_BYTES) return {}
+    return JSON.parse(json) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -21,22 +35,23 @@ export async function POST(
       return NextResponse.json({ success: false, ignored: true }, { status: 200, headers: corsHeaders })
     }
 
-    const body = await req.json()
-    const { event_type, metadata } = body
+    const body = await req.json().catch(() => ({} as Record<string, unknown>))
+    const eventType = typeof body.event_type === 'string' ? body.event_type.trim() : ''
 
-    if (!event_type) {
+    if (!eventType || !EVENT_TYPE_RE.test(eventType)) {
       return NextResponse.json({ error: 'event_type is required' }, { status: 400, headers: corsHeaders })
     }
 
-    const event = await createAnalyticsEvent(ventureId, event_type, metadata)
+    const safeMetadata = sanitizeMetadata((body as Record<string, unknown>).metadata)
+    const event = await createAnalyticsEvent(ventureId, eventType, safeMetadata)
 
     return NextResponse.json({ success: true, event }, { headers: corsHeaders })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating analytics event:', error)
-    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders })
+    return NextResponse.json({ error: 'Failed to record event' }, { status: 500, headers: corsHeaders })
   }
 }
 
-export async function OPTIONS(req: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders })
 }

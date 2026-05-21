@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createLead } from '@/lib/queries'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,23 +24,35 @@ export async function POST(
       )
     }
 
-    const body = await req.json()
-    const { email, name, source } = body
+    const body = await req.json().catch(() => ({} as Record<string, unknown>))
+    const emailRaw = typeof body.email === 'string' ? body.email.trim() : ''
+    const nameRaw = typeof body.name === 'string' ? body.name.trim() : ''
+    const sourceRaw = typeof body.source === 'string' ? body.source.trim() : ''
 
-    if (!email) {
+    if (!emailRaw) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400, headers: corsHeaders })
     }
+    if (emailRaw.length > 254 || !EMAIL_RE.test(emailRaw)) {
+      return NextResponse.json({ error: 'Invalid email' }, { status: 400, headers: corsHeaders })
+    }
+    if (nameRaw.length > 200) {
+      return NextResponse.json({ error: 'Name is too long' }, { status: 400, headers: corsHeaders })
+    }
 
-    const lead = await createLead(ventureId, email, name, source)
-    
-    // We should probably allow CORS if landing pages are on different domains
+    const safeName = nameRaw ? nameRaw.slice(0, 200) : undefined
+    const safeSource = sourceRaw ? sourceRaw.slice(0, 120) : undefined
+
+    const lead = await createLead(ventureId, emailRaw, safeName, safeSource)
+
     return NextResponse.json({ success: true, lead }, { headers: corsHeaders })
-  } catch (error: any) {
+  } catch (error) {
+    // Never echo the raw DB / driver error back to anonymous landing-page
+    // traffic — it can leak schema details.
     console.error('Error creating lead:', error)
-    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders })
+    return NextResponse.json({ error: 'Failed to submit lead' }, { status: 500, headers: corsHeaders })
   }
 }
 
-export async function OPTIONS(req: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders })
 }
