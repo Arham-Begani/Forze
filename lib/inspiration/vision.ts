@@ -166,6 +166,39 @@ function buildContextPreamble(ctx: PassContext | undefined): string {
     return lines.join('\n')
 }
 
+// Build a ground-truth block from Microlink's Vibrant palette + brand color +
+// background color. When present (Tier 0 captures), this REPLACES Gemini's
+// hex-guessing for the primary slots and tells it the colors it must use.
+// The model is still free to derive accents, neutrals, and secondaries from
+// the image — but the core palette comes from real pixel sampling, not vision.
+function buildGroundTruthBlock(capture: CaptureResult): string {
+    if (!capture.groundTruth) return ''
+    const { palette, brandColor, backgroundColor, title, publisher } = capture.groundTruth
+    const lines: string[] = ['', '### Ground-truth values extracted from the live page (NOT estimates — use these EXACTLY)']
+    if (brandColor) {
+        lines.push(`- BRAND COLOR (use as colors.primary.hex with confidence ≥ 95): ${brandColor.toLowerCase()}`)
+    }
+    if (backgroundColor) {
+        lines.push(`- PAGE BACKGROUND (use as colors.background): ${backgroundColor.toLowerCase()}`)
+    }
+    if (palette && palette.length > 0) {
+        lines.push(
+            `- DOMINANT PALETTE (most-frequent first — pick secondary/accent from THIS list, in order, do not invent new hexes): ${palette
+                .map((p) => p.toLowerCase())
+                .join(', ')}`,
+        )
+    }
+    if (title || publisher) {
+        lines.push(`- Page identity (helpful for tone, not tokens): ${[publisher, title].filter(Boolean).join(' — ')}`)
+    }
+    lines.push(
+        '',
+        'These values are programmatically extracted from the live page render. Hex codes above OVERRIDE any color you would visually guess from the image — do not "improve" them.',
+        'Confidence for colors.primary, colors.background, colors.secondary, colors.accent MUST be 95+ when populated from the ground-truth list. Only drop below 95 for slots you derive yourself (neutrals, text, surface).',
+    )
+    return lines.join('\n')
+}
+
 export async function analyzeImageWithGemini(
     capture: CaptureResult,
     ctx?: PassContext,
@@ -178,6 +211,7 @@ export async function analyzeImageWithGemini(
     })
 
     const base64 = capture.image.data.toString('base64')
+    const groundTruthBlock = buildGroundTruthBlock(capture)
 
     const run = async (): Promise<AnalyzeImageResult> => {
         const response = await model.generateContent({
@@ -192,7 +226,9 @@ export async function analyzeImageWithGemini(
                             },
                         },
                         {
-                            text: `Analyze the image from ${capture.url}. Return ONLY the DesignTokens JSON described in the system instructions.`,
+                            text:
+                                `Analyze the image from ${capture.url}. Return ONLY the DesignTokens JSON described in the system instructions.` +
+                                groundTruthBlock,
                         },
                     ],
                 },
@@ -213,7 +249,57 @@ export async function analyzeImageWithGemini(
             },
         }
 
-        const tokens = DesignTokensSchema.parse(patched)
+        let tokens = DesignTokensSchema.parse(patched)
+
+        // Trust-but-verify: even with the ground-truth instructions, Gemini
+        // sometimes still "polishes" the hex. Clamp the canonical slots back
+        // to ground truth when we have it. This is the deterministic floor —
+        // the model can never override Vibrant on the colors we measured.
+        if (capture.groundTruth) {
+            const gt = capture.groundTruth
+            if (gt.brandColor && /^#[0-9a-f]{6}$/i.test(gt.brandColor)) {
+                tokens = {
+                    ...tokens,
+                    colors: {
+                        ...tokens.colors,
+                        primary: { hex: gt.brandColor.toLowerCase(), confidence: 98, source: 'ground-truth' },
+                    },
+                }
+            }
+            if (gt.backgroundColor && /^#[0-9a-f]{6}$/i.test(gt.backgroundColor)) {
+                tokens = {
+                    ...tokens,
+                    colors: { ...tokens.colors, background: gt.backgroundColor.toLowerCase() },
+                }
+            }
+            // Fill secondary/accent from the dominant palette ONLY if Gemini
+            // didn't return one or returned a color suspiciously close to the
+            // primary (saturation distance below 0.05 in HSL → same color).
+            if (gt.palette && gt.palette.length > 1) {
+                const usable = gt.palette.filter(
+                    (p) => /^#[0-9a-f]{6}$/i.test(p) && p.toLowerCase() !== tokens.colors.primary.hex.toLowerCase(),
+                )
+                if (usable.length > 0 && (!tokens.colors.secondary?.hex || tokens.colors.secondary.hex.toLowerCase() === tokens.colors.primary.hex.toLowerCase())) {
+                    tokens = {
+                        ...tokens,
+                        colors: {
+                            ...tokens.colors,
+                            secondary: { hex: usable[0].toLowerCase(), confidence: 92, source: 'ground-truth-palette' },
+                        },
+                    }
+                }
+                if (usable.length > 1 && (!tokens.colors.accent?.hex || tokens.colors.accent.hex.toLowerCase() === tokens.colors.primary.hex.toLowerCase())) {
+                    tokens = {
+                        ...tokens,
+                        colors: {
+                            ...tokens.colors,
+                            accent: { hex: usable[1].toLowerCase(), confidence: 88, source: 'ground-truth-palette' },
+                        },
+                    }
+                }
+            }
+        }
+
         return { tokens, rawText: text }
     }
 
