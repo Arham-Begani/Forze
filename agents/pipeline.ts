@@ -8,11 +8,85 @@ import {
     getFlashModel,
     Content,
 } from '@/lib/gemini'
-import { resolveLandingComponent, isRenderableLandingComponent } from '@/lib/landing-page'
+import {
+    resolveLandingComponent,
+    isRenderableLandingComponent,
+    validateLandingComponent,
+    summariseIssues,
+    type LandingComponentIssue,
+} from '@/lib/landing-page'
 import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 import { getVenturePublic } from '@/lib/queries'
 import { DesignTokensSchema } from '@/lib/schemas/inspiration'
 import { tokensToPromptDigest, tokensToCssVarBlock, tokensToDesignBriefing } from '@/lib/inspiration/tokens'
+import type { LandingAsset } from '@/lib/schemas/landing-assets'
+
+// ── User-supplied landing assets ─────────────────────────────────────────────
+//
+// The founder may upload logos, hero photos, product screenshots, team
+// portraits, etc. via /api/ventures/[id]/assets. The run route attaches the
+// list to venture.context.landingAssets (an array of LandingAsset rows).
+// We build a deterministic, agent-friendly block from those rows so the
+// LLM places real URLs in the generated component instead of stock placeholders.
+function buildLandingAssetsBlock(rawAssets: unknown): string | null {
+    if (!Array.isArray(rawAssets) || rawAssets.length === 0) return null
+    const assets = rawAssets
+        .filter((a): a is LandingAsset => !!a && typeof a === 'object' && typeof (a as { publicUrl?: unknown }).publicUrl === 'string')
+        .slice(0, 24)
+    if (assets.length === 0) return null
+
+    // Group by kind so the prompt reads top-down: logos first, then hero,
+    // then product / feature / etc. The LLM can use this ordering as a hint
+    // about which assets are "global brand" vs "section-specific."
+    const KIND_ORDER: Array<LandingAsset['kind']> = [
+        'logo', 'hero', 'background', 'product', 'feature', 'team', 'testimonial', 'customer-logo', 'image',
+    ]
+    const sorted = [...assets].sort((a, b) => {
+        const aRank = KIND_ORDER.indexOf(a.kind)
+        const bRank = KIND_ORDER.indexOf(b.kind)
+        if (aRank !== bRank) return (aRank === -1 ? 99 : aRank) - (bRank === -1 ? 99 : bRank)
+        return a.createdAt.localeCompare(b.createdAt)
+    })
+
+    const lines: string[] = []
+    for (let i = 0; i < sorted.length; i++) {
+        const asset = sorted[i]
+        const dimensions = (asset.width && asset.height) ? ` (${asset.width}×${asset.height})` : ''
+        const label = asset.label?.trim() || '(no label)'
+        const alt = asset.altText?.trim() || asset.label?.trim() || asset.kind
+        lines.push(`  ${i + 1}. [${asset.kind}] ${label}${dimensions}`)
+        lines.push(`     URL: ${asset.publicUrl}`)
+        lines.push(`     ALT: ${alt}`)
+    }
+
+    return [
+        '## User-Supplied Images (REQUIRED — use these exact URLs)',
+        '',
+        'The founder uploaded these images. Embed them in the generated landing page using the exact public URLs listed below. Do NOT use stock-photo URLs (unsplash, pexels, placeholder.com, picsum), do NOT use absolute paths like `/images/...`, do NOT invent file names. Every <img> in the component must reference one of these URLs verbatim or be omitted.',
+        '',
+        'Placement guidance by kind:',
+        '  • `logo` — nav bar logo + footer logo (use the same URL in both places).',
+        '  • `hero` — hero section background or featured image. If a hero image is provided, lay the headline over it or float it next to the copy.',
+        '  • `background` — section-level background (use as `background-image` style).',
+        '  • `product` — product screenshot in the features or hero section.',
+        '  • `feature` — illustrate a specific feature card.',
+        '  • `team` — about / team section portrait.',
+        '  • `testimonial` — customer face inside a testimonial card.',
+        '  • `customer-logo` — logo strip ("Trusted by") above social proof.',
+        '  • `image` — generic; place wherever it makes sense given the alt text.',
+        '',
+        'Implementation rules:',
+        '  • Use <img src="EXACT_URL_FROM_BELOW" alt="EXACT_ALT_FROM_BELOW" loading="lazy" /> for foreground images.',
+        '  • Use `style={{ backgroundImage: "url(EXACT_URL_FROM_BELOW)" }}` for background images.',
+        '  • If a logo URL ends in `.svg`, render at the natural intrinsic size; for other types apply explicit className width/height (e.g. `h-8 w-auto`).',
+        '  • Never reference an asset that is not in this list. If a section needs an image and no matching asset exists, use an inline <svg> illustration or a tasteful CSS gradient — never a stock URL.',
+        '',
+        'Available assets:',
+        ...lines,
+    ].join('\n')
+}
+
+
 
 // ── PipelineOutput Zod Schema ────────────────────────────────────────────────
 
@@ -206,6 +280,44 @@ async function deployLandingPage(ventureId: string, result: PipelineOutput): Pro
     return `/v/${ventureId}`
 }
 
+// ── Validator integration ────────────────────────────────────────────────────
+//
+// Runs the static landing-component validator and streams findings to the
+// founder so they can see exactly what was caught (and what we auto-fixed
+// vs. what they need to revisit). Returns the sanitized component string —
+// imports of unavailable libraries get commented out, `process.env.X`
+// references get replaced with `""`, everything else is reported only.
+//
+// The "errorCount" return is used by the caller to decide whether to
+// surface a louder warning (e.g. an "Errors detected" tag in the stream
+// preamble). All severities are reported individually below.
+async function runComponentValidator(
+    component: string,
+    onStream: (line: string) => Promise<void>,
+    contextLabel: 'Initial generation' | 'Edit mode',
+): Promise<{ sanitized: string; issues: LandingComponentIssue[]; hasErrors: boolean }> {
+    const { issues, sanitized, hasErrors } = validateLandingComponent(component)
+    if (issues.length === 0) {
+        await onStream(`\n[${contextLabel}] Component validator: clean — no issues detected.\n`)
+        return { sanitized, issues, hasErrors }
+    }
+    const headline = hasErrors
+        ? `[${contextLabel}] Component validator: ${summariseIssues(issues)} — auto-fixed where safe.`
+        : `[${contextLabel}] Component validator: ${summariseIssues(issues)} — auto-fixed where safe.`
+    await onStream(`\n${headline}\n`)
+    const MAX_REPORTED = 12
+    for (const issue of issues.slice(0, MAX_REPORTED)) {
+        const tag = issue.severity === 'error' ? '✗' : issue.severity === 'warning' ? '!' : '·'
+        const fix = issue.autoFixed ? ' [auto-fixed]' : ''
+        const loc = typeof issue.line === 'number' ? ` (line ${issue.line})` : ''
+        await onStream(`  ${tag} ${issue.message}${loc}${fix}\n`)
+    }
+    if (issues.length > MAX_REPORTED) {
+        await onStream(`  … ${issues.length - MAX_REPORTED} more issue${issues.length - MAX_REPORTED === 1 ? '' : 's'} not shown.\n`)
+    }
+    return { sanitized, issues, hasErrors }
+}
+
 // ── System Prompt ─────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `
@@ -245,7 +357,7 @@ Pages:
 Each feature must include:
 - Title: concise, benefit-oriented name
 - Description: 2-3 sentences in brand voice explaining what it does AND why it matters to the target user. Include specific benefits, not vague claims.
-- Icon: a descriptive emoji or icon name that visually represents the feature
+- Icon: an emoji ONLY (e.g. "⚡", "🚀", "🛡️", "💎") — do NOT return a Lucide/Heroicons name like "Shield" or "User"; the rendered component must use the emoji as-is or wrap it in an SVG, never reference an icon library
 
 **Social Proof Section (3 detailed testimonials)**
 Each testimonial must be:
@@ -274,11 +386,39 @@ Generate a COMPLETE, production-quality landing page as a single React functiona
 **Technical Requirements:**
 - Single functional component exported as default
 - Use Tailwind CSS for ALL styling (the page loads Tailwind CDN)
-- Use React hooks (useState, useEffect) for interactivity — these are available globally
+- Use React hooks (useState, useEffect, useRef, useMemo, useCallback) for interactivity — these are pre-destructured from React and available globally
 - Do NOT use import statements (they will be stripped for preview rendering)
 - Mobile-responsive design with proper breakpoints (sm:, md:, lg:)
 - Smooth scroll navigation between sections
 - Accessible (proper heading hierarchy, aria-labels on interactive elements, contrast ratios)
+
+**Runtime Constraints (CRITICAL — non-negotiable. The page renders inside a sandboxed iframe with React UMD + Tailwind CDN + Babel-standalone. Nothing else is loaded.)**
+
+ALLOWED globals only:
+- \`React\`, \`ReactDOM\`
+- Pre-destructured hooks: \`useState\`, \`useEffect\`, \`useRef\`, \`useCallback\`, \`useMemo\`, \`useReducer\`, \`useLayoutEffect\`, \`useId\`, \`Fragment\`, \`Children\`, \`cloneElement\`, \`createContext\`, \`useContext\`, \`forwardRef\`, \`memo\`
+- Tailwind utility classes (any class from cdn.tailwindcss.com)
+- \`window.__VENTURE_ID__\` — for the lead-capture + analytics POST endpoints
+- Native browser APIs: \`fetch\`, \`IntersectionObserver\`, \`setTimeout\`, \`localStorage\`, etc.
+
+FORBIDDEN — these are NOT available and WILL crash the page if referenced:
+- \`lucide-react\`, \`LucideIcons\`, \`Lucide\`, \`LucideReact\` — no Lucide icons
+- \`Heroicons\`, \`HeroIcons\`, \`HiIcons\` — no Heroicons
+- \`FontAwesome\`, \`FaIcons\`, \`FontAwesomeIcon\` — no Font Awesome
+- \`react-icons\`, \`FiIcons\`, \`BiIcons\`, \`TbIcons\`, \`PhIcons\`, \`MdIcons\`, \`IoIcons\`, \`SiIcons\`, \`GiIcons\` — no react-icons
+- \`Feather\`, \`Tabler\`, \`Phosphor\`, \`MaterialIcons\` — no other icon libraries
+- Bare component icon names like \`<Shield />\`, \`<User />\`, \`<Check />\`, \`<ArrowRight />\`, \`<ChevronDown />\`, \`<Star />\`, \`<Mail />\`, \`<Zap />\`, \`<Sparkles />\`, \`<Lock />\` — these resolve to undefined
+- \`framer-motion\` — \`motion.div\`, \`<AnimatePresence>\`, \`<LazyMotion>\` are not available
+- Next.js components — no \`<Image>\`, no \`<Link>\`, no \`useRouter\`
+- Utility libraries — no \`clsx\`, \`cn\`, \`classNames\`, \`twMerge\`, \`tailwind-merge\`
+- \`import\` statements of any kind — they get stripped at render time
+
+**For icons you MUST use ONE of these three approaches (no exceptions):**
+1. An emoji rendered as a plain string in JSX: \`<div className="text-2xl">⚡</div>\`, \`🚀\`, \`🛡️\`, \`✓\`, \`→\`, \`★\`, \`💎\`, \`✨\`, \`🔒\`
+2. An inline \`<svg>\` element with explicit \`viewBox\`, \`fill\`, \`stroke\`, and \`<path>\` / \`<circle>\` / \`<rect>\` children. Example: \`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2C20 17.5 12 22 12 22z"/></svg>\`
+3. A Tailwind-styled div with a Unicode glyph: \`<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 text-white text-lg">▲</div>\`
+
+If you write \`<LucideIcons.Shield />\`, \`<Shield />\`, or \`import { Shield } from 'lucide-react'\`, the generated page will throw \`ReferenceError\` or \`Cannot read properties of undefined\` at render time. The founder will see a broken page. Use inline SVG.
 
 **Design Requirements (aim for Stripe / Linear / Vercel quality):**
 - Use the EXACT brand colors from the Identity output as CSS custom properties in a style tag (--color-primary, --color-secondary, --color-accent)
@@ -422,6 +562,32 @@ You are editing an EXISTING, production-quality landing page. The founder wants 
 7. For seoMetadata: include only the fields that changed (title, description, or keywords).
 8. For sitemap: include only if the site structure actually changes.
 9. Preserve the EXACT brand colors, voice, and design quality of the original page.
+
+## Runtime Constraints (CRITICAL — non-negotiable when emitting fullComponent)
+
+The landing page renders inside a sandboxed iframe with ONLY React UMD + Tailwind CDN + Babel-standalone loaded. Nothing else is available.
+
+ALLOWED globals only:
+- \`React\`, \`ReactDOM\`
+- Pre-destructured hooks: \`useState\`, \`useEffect\`, \`useRef\`, \`useCallback\`, \`useMemo\`, \`useReducer\`, \`useLayoutEffect\`, \`useId\`, \`Fragment\`, \`Children\`, \`cloneElement\`, \`createContext\`, \`useContext\`, \`forwardRef\`, \`memo\`
+- Tailwind utility classes via cdn.tailwindcss.com
+- \`window.__VENTURE_ID__\` for lead-capture + analytics POST endpoints
+
+FORBIDDEN — these are NOT available and WILL crash the page if referenced:
+- \`lucide-react\`, \`LucideIcons\`, \`Lucide\`, \`LucideReact\`
+- \`Heroicons\`, \`HeroIcons\`, \`FontAwesome\`, \`FaIcons\`, \`FontAwesomeIcon\`, \`react-icons\`, \`Feather\`, \`Tabler\`, \`Phosphor\`, \`MaterialIcons\`
+- Bare icon component names like \`<Shield />\`, \`<User />\`, \`<Check />\`, \`<X />\`, \`<ArrowRight />\`, \`<ChevronDown />\`, \`<Star />\`, \`<Mail />\`, \`<Zap />\`, \`<Sparkles />\`, \`<Lock />\` — these resolve to undefined and crash
+- \`framer-motion\` (\`motion.div\`, \`<AnimatePresence>\`)
+- Next.js components (\`<Image>\`, \`<Link>\`, \`useRouter\`)
+- Utility libraries (\`clsx\`, \`cn\`, \`classNames\`, \`twMerge\`)
+- \`import\` statements of any kind — they get stripped before render
+
+**For icons you MUST use ONE of (no exceptions):**
+1. An emoji rendered as a plain string: \`<div className="text-2xl">⚡</div>\`, \`🚀\`, \`🛡️\`, \`✓\`, \`→\`, \`★\`
+2. An inline \`<svg>\` with \`viewBox\`, \`fill\`, \`stroke\`, and \`<path>\` / \`<circle>\` / \`<rect>\` children
+3. A Tailwind-styled div with a Unicode glyph (e.g. \`<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 text-white">▲</div>\`)
+
+If the existing component already contains forbidden references (\`<LucideIcons.X />\`, \`<Shield />\`, framer-motion, etc.), you MUST emit a fullComponent that REPLACES those references with safe alternatives (inline SVG or emoji) as part of the requested change. Do not preserve broken code just because it was there before.
 
 ## Output Format
 
@@ -600,6 +766,13 @@ export async function runPipelineAgent(
         }
     }
 
+    // User-supplied images (logos, hero photos, screenshots, etc.) attached
+    // via /api/ventures/[id]/assets. Goes near the end of the context block
+    // so it sits closest to the generation directive — the LLM has fresh
+    // memory of the asset URLs when writing the component.
+    const landingAssetsBlock = buildLandingAssetsBlock(venture.context?.landingAssets)
+    if (landingAssetsBlock) contextParts.push(landingAssetsBlock)
+
     const isContinuation = history.length > 0
     const userMessage = isContinuation
         ? "Continue from where you left off. Do not repeat anything already outputted. Complete the PipelineOutput JSON object strictly. The fullComponent MUST be completed fully."
@@ -665,7 +838,17 @@ Output the complete PipelineOutput JSON.`
                 ? `\n\n${inspirationBlock}\n\nIf the existing component does not yet match this directive (e.g. wrong gradient strategy, wrong card surface, wrong typography rhythm), output the FULL updated fullComponent so the page actually adopts the inspiration's feel — not just a surgical copy edit.`
                 : ''
 
-            const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Landing Page Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`${editInspirationBlock}\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
+            // User-uploaded images: include the same block in edit mode so
+            // "swap the hero", "add my logo to the navbar", "use my
+            // screenshot in the features section" requests have the actual
+            // URLs to work with. If the founder asks to USE an asset, the
+            // LLM must emit a fullComponent patch — copy-only patches can't
+            // add new <img> tags.
+            const editAssetsBlock = landingAssetsBlock
+                ? `\n\n${landingAssetsBlock}\n\nIf the founder's request involves ADDING, SWAPPING, or REMOVING any image, you MUST output a fullComponent (not a copy-only patch) so the <img> / background-image references actually change.`
+                : ''
+
+            const editUserMessage = `## Edit Request\n${sanitizeLabel(venture.name)}\n\n## Current Landing Page Data\n\`\`\`json\n${JSON.stringify(existingForContext, null, 2)}\n\`\`\`${editInspirationBlock}${editAssetsBlock}\n\nApply the requested change. Output ONLY the fields that need to change as a JSON patch.`
 
             let fullText = ''
             await streamPrompt(
@@ -763,6 +946,15 @@ Output the complete PipelineOutput JSON.`
                 colorPalette: branding?.colorPalette,
             })
 
+            // Static validation: catch forbidden patterns + auto-sanitize
+            // before the component reaches the iframe.
+            const editValidation = await runComponentValidator(
+                validated.fullComponent,
+                onStream,
+                'Edit mode',
+            )
+            validated.fullComponent = editValidation.sanitized
+
             validated.deploymentUrl = await deployLandingPage(venture.ventureId, validated)
             validated.leadCaptureActive = true
             validated.analyticsActive = false
@@ -798,6 +990,16 @@ Output the complete PipelineOutput JSON.`
             seoMetadata: validated.seoMetadata,
             colorPalette: branding?.colorPalette,
         })
+
+        // Static validation: catch forbidden patterns + auto-sanitize before
+        // the component reaches the iframe. Issues are streamed to the
+        // founder so they can see what was fixed and what still needs work.
+        const initialValidation = await runComponentValidator(
+            validated.fullComponent,
+            onStream,
+            'Initial generation',
+        )
+        validated.fullComponent = initialValidation.sanitized
 
         // Post-process: wire deployment and flags
         validated.deploymentUrl = await deployLandingPage(venture.ventureId, validated)
