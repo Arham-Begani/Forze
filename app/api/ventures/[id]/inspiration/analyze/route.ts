@@ -19,7 +19,7 @@ import { getVentureAccess, getVenture } from '@/lib/queries'
 import { InspirationAnalyzeInputSchema } from '@/lib/schemas/inspiration'
 import { captureInspirationImage, isCaptureSuccess } from '@/lib/inspiration/screenshot'
 import { scrapeHtmlTokens } from '@/lib/inspiration/html-scrape'
-import { analyzeImageWithGemini } from '@/lib/inspiration/vision'
+import { analyzeImageWithSelfConsistency } from '@/lib/inspiration/vision'
 import { mergeTokens } from '@/lib/inspiration/tokens'
 import { validateAccessibility } from '@/lib/inspiration/accessibility'
 import { scoreTokens } from '@/lib/inspiration/scoring'
@@ -180,7 +180,7 @@ export async function POST(
                 componentPatterns,
                 antiPatterns,
             ] = await Promise.all([
-                Promise.all(successes.map((capture) => analyzeImageWithGemini(capture, passContext))),
+                Promise.all(successes.map((capture) => analyzeImageWithSelfConsistency(capture, passContext))),
                 detectSections(primaryCapture, passContext),
                 analyzeComponentPatterns(primaryCapture, passContext),
                 analyzeAntiPatterns(primaryCapture, passContext),

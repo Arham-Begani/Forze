@@ -445,3 +445,107 @@ export async function analyzeImageWithGemini(
         }
     }
 }
+
+// ── Self-consistency wrapper ────────────────────────────────────────────────
+//
+// Runs the canonical extraction N times in parallel and reconciles fields
+// that Gemini is unstable on (mood, confidence, mobile sizes, brand
+// personality wording). Color slots are NOT touched here — they're already
+// clamped to ground truth in the inner run. We're paying the extra call to
+// stabilise the qualitative output, not the numeric ground-truth output.
+//
+// Cost: 2× vision calls per URL when enabled. Default ON, opt out via env
+// INSPIRATION_VISION_SELF_CONSISTENCY=false. Latency is unchanged (parallel).
+
+const SELF_CONSISTENCY_ENABLED = process.env.INSPIRATION_VISION_SELF_CONSISTENCY !== 'false'
+
+export async function analyzeImageWithSelfConsistency(
+    capture: CaptureResult,
+    ctx?: PassContext,
+): Promise<AnalyzeImageResult> {
+    if (!SELF_CONSISTENCY_ENABLED) {
+        return analyzeImageWithGemini(capture, ctx)
+    }
+
+    const [first, second] = await Promise.all([
+        analyzeImageWithGemini(capture, ctx),
+        analyzeImageWithGemini(capture, ctx),
+    ])
+
+    // Mood reconciliation: if both agree, keep. If they disagree, pick the
+    // one with higher confidenceByCategory.overall. Ties → first.
+    const mood1 = first.tokens.brand.mood
+    const mood2 = second.tokens.brand.mood
+    const overall1 = first.tokens.confidenceByCategory.overall ?? 0
+    const overall2 = second.tokens.confidenceByCategory.overall ?? 0
+    const chosenMood = mood1 === mood2 ? mood1 : overall2 > overall1 ? mood2 : mood1
+
+    // Median across confidence categories — Gemini tends to inflate
+    // confidence on single calls. Median across two runs is the most
+    // honest stable estimate without doing a third call.
+    const med = (a: number | undefined, b: number | undefined): number => {
+        const aa = typeof a === 'number' ? a : 0
+        const bb = typeof b === 'number' ? b : 0
+        return Math.round((aa + bb) / 2)
+    }
+    const confidence = {
+        colors: med(first.tokens.confidenceByCategory.colors, second.tokens.confidenceByCategory.colors),
+        typography: med(first.tokens.confidenceByCategory.typography, second.tokens.confidenceByCategory.typography),
+        spacing: med(first.tokens.confidenceByCategory.spacing, second.tokens.confidenceByCategory.spacing),
+        components: med(first.tokens.confidenceByCategory.components, second.tokens.confidenceByCategory.components),
+        overall: med(overall1, overall2),
+    }
+
+    // Brand personality: keep the longer of the two responses — the model
+    // sometimes truncates personality strings on the first pass.
+    const personality1 = first.tokens.brand.personality ?? ''
+    const personality2 = second.tokens.brand.personality ?? ''
+    const personality = personality2.length > personality1.length ? personality2 : personality1
+
+    // designSignals.notableInteractions: take the union, deduped, capped.
+    // Two passes often find different interactions; the union is more
+    // accurate than either alone.
+    const interactions = Array.from(
+        new Set([
+            ...first.tokens.designSignals.notableInteractions,
+            ...second.tokens.designSignals.notableInteractions,
+        ]),
+    ).slice(0, 8)
+
+    // For typography mobile sizes — second pass often skips them. Take the
+    // first non-empty value across the two runs.
+    const h1Mobile =
+        first.tokens.typography.sizes.h1.mobile ?? second.tokens.typography.sizes.h1.mobile
+    const h2Mobile =
+        first.tokens.typography.sizes.h2.mobile ?? second.tokens.typography.sizes.h2.mobile
+
+    // Base everything on `first` (ground-truth clamps are deterministic so
+    // both runs have identical color slots — we only override the
+    // qualitative + confidence fields).
+    const merged = {
+        ...first.tokens,
+        brand: {
+            ...first.tokens.brand,
+            mood: chosenMood,
+            personality,
+        },
+        designSignals: {
+            ...first.tokens.designSignals,
+            notableInteractions: interactions,
+        },
+        typography: {
+            ...first.tokens.typography,
+            sizes: {
+                ...first.tokens.typography.sizes,
+                h1: { ...first.tokens.typography.sizes.h1, mobile: h1Mobile },
+                h2: { ...first.tokens.typography.sizes.h2, mobile: h2Mobile },
+            },
+        },
+        confidenceByCategory: confidence,
+    }
+
+    return {
+        tokens: DesignTokensSchema.parse(merged),
+        rawText: `${first.rawText}\n---second-pass---\n${second.rawText}`,
+    }
+}
