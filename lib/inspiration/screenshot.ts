@@ -21,13 +21,28 @@ import { createHash } from 'crypto'
 
 export interface CaptureResult {
     url: string
-    tier: 1 | 2 | 3 | 4
+    // Tier 0 = remote browser screenshot (Microlink). Highest accuracy because
+    //         it's the actual rendered hero of the live page, not a curated
+    //         og:image. Comes with palette + brand-color metadata.
+    tier: 0 | 1 | 2 | 3 | 4
     image: {
         data: Buffer
         contentType: string
         bytes: number
     }
     sourceUrl?: string // exact resource we ended up downloading
+    // ── Tier 0 metadata (populated only when remote screenshot succeeded) ──
+    // The palette is Vibrant-extracted dominant colors from the live render.
+    // Feeding these to Gemini as ground truth replaces it eyeballing hex
+    // codes from a JPEG, which it's bad at.
+    groundTruth?: {
+        palette?: string[] // hex strings, most-dominant first
+        brandColor?: string // primary brand color per Vibrant
+        backgroundColor?: string // page background per Vibrant
+        title?: string
+        description?: string
+        publisher?: string
+    }
 }
 
 export interface CaptureFailure {
@@ -49,6 +64,32 @@ export async function captureInspirationImage(
 ): Promise<CaptureOutcome> {
     if (!isSafeRemoteUrl(url)) {
         return { url, error: 'URL is not a safe public address' }
+    }
+
+    // Tier 0 — remote browser screenshot of the live page. Massively more
+    // representative than og:image when og:image is just a logo card. Also
+    // returns programmatically-extracted palette + brand color we can hand to
+    // Gemini as ground truth instead of asking it to eyeball hex codes.
+    //
+    // Disabled via INSPIRATION_USE_REMOTE_SCREENSHOT=false for cost control or
+    // when the upstream is down. Falls through to the existing tiers on any
+    // failure so this never blocks the pipeline.
+    if (process.env.INSPIRATION_USE_REMOTE_SCREENSHOT !== 'false') {
+        try {
+            const { captureWithMicrolink } = await import('@/lib/inspiration/remote-capture')
+            const remote = await captureWithMicrolink(url)
+            if (remote) {
+                return {
+                    url,
+                    tier: 0,
+                    image: remote.image,
+                    sourceUrl: remote.sourceUrl,
+                    groundTruth: remote.groundTruth,
+                }
+            }
+        } catch (e) {
+            console.warn('[inspiration] remote screenshot failed, falling back:', e instanceof Error ? e.message : e)
+        }
     }
 
     // Try og:image / twitter:image first — almost always present on landing
