@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ user, grants: subs ?? [] })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[admin/grant-plan] error:', e)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
 
@@ -166,8 +166,8 @@ export async function POST(req: NextRequest) {
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[admin/grant-plan] error:', e)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
 
@@ -214,7 +214,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[admin/grant-plan] error:', e)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

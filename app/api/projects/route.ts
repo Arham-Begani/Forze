@@ -20,10 +20,10 @@ export async function GET() {
     return NextResponse.json(projects)
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    const message = e instanceof Error ? e.message : String(e)
-    const stack = e instanceof Error ? e.stack : undefined
+    // Log full detail server-side; never return stack traces or raw error
+    // messages to the client — they leak filesystem paths and internal schema.
     console.error(`[GET /api/projects] failed at step="${step}"`, e)
-    return NextResponse.json({ error: message, step, stack }, { status: 500 })
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
 
@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
     console.error('[POST /api/projects]', e)
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
