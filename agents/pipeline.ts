@@ -546,14 +546,39 @@ export async function runPipelineAgent(
     //      cascade through var(--insp-*) references instead of regenerating
     //      the whole component.
     let inspirationBlock: string | null = null
+    // Reference screenshot images of the inspiration page(s), attached as
+    // multimodal input to the Gemini call. The model sees the actual visual
+    // target alongside the text briefing — major accuracy jump.
+    const inspirationImages: Array<{ mimeType: string; data: string }> = []
     if (venture.context.inspirationTokens) {
         try {
             const tokens = DesignTokensSchema.parse(venture.context.inspirationTokens)
             const briefing = tokensToDesignBriefing(tokens)
             const digest = tokensToPromptDigest(tokens)
             const cssBlock = tokensToCssVarBlock(tokens)
+            // Pull persisted reference images. Capped at 2 in the apply route
+            // already; we double-check here in case the schema drifts.
+            const refImagesRaw = (venture.context as { inspirationReferenceImages?: unknown }).inspirationReferenceImages
+            if (Array.isArray(refImagesRaw)) {
+                for (const img of refImagesRaw.slice(0, 2)) {
+                    if (
+                        img && typeof img === 'object' &&
+                        typeof (img as { base64?: unknown }).base64 === 'string' &&
+                        typeof (img as { mimeType?: unknown }).mimeType === 'string'
+                    ) {
+                        inspirationImages.push({
+                            mimeType: (img as { mimeType: string }).mimeType,
+                            data: (img as { base64: string }).base64,
+                        })
+                    }
+                }
+            }
+            const hasImages = inspirationImages.length > 0
             inspirationBlock =
                 `## Inspiration Design Directive (HIGHEST PRIORITY — overrides branding palette)\n\n` +
+                (hasImages
+                    ? `**A screenshot of the inspiration page is attached to this message.** Look at it. Your generated landing page must visually echo what you see — the same gradient strategy, hero layout, density, type weight, button shape, and surface treatment. The text briefing below describes what's in the image; the image itself is the truth.\n\n`
+                    : '') +
                 `The founder pasted one or more inspiration URLs (e.g. Stripe, Vercel, Linear) and locked in these design choices. ` +
                 `For THIS landing page, the inspiration tokens AND aesthetic briefing below take precedence over the branding agent's color palette and any default styling instincts. ` +
                 `Match the inspiration's FEEL, not just its colors — that means surfaces, density, motion, gradients, and corner treatment all need to match the briefing.\n\n` +
@@ -565,7 +590,10 @@ export async function runPipelineAgent(
                 `- ALL background, text, border, and accent colors must reference the CSS vars above. No hardcoded hex outside the <style> block.\n` +
                 `- The "Aesthetic North Star" line above is the single sentence that should describe how this page feels — write code that earns it.\n` +
                 `- If the anti-patterns list above conflicts with your default landing-page instincts, the anti-patterns win.\n` +
-                `- Brand mood is "${tokens.brand.mood}" — every section's visual treatment must read as that mood. A "luxury-premium" mood should NOT have bouncy hover states. A "tech-dark" mood should NOT have light cream backgrounds. Be consistent.`
+                `- Brand mood is "${tokens.brand.mood}" — every section's visual treatment must read as that mood. A "luxury-premium" mood should NOT have bouncy hover states. A "tech-dark" mood should NOT have light cream backgrounds. Be consistent.` +
+                (hasImages
+                    ? `\n- **The attached screenshot is the visual target.** When the briefing and the screenshot conflict, the screenshot wins. Treat the briefing as your written instructions and the screenshot as your reference photo — you're building the landing page TO MATCH the screenshot.`
+                    : '')
             contextParts.push(inspirationBlock)
         } catch {
             // Bad shape on disk — ignore silently and fall back to branding-only.
@@ -648,7 +676,12 @@ Output the complete PipelineOutput JSON.`
                     fullText += chunk
                     await onStream(chunk)
                 },
-                history
+                history,
+                // Pass through the reference screenshot(s) so edit-mode also
+                // gets visual grounding — useful when the founder applies
+                // tokens after the landing was already generated and wants
+                // the next edit to actually adopt the inspiration's feel.
+                inspirationImages,
             )
 
             const rawPatch = extractJSON(fullText) as PipelineEditPatch
@@ -749,7 +782,10 @@ Output the complete PipelineOutput JSON.`
                 fullText += chunk
                 await onStream(chunk)
             },
-            history
+            history,
+            // Attach the inspiration screenshot(s) for multimodal grounding.
+            // The React generator targets the visual directly, not just text.
+            inspirationImages,
         )
 
         const raw = extractJSON(fullText) as PipelineOutput

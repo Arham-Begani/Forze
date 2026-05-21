@@ -113,21 +113,43 @@ async function emitBufferedChunks(
     }
 }
 
+// InlineImagePart — optional multimodal input attached to the user message.
+// Used by the landing-page pipeline to show the inspiration screenshot to
+// the React generator so it can target the actual visual, not just text.
+export interface InlineImagePart {
+    mimeType: string
+    data: string // base64 (no data: prefix)
+}
+
 async function streamGeminiPrompt(
     model: GenerativeModel,
     systemPrompt: string,
     userMessage: string,
     onChunk: (text: string) => Promise<void>,
-    history: Content[] = []
+    history: Content[] = [],
+    inlineImages: InlineImagePart[] = []
 ): Promise<string> {
     const chat = model.startChat({
         history,
         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
     })
 
+    // If inline images were attached, send them as a multi-part message so
+    // Gemini can attend over the image + text together. Otherwise keep the
+    // string path so every existing single-modality caller is byte-identical.
+    const messageInput =
+        inlineImages.length > 0
+            ? [
+                  ...inlineImages.map((img) => ({
+                      inlineData: { mimeType: img.mimeType, data: img.data },
+                  })),
+                  { text: userMessage },
+              ]
+            : userMessage
+
     let result
     try {
-        result = await chat.sendMessageStream(userMessage)
+        result = await chat.sendMessageStream(messageInput)
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         throw new Error(`Gemini API call failed: ${msg}`)
@@ -304,12 +326,19 @@ export function getProModelWithSearchAndThinking(_thinkingBudget: number = 12000
 
 // Streams a prompt to a model, calling onChunk for each text delta.
 // Returns the full accumulated text when done.
+//
+// `inlineImages` lets callers attach base64 images to the user message for
+// multimodal grounding (e.g. the landing-page pipeline showing the
+// inspiration screenshot alongside its text briefing). When the model is the
+// Grok search path, the images are dropped — Grok does not accept images,
+// and we'd rather degrade to text-only than silently fail.
 export async function streamPrompt(
     model: SearchCapableModel,
     systemPrompt: string,
     userMessage: string,
     onChunk: (text: string) => Promise<void>,
-    history: Content[] = []
+    history: Content[] = [],
+    inlineImages: InlineImagePart[] = []
 ): Promise<string> {
     if (isGrokResponsesModel(model)) {
         try {
@@ -324,11 +353,11 @@ export async function streamPrompt(
                 error instanceof Error ? error.message : String(error)
             )
 
-            return await streamGeminiPrompt(model.fallbackModel, systemPrompt, userMessage, onChunk, history)
+            return await streamGeminiPrompt(model.fallbackModel, systemPrompt, userMessage, onChunk, history, inlineImages)
         }
     }
 
-    return await streamGeminiPrompt(model, systemPrompt, userMessage, onChunk, history)
+    return await streamGeminiPrompt(model, systemPrompt, userMessage, onChunk, history, inlineImages)
 }
 
 // JSON extraction

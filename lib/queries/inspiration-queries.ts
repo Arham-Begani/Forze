@@ -259,11 +259,26 @@ export async function listInspirationAnalysesForVenture(
 // reads with admin writes turned out to silently no-op for venture_members
 // who weren't the original owner — RLS on ventures.select returned null and
 // the helper threw "Venture not found" before getting to the update.
+export interface InspirationReferenceImage {
+    // Base64-encoded screenshot of the inspiration page. Persisted on apply
+    // so the landing-page pipeline can attach it as multimodal input even if
+    // the source CDN URL has since expired. Capped at 2 images and ~500KB
+    // each in the apply route to keep the JSONB payload reasonable.
+    base64: string
+    mimeType: string
+    sourceUrl: string
+}
+
 export async function setVentureInspirationTokens(
     ventureId: string,
     _userId: string,
     tokens: DesignTokens | null,
-    options: { clearLanding?: boolean } = {},
+    options: {
+        clearLanding?: boolean
+        // When provided, also writes / clears inspirationReferenceImages on
+        // the venture context. Explicit null means "remove existing images".
+        referenceImages?: InspirationReferenceImage[] | null
+    } = {},
 ): Promise<void> {
     const admin = createAdminClient()
     const { data: venture, error: fetchError } = await admin
@@ -278,6 +293,16 @@ export async function setVentureInspirationTokens(
     const nextContext: Record<string, unknown> = {
         ...currentContext,
         inspirationTokens: tokens,
+    }
+
+    // Reference images flow alongside tokens but live under a separate key so
+    // the DesignTokens schema stays clean. Only the pipeline agent reads them.
+    if (options.referenceImages !== undefined) {
+        if (options.referenceImages === null) {
+            nextContext.inspirationReferenceImages = null
+        } else {
+            nextContext.inspirationReferenceImages = options.referenceImages
+        }
     }
 
     // When the founder explicitly applies (or re-applies) tokens, they want a

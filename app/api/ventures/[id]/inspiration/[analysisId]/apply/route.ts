@@ -7,11 +7,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import { getVentureAccess } from '@/lib/queries'
+import { isSafeRemoteUrl } from '@/lib/inspiration/screenshot'
 import {
     getInspirationAnalysis,
     setVentureInspirationTokens,
     updateInspirationAnalysis,
+    type InspirationReferenceImage,
 } from '@/lib/queries/inspiration-queries'
+
+// Download the inspiration screenshot CDN URLs the analyze route captured,
+// base64-encode the first two (we don't need every URL — the pipeline agent
+// is most accurate with one reference image, two for multi-source ventures),
+// and return them ready to persist on venture.context. Best-effort: any
+// download failure silently drops that image rather than blocking apply.
+const MAX_PERSIST_IMAGES = 2
+const MAX_IMAGE_BYTES = 600_000 // ~600 KB per image — JSONB-friendly
+
+async function downloadReferenceImages(
+    sourceUrls: string[],
+): Promise<InspirationReferenceImage[]> {
+    const results: InspirationReferenceImage[] = []
+    for (const url of sourceUrls.slice(0, MAX_PERSIST_IMAGES)) {
+        if (!url || !isSafeRemoteUrl(url)) continue
+        try {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 10_000)
+            const res = await fetch(url, { signal: controller.signal })
+            clearTimeout(timer)
+            if (!res.ok) continue
+            const contentType = res.headers.get('content-type') ?? ''
+            if (!contentType.startsWith('image/')) continue
+            const buf = Buffer.from(await res.arrayBuffer())
+            if (buf.byteLength === 0 || buf.byteLength > MAX_IMAGE_BYTES) continue
+            results.push({
+                base64: buf.toString('base64'),
+                mimeType: contentType,
+                sourceUrl: url,
+            })
+        } catch {
+            // Best-effort — a failure here doesn't block the apply, the
+            // pipeline just runs text-only briefing instead of multimodal.
+        }
+    }
+    return results
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -42,10 +81,25 @@ export async function POST(
             )
         }
 
+        // Pull the captured screenshot URLs out of the analysis row's
+        // capture_metadata and download the first 1-2. Persisting the bytes
+        // alongside the tokens means the landing-page pipeline can attach the
+        // actual page render as multimodal input to its Gemini call, not just
+        // a text briefing. This is the biggest accuracy upgrade — the React
+        // generator can target the actual visual, not its category.
+        const captureMeta = (row.capture_metadata ?? {}) as { perUrl?: Array<{ sourceUrl?: string }> }
+        const sourceUrls = (captureMeta.perUrl ?? [])
+            .map((entry) => entry?.sourceUrl)
+            .filter((u): u is string => typeof u === 'string' && u.length > 0)
+        const referenceImages = await downloadReferenceImages(sourceUrls)
+
         // clearLanding=true forces the next /run landing call into a fresh
         // generation that actually consumes the inspiration briefing instead
         // of running surgical edit mode against the previous component.
-        await setVentureInspirationTokens(ventureId, session.userId, row.tokens, { clearLanding: true })
+        await setVentureInspirationTokens(ventureId, session.userId, row.tokens, {
+            clearLanding: true,
+            referenceImages,
+        })
         await updateInspirationAnalysis(analysisId, session.userId, {
             applied_at: new Date().toISOString(),
         })
@@ -82,8 +136,9 @@ export async function DELETE(
 
         // Clearing inspirationTokens is what "unapply" means — the pipeline
         // agent's tokens-aware branch checks for presence on the venture
-        // context object.
-        await setVentureInspirationTokens(ventureId, session.userId, null)
+        // context object. Also drop the reference images so the next landing
+        // run doesn't attach a stale screenshot to its Gemini call.
+        await setVentureInspirationTokens(ventureId, session.userId, null, { referenceImages: null })
         await updateInspirationAnalysis(analysisId, session.userId, { applied_at: null })
 
         return NextResponse.json({ ok: true })
