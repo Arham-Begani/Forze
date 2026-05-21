@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { resolveLandingComponent } from "@/lib/landing-page";
+import { resolveLandingComponent, LANDING_RUNTIME_SHIM } from "@/lib/landing-page";
 
 export default function SubdomainPreviewPage() {
   const { subdomain } = useParams();
@@ -221,6 +221,7 @@ function buildHtmlDocument(
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+  ${LANDING_RUNTIME_SHIM}
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -253,7 +254,7 @@ function buildHtmlDocument(
     })();
   <\/script>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback, useMemo, useReducer, useLayoutEffect, useId, useTransition, useDeferredValue, Fragment, Children, cloneElement, createContext, useContext, forwardRef, memo } = React;
     const __VENTURE_ID__ = window.__VENTURE_ID__;
 
     ${componentCode
@@ -270,7 +271,9 @@ function buildHtmlDocument(
             ? Page
             : () => React.createElement('div', {style:{padding:40,textAlign:'center'}}, 'Component not found');
 
-    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+    const __Boundary__ = (typeof window !== 'undefined' && typeof window.__ForzeErrorBoundary__ === 'function') ? window.__ForzeErrorBoundary__ : null;
+    const __rootElement__ = __Boundary__ ? React.createElement(__Boundary__, null, React.createElement(App)) : React.createElement(App);
+    ReactDOM.createRoot(document.getElementById('root')).render(__rootElement__);
   <\/script>
 </body>
 </html>`;
