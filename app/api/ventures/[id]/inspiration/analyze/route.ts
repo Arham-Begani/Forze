@@ -18,6 +18,7 @@ import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import { getVentureAccess, getVenture } from '@/lib/queries'
 import { InspirationAnalyzeInputSchema } from '@/lib/schemas/inspiration'
 import { captureInspirationImage, isCaptureSuccess } from '@/lib/inspiration/screenshot'
+import { scrapeHtmlTokens } from '@/lib/inspiration/html-scrape'
 import { analyzeImageWithGemini } from '@/lib/inspiration/vision'
 import { mergeTokens } from '@/lib/inspiration/tokens'
 import { validateAccessibility } from '@/lib/inspiration/accessibility'
@@ -114,10 +115,35 @@ export async function POST(
 
         try {
             // Capture all URLs in parallel — most are fetch-bound and the
-            // wall-clock improvement is significant.
-            const captures = await Promise.all(
-                urls.map((url) => captureInspirationImage(url, { uploadedImage })),
-            )
+            // wall-clock improvement is significant. We also scrape the live
+            // HTML of each URL in parallel so vision gets real font names +
+            // CSS variables as ground truth alongside the screenshot.
+            const [captures, scrapes] = await Promise.all([
+                Promise.all(urls.map((url) => captureInspirationImage(url, { uploadedImage }))),
+                Promise.all(urls.map((url) => scrapeHtmlTokens(url).catch(() => null))),
+            ])
+
+            // Fold each URL's scrape result into its capture so the vision
+            // pass sees fonts/css-vars/inline colours as part of groundTruth.
+            // Tier 0 captures already carry Microlink palette + brand/bg —
+            // the scrape is purely additive: never overwrites Tier 0 values.
+            for (let i = 0; i < captures.length; i++) {
+                const cap = captures[i]
+                if (!isCaptureSuccess(cap)) continue
+                const sc = scrapes[i]
+                if (!sc) continue
+                cap.groundTruth = {
+                    ...(cap.groundTruth ?? {}),
+                    fontHeading: cap.groundTruth?.fontHeading ?? sc.fonts.heading,
+                    fontBody: cap.groundTruth?.fontBody ?? sc.fonts.body,
+                    fontMono: cap.groundTruth?.fontMono ?? sc.fonts.mono,
+                    allFontFamilies: cap.groundTruth?.allFontFamilies ?? sc.fonts.allFamilies,
+                    cssVariables: cap.groundTruth?.cssVariables ?? sc.cssVariables,
+                    inlineColors: cap.groundTruth?.inlineColors ?? sc.inlineColors,
+                    title: cap.groundTruth?.title ?? sc.title,
+                    description: cap.groundTruth?.description ?? sc.description,
+                }
+            }
 
             const successes = captures.filter(isCaptureSuccess)
             if (successes.length === 0) {

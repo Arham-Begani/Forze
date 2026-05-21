@@ -42,6 +42,15 @@ export interface CaptureResult {
         title?: string
         description?: string
         publisher?: string
+        // ── HTML/CSS scrape results (populated by lib/inspiration/html-scrape) ──
+        // These are POPULATED INDEPENDENTLY from Microlink — even Tier 1+
+        // captures can carry scrape data if the analyze route ran the scraper.
+        fontHeading?: string
+        fontBody?: string
+        fontMono?: string
+        allFontFamilies?: string[]
+        cssVariables?: Record<string, string>
+        inlineColors?: string[]
     }
 }
 

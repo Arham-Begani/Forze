@@ -173,7 +173,19 @@ function buildContextPreamble(ctx: PassContext | undefined): string {
 // the image — but the core palette comes from real pixel sampling, not vision.
 function buildGroundTruthBlock(capture: CaptureResult): string {
     if (!capture.groundTruth) return ''
-    const { palette, brandColor, backgroundColor, title, publisher } = capture.groundTruth
+    const {
+        palette,
+        brandColor,
+        backgroundColor,
+        title,
+        publisher,
+        fontHeading,
+        fontBody,
+        fontMono,
+        allFontFamilies,
+        cssVariables,
+        inlineColors,
+    } = capture.groundTruth
     const lines: string[] = ['', '### Ground-truth values extracted from the live page (NOT estimates — use these EXACTLY)']
     if (brandColor) {
         lines.push(`- BRAND COLOR (use as colors.primary.hex with confidence ≥ 95): ${brandColor.toLowerCase()}`)
@@ -188,12 +200,46 @@ function buildGroundTruthBlock(capture: CaptureResult): string {
                 .join(', ')}`,
         )
     }
+    if (fontHeading || fontBody || fontMono) {
+        lines.push(
+            `- REAL FONTS detected from <link>/@font-face/preload tags (use these literally, do not substitute Inter unless detected):`,
+        )
+        if (fontHeading) lines.push(`    • Heading: "${fontHeading}" → typography.headingFamily must start with this name`)
+        if (fontBody) lines.push(`    • Body: "${fontBody}" → typography.bodyFamily must start with this name`)
+        if (fontMono) lines.push(`    • Monospace (use for code/labels): "${fontMono}"`)
+    }
+    if (allFontFamilies && allFontFamilies.length > 0) {
+        lines.push(`- All font families detected on the page: ${allFontFamilies.join(', ')}`)
+    }
+    if (cssVariables && Object.keys(cssVariables).length > 0) {
+        // Pick the most useful slice for the prompt — primary/accent/brand
+        // colour variables and radius / spacing variables.
+        const interesting: Array<[string, string]> = Object.entries(cssVariables).filter(
+            ([k]) =>
+                /(color|bg|background|fg|foreground|brand|primary|accent|secondary|text|surface|radius|rounded|space|spacing|padding|gap|font)/i.test(
+                    k,
+                ),
+        )
+        if (interesting.length > 0) {
+            lines.push(`- Real CSS variables defined in :root (USE THESE VALUES — they're authoritative for the slots they name):`)
+            for (const [k, v] of interesting.slice(0, 14)) {
+                lines.push(`    • --${k}: ${v}`)
+            }
+        }
+    }
+    if (inlineColors && inlineColors.length > 0) {
+        lines.push(
+            `- Inline hex colours referenced in style="" attributes (supplementary evidence): ${inlineColors
+                .slice(0, 6)
+                .join(', ')}`,
+        )
+    }
     if (title || publisher) {
         lines.push(`- Page identity (helpful for tone, not tokens): ${[publisher, title].filter(Boolean).join(' — ')}`)
     }
     lines.push(
         '',
-        'These values are programmatically extracted from the live page render. Hex codes above OVERRIDE any color you would visually guess from the image — do not "improve" them.',
+        'These values are programmatically extracted from the live page (Vibrant palette + Microlink screenshot + HTML/CSS scrape). They OVERRIDE anything you would visually guess from the image.',
         'Confidence for colors.primary, colors.background, colors.secondary, colors.accent MUST be 95+ when populated from the ground-truth list. Only drop below 95 for slots you derive yourself (neutrals, text, surface).',
     )
     return lines.join('\n')
@@ -257,6 +303,75 @@ export async function analyzeImageWithGemini(
         // the model can never override Vibrant on the colors we measured.
         if (capture.groundTruth) {
             const gt = capture.groundTruth
+
+            // Font clamps. The detected family wins absolutely — Gemini
+            // hallucinates "Inter" on every other site without this guard.
+            if (gt.fontHeading) {
+                const existing = tokens.typography.headingFamily ?? ''
+                if (!existing.toLowerCase().includes(gt.fontHeading.toLowerCase())) {
+                    tokens = {
+                        ...tokens,
+                        typography: {
+                            ...tokens.typography,
+                            headingFamily: `"${gt.fontHeading}", ${existing || 'system-ui, sans-serif'}`,
+                        },
+                    }
+                }
+            }
+            if (gt.fontBody) {
+                const existing = tokens.typography.bodyFamily ?? ''
+                if (!existing.toLowerCase().includes(gt.fontBody.toLowerCase())) {
+                    tokens = {
+                        ...tokens,
+                        typography: {
+                            ...tokens.typography,
+                            bodyFamily: `"${gt.fontBody}", ${existing || 'system-ui, sans-serif'}`,
+                        },
+                    }
+                }
+            }
+
+            // CSS variable clamps for the most authoritative slots.
+            const css = gt.cssVariables ?? {}
+            const pickHex = (...keys: string[]): string | undefined => {
+                for (const k of keys) {
+                    const v = css[k]
+                    if (v && /^#[0-9a-f]{6}$/i.test(v.trim())) return v.trim().toLowerCase()
+                }
+                return undefined
+            }
+            const cssPrimary = pickHex('primary', 'color-primary', 'brand', 'brand-primary', 'colour-primary')
+            const cssAccent = pickHex('accent', 'color-accent', 'highlight')
+            if (cssPrimary && !gt.brandColor) {
+                tokens = {
+                    ...tokens,
+                    colors: {
+                        ...tokens.colors,
+                        primary: { hex: cssPrimary, confidence: 97, source: 'ground-truth-css-var' },
+                    },
+                }
+            }
+            if (cssAccent) {
+                tokens = {
+                    ...tokens,
+                    colors: {
+                        ...tokens.colors,
+                        accent: { hex: cssAccent, confidence: 95, source: 'ground-truth-css-var' },
+                    },
+                }
+            }
+            const cssRadius = css['radius'] ?? css['border-radius'] ?? css['rounded-md']
+            if (cssRadius) {
+                tokens = {
+                    ...tokens,
+                    components: {
+                        ...tokens.components,
+                        button: { ...tokens.components.button, radius: { value: cssRadius, confidence: 95 } },
+                        card: { ...tokens.components.card, radius: { value: cssRadius, confidence: 95 } },
+                    },
+                }
+            }
+
             if (gt.brandColor && /^#[0-9a-f]{6}$/i.test(gt.brandColor)) {
                 tokens = {
                     ...tokens,
