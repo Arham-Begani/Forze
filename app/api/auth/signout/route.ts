@@ -8,12 +8,13 @@ export async function POST() {
     const { error } = await supabase.auth.signOut()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error('[POST /api/auth/signout] sign-out failed:', error)
+      return NextResponse.json({ error: 'Sign-out failed' }, { status: 400 })
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[POST /api/auth/signout] error:', error)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
