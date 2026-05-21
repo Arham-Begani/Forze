@@ -31,6 +31,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
        return NextResponse.json({ error: 'Invite expired' }, { status: 400 })
     }
 
+    // Verify the invite was issued for the logged-in account. Without this
+    // check a leaked invite token could be used by any signed-in user to gain
+    // access to a venture that wasn't theirs.
+    const sessionEmail = (session.email ?? '').trim().toLowerCase()
+    const inviteEmail = String(invite.email ?? '').trim().toLowerCase()
+    if (!sessionEmail || !inviteEmail || sessionEmail !== inviteEmail) {
+      return NextResponse.json(
+        { error: 'This invite was sent to a different email address. Sign in with the invited account.' },
+        { status: 403 }
+      )
+    }
+
     // 2. Add User to Venture
     const { error: memberError } = await db
       .from('venture_members')
