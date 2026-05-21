@@ -131,8 +131,8 @@ export async function POST(
       sentCount,
       ...(errors.length > 0 ? { errors: errors.slice(0, 20) } : {}),
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error dispatching outreach:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to dispatch outreach' }, { status: 500 })
   }
 }

@@ -51,9 +51,8 @@ export async function POST(
 
     return NextResponse.json({ success: true, testimonial }, { headers: corsHeaders })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to submit feedback'
     console.error('[POST /api/ventures/[id]/feedback] error:', error)
-    return NextResponse.json({ error: message }, { status: 500, headers: corsHeaders })
+    return NextResponse.json({ error: 'Failed to submit feedback' }, { status: 500, headers: corsHeaders })
   }
 }
 

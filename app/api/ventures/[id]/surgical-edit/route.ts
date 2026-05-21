@@ -40,8 +40,8 @@ export async function PATCH(
 
     return NextResponse.json({ result: updatedResult })
   } catch (e) {
-    if (isAuthError(e)) return (e as any).toResponse()
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    if (isAuthError(e)) return (e as { toResponse: () => NextResponse }).toResponse()
+    console.error('[PATCH surgical-edit] error:', e)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
