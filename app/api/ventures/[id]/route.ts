@@ -2,6 +2,7 @@
 import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import {
     getVenture,
+    getVentureAccess,
     updateVentureName,
     deleteVenture,
     getConversationsByModule,
@@ -61,6 +62,13 @@ export async function PATCH(
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
+        // Only owners and admins can rename a venture — viewers and editors
+        // can read it but must not be able to mutate the top-level identity.
+        const role = await getVentureAccess(id, session.userId)
+        if (role !== 'owner' && role !== 'admin') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
         const { name } = await request.json()
         const result = z.string().min(1).max(100).safeParse(name)
         if (!result.success) {
@@ -85,6 +93,12 @@ export async function DELETE(
         const venture = await getVenture(id, session.userId)
         if (!venture) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
+
+        // Deleting a venture is irreversible — restrict to owners only.
+        const role = await getVentureAccess(id, session.userId)
+        if (role !== 'owner') {
+            return NextResponse.json({ error: 'Only the venture owner can delete it.' }, { status: 403 })
         }
 
         await deleteVenture(id)
