@@ -24,6 +24,7 @@ import { runGenesisAgent } from '@/agents/genesis'
 import { runIdentityAgent } from '@/agents/identity'
 import { runContentAgent } from '@/agents/content'
 import { runPipelineAgent } from '@/agents/pipeline'
+import { listLandingAssets } from '@/lib/queries/landing-asset-queries'
 import { runFeasibilityAgent } from '@/agents/feasibility'
 import { runFullLaunch } from '@/agents/orchestrator'
 import { runGeneralAgent } from '@/agents/general'
@@ -124,6 +125,21 @@ async function runAgent(
         name: isContinuation ? `${venture.name} (Continuing...)` : `${venture.name}: ${prompt}${decisionsContext}`,
         globalIdea,
         context: venture.context as unknown as Record<string, unknown>,
+    }
+
+    // Surface user-uploaded landing-page imagery to the Pipeline agent (it
+    // also runs inside Full Launch). The pipeline reads this from
+    // venture.context.landingAssets and threads asset URLs into the
+    // generated component instead of hallucinating stock photo URLs.
+    if (moduleId === 'landing' || moduleId === 'full-launch') {
+        try {
+            const landingAssets = await listLandingAssets(ventureId)
+            if (landingAssets.length > 0) {
+                (ventureInput.context as Record<string, unknown>).landingAssets = landingAssets
+            }
+        } catch (err) {
+            console.warn('[run] failed to load landing assets', err)
+        }
     }
 
     let buffer = ''
