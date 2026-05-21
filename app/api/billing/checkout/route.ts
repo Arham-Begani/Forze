@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
     if (e instanceof BillingError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: e.status })
     }
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[POST /api/billing/checkout] error:', e)
+    return NextResponse.json({ error: 'Checkout failed' }, { status: 500 })
   }
 }

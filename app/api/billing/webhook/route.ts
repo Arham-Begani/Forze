@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Internal error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[POST /api/billing/webhook] error:', e)
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 }
