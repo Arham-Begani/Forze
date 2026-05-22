@@ -7,19 +7,47 @@ import { BILLING_PLANS, type PlanSlug } from '@/lib/billing'
 const PLAN_ORDER: PlanSlug[] = ['free', 'starter', 'builder', 'pro', 'studio']
 
 const PLAN_DESCRIPTIONS: Record<PlanSlug, string> = {
-  free: 'Pressure-test one venture with the full stack.',
+  free: 'Pressure-test one venture with the validation stack.',
   starter: 'Rerun research and feasibility with more room to iterate.',
-  builder: 'Validate multiple ventures and refine the strongest one.',
-  pro: 'Run serious founder diligence with enough credits for repetition.',
-  studio: 'Portfolio-level validation for teams and venture studios.',
+  builder: 'Outreach, CRM, and Inspiration unlock — go from idea to launched venture.',
+  pro: 'Founder diligence at full tempo with rerun-heavy quotas.',
+  studio: 'Portfolio-level operations for teams and venture studios.',
 }
 
 const PLAN_HIGHLIGHTS: Record<PlanSlug, string[]> = {
-  free: ['1 validation workspace', '25 credits / month', 'All modules included', 'Community support'],
-  starter: ['2 ventures', '40 credits / month', 'More research + feasibility reruns', 'Email support'],
-  builder: ['5 ventures', '120 credits / month', 'Full validation and launch coverage', 'Priority support'],
-  pro: ['15 ventures', '400 credits / month', 'Investor kit and rerun-heavy workflows', 'Dedicated support'],
-  studio: ['Unlimited ventures', '1,500 credits / month', 'Portfolio-wide validation ops', 'White-glove support'],
+  free: [
+    '1 validation workspace',
+    '10 credits / week',
+    'Validation modules only',
+    'Community support',
+  ],
+  starter: [
+    '2 ventures',
+    '20 credits / week',
+    'Validation modules only',
+    'Email support',
+  ],
+  builder: [
+    '5 ventures',
+    '60 credits / week',
+    'Outreach, CRM, Inspiration unlocked',
+    '3 campaign sends / week · 50 CRM emails / week',
+    'Priority support',
+  ],
+  pro: [
+    '15 ventures',
+    '300 credits / week',
+    'Outreach, CRM, Inspiration unlocked',
+    '15 campaign sends / week · 250 CRM emails / week',
+    'Dedicated support',
+  ],
+  studio: [
+    'Unlimited ventures',
+    '600 credits / week',
+    'Outreach, CRM, Inspiration unlocked',
+    'Unlimited campaign + CRM sends',
+    'White-glove support',
+  ],
 }
 
 export function PricingSection() {
@@ -55,8 +83,8 @@ export function PricingSection() {
           <h2 style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, color: 'var(--text)', margin: '0 0 16px', letterSpacing: '-0.02em' }}>
             Pricing for validation velocity
           </h2>
-          <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '17px', color: 'var(--text-soft)', maxWidth: '400px', margin: '0 auto 28px', lineHeight: 1.6 }}>
-            Start with one venture, then scale when you need more reruns, more ideas, and more investor prep.
+          <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '17px', color: 'var(--text-soft)', maxWidth: '460px', margin: '0 auto 28px', lineHeight: 1.6 }}>
+            Credits refresh every Monday 00:00 IST. Outreach, CRM, and Inspiration unlock on Builder and up. Top-ups never expire.
           </p>
 
           {/* Billing toggle */}
