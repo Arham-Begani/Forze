@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
 import { listMarketingAssetsByVenture } from '@/lib/marketing-queries'
 import { aggregateCrmInbox, type CrmInboxItem } from '../inbox/route'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 export type CrmLead = {
   id: string
@@ -63,6 +64,8 @@ export async function GET(
   try {
     const { id } = await params
     const { session } = await requireMarketingVenture(id)
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
     const assets = await listMarketingAssetsByVenture(id, session.userId)
     const leads = aggregateLeads(aggregateCrmInbox(assets))
     return NextResponse.json({ leads })

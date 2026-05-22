@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, isAuthError } from '@/lib/auth'
 import { UpdateCampaignSchema } from '@/lib/schemas/campaign'
 import { getCampaignForUser, updateCampaign, deleteCampaign, getCampaignMetrics } from '@/lib/queries/campaign-queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -14,6 +15,8 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const { id } = await params
 
     const campaign = await getCampaignForUser(id, session.userId)
@@ -34,6 +37,8 @@ export async function PATCH(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const { id } = await params
 
     const existing = await getCampaignForUser(id, session.userId)
@@ -60,6 +65,8 @@ export async function DELETE(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const { id } = await params
 
     const existing = await getCampaignForUser(id, session.userId)

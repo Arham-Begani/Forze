@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { listMarketingAssetsByVenture, getSocialConnectionSecretByProvider } from '@/lib/marketing-queries'
 import { fetchInstagramPostInsights, type InstagramPostInsights } from '@/lib/instagram-insights'
 import type { MarketingAsset } from '@/lib/marketing.shared'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 type SocialPlatform = 'Twitter (X)' | 'LinkedIn' | 'Instagram'
 
@@ -54,6 +55,9 @@ export async function GET(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
 
     const ventureId = (await params).id
     const venture = await getVenture(ventureId, session.userId)

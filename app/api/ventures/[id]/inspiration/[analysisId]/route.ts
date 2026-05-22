@@ -19,6 +19,7 @@ import {
     getInspirationAnalysis,
     updateInspirationAnalysis,
 } from '@/lib/queries/inspiration-queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -39,6 +40,9 @@ export async function GET(
         if (!UUID_RE.test(ventureId) || !UUID_RE.test(analysisId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const access = await authorizeVentureAccess(ventureId, session.userId, false)
         if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: access.status })
@@ -96,6 +100,9 @@ export async function PATCH(
         if (!UUID_RE.test(ventureId) || !UUID_RE.test(analysisId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const access = await authorizeVentureAccess(ventureId, session.userId, true)
         if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: access.status })
@@ -211,6 +218,9 @@ export async function DELETE(
         if (!UUID_RE.test(ventureId) || !UUID_RE.test(analysisId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const access = await authorizeVentureAccess(ventureId, session.userId, true)
         if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: access.status })

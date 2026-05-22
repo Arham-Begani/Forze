@@ -10,6 +10,7 @@ import {
     checkInspirationRateLimit,
     listInspirationAnalysesForVenture,
 } from '@/lib/queries/inspiration-queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -23,6 +24,9 @@ export async function GET(
         if (!UUID_RE.test(ventureId)) {
             return NextResponse.json({ error: 'Invalid ventureId' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const role = await getVentureAccess(ventureId, session.userId)
         if (!role) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

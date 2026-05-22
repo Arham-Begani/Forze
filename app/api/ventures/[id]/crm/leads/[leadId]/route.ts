@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSession } from '@/lib/auth'
 import { deleteLead, getLeadById, getVenture, updateLeadStatus } from '@/lib/queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 const UpdateLeadSchema = z.object({
   status: z.enum(['new', 'contacted', 'qualified', 'lost', 'won']),
@@ -24,6 +25,9 @@ export async function PATCH(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
 
     const { id, leadId } = await params
     const input = UpdateLeadSchema.safeParse(await request.json())
@@ -50,6 +54,9 @@ export async function DELETE(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
 
     const { id, leadId } = await params
     const lead = await authorizeLead(id, leadId, session.userId)

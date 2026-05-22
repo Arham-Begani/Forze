@@ -20,6 +20,7 @@ import {
 import { validateAccessibility } from '@/lib/inspiration/accessibility'
 import { suggestRefinement } from '@/lib/inspiration/refine'
 import { getInspirationAnalysis } from '@/lib/queries/inspiration-queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -33,6 +34,9 @@ export async function POST(
         if (!UUID_RE.test(ventureId) || !UUID_RE.test(analysisId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const role = await getVentureAccess(ventureId, session.userId)
         if (!role || role === 'viewer') {

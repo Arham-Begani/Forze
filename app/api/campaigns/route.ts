@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { CreateCampaignSchema } from '@/lib/schemas/campaign'
 import { createCampaign, listVentureCampaigns } from '@/lib/queries/campaign-queries'
 import { getVenture } from '@/lib/queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 const ListQuerySchema = z.object({
   venture_id: z.string().uuid().optional(),
@@ -14,6 +15,8 @@ const ListQuerySchema = z.object({
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const { searchParams } = req.nextUrl
     const query = ListQuerySchema.safeParse({ venture_id: searchParams.get('venture_id') ?? undefined })
 
@@ -43,6 +46,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const body = await req.json()
     const input = CreateCampaignSchema.safeParse(body)
 

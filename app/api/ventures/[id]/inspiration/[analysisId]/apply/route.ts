@@ -14,6 +14,7 @@ import {
     updateInspirationAnalysis,
     type InspirationReferenceImage,
 } from '@/lib/queries/inspiration-queries'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 // Download the inspiration screenshot CDN URLs the analyze route captured,
 // base64-encode the first two (we don't need every URL — the pipeline agent
@@ -64,6 +65,9 @@ export async function POST(
         if (!UUID_RE.test(ventureId) || !UUID_RE.test(analysisId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const role = await getVentureAccess(ventureId, session.userId)
         if (!role || role === 'viewer') {
@@ -123,6 +127,9 @@ export async function DELETE(
         if (!UUID_RE.test(ventureId) || !UUID_RE.test(analysisId)) {
             return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
         }
+
+        const gate = await gateFeatureForResponse(session.userId, 'inspiration')
+        if (!gate.ok) return gate.response
 
         const role = await getVentureAccess(ventureId, session.userId)
         if (!role || role === 'viewer') {

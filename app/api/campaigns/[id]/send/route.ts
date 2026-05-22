@@ -18,6 +18,7 @@ import { addTrackingPixel, rewriteLinksForTracking, injectUnsubscribeFooter, wra
 import { signTrackingToken } from '@/lib/tracking-hmac'
 import { enforceRateLimit, SEND_LIMIT, SEND_WINDOW_SEC } from '@/lib/rate-limit'
 import { getGmailStatus } from '@/lib/gmail-oauth'
+import { gateActionForResponse, gateFeatureForResponse } from '@/lib/billing-http'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -31,6 +32,11 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    // One 'campaign_send' counts per invocation (not per recipient) — matches
+    // the user-visible 'campaign sends / week' ceiling on the pricing page.
+    const actionGate = await gateActionForResponse(session.userId, 'campaign_send')
+    if (!actionGate.ok) return actionGate.response
+
     const { id } = await params
 
     const rl = await enforceRateLimit(session.userId, 'campaign:send', SEND_WINDOW_SEC, SEND_LIMIT)

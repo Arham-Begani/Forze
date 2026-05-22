@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getVenture } from '@/lib/queries'
 import { fetchCrmGmailReplies } from '@/lib/gmail-replies'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 export async function GET(
   _request: NextRequest,
@@ -10,6 +11,9 @@ export async function GET(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
 
     const { id } = await params
     const venture = await getVenture(id, session.userId)

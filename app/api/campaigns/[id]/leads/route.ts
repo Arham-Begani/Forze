@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { UploadLeadsSchema } from '@/lib/schemas/campaign'
 import { getCampaignForUser, createCampaignLeads, getCampaignLeads, getLeadEmailsForCampaign } from '@/lib/queries/campaign-queries'
 import { validateEmail, normalizeEmail } from '@/lib/email-utils'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -14,6 +15,8 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const { id } = await params
 
     const campaign = await getCampaignForUser(id, session.userId)
@@ -38,6 +41,8 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
+    const gate = await gateFeatureForResponse(session.userId, 'outreach')
+    if (!gate.ok) return gate.response
     const { id } = await params
 
     const campaign = await getCampaignForUser(id, session.userId)

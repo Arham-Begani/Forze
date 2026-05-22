@@ -5,6 +5,7 @@ import { getLeadsForVenture, getVenture } from '@/lib/queries'
 import { listMarketingAssetsByVenture } from '@/lib/marketing-queries'
 import { aggregateCrmInbox } from '../../inbox/route'
 import { aggregateLeads } from '../route'
+import { gateFeatureForResponse } from '@/lib/billing-http'
 
 const ExportQuerySchema = z.object({
   type: z.enum(['email', 'social']).default('email'),
@@ -26,6 +27,9 @@ export async function GET(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
 
     const { id } = await params
     const venture = await getVenture(id, session.userId)

@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries'
 import { getGmailStatus } from '@/lib/gmail-oauth'
 import { sendEmailViaGmail } from '@/lib/gmail-sender'
+import { gateActionForResponse, gateFeatureForResponse } from '@/lib/billing-http'
 
 const DispatchSchema = z.object({
   campaignType: z.enum(['initial_outreach', 'follow_up', 'newsletter']),
@@ -38,6 +39,11 @@ export async function POST(
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Feature gate (Builder+). The per-action weekly counter is incremented
+    // once per recipient inside the send loop below.
+    const gate = await gateFeatureForResponse(session.userId, 'crm')
+    if (!gate.ok) return gate.response
 
     const ventureId = (await params).id
     const venture = await getVenture(ventureId, session.userId)
@@ -84,6 +90,14 @@ export async function POST(
 
     for (const lead of targetLeads) {
       if (lead.email) {
+        // Per-send weekly cap. The gate throws 429 on the first lead that
+        // would exceed the plan's crmEmailsSent limit; everyone already sent
+        // is preserved, the response captures sentCount + remaining errors.
+        const actionGate = await gateActionForResponse(session.userId, 'crm_email_send')
+        if (!actionGate.ok) {
+          errors.push(`Weekly CRM email limit reached — stopped at ${sentCount} sent`)
+          break
+        }
         try {
           const result = await sendEmailViaGmail(session.userId, {
             to: lead.email,

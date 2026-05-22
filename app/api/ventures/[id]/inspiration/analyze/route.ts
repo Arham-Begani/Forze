@@ -35,6 +35,7 @@ import {
     incrementInspirationRateLimit,
     updateInspirationAnalysis,
 } from '@/lib/queries/inspiration-queries'
+import { gateActionForResponse } from '@/lib/billing-http'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -48,6 +49,12 @@ export async function POST(
         if (!UUID_RE.test(ventureId)) {
             return NextResponse.json({ error: 'Invalid ventureId' }, { status: 400 })
         }
+
+        // Plan-gate + per-week ceiling combined. Throws 403 'feature_not_in_plan'
+        // for free/starter; throws 429 'weekly_action_limit_reached' for builder+
+        // who've used their weekly inspiration analyses allotment.
+        const actionGate = await gateActionForResponse(session.userId, 'inspiration_analyze')
+        if (!actionGate.ok) return actionGate.response
 
         // Editors and above can run inspiration analyses; viewers cannot.
         const role = await getVentureAccess(ventureId, session.userId)
