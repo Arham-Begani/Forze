@@ -3,15 +3,32 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import {
+  ALL_FEATURES,
   BILLING_PLANS,
+  FEATURE_LABELS,
   PLAN_SEQUENCE,
   TOPUP_PRODUCTS,
   TOPUP_SEQUENCE,
+  UNLIMITED_BILLING_VENTURE_LIMIT,
+  UNLIMITED_WEEKLY_ACTION_LIMIT,
   type BillingPeriod,
+  type FeatureId,
   type PlanSlug,
   type TopupSlug,
 } from '@/lib/billing'
 import { openRazorpayCheckout } from '@/lib/client-razorpay'
+
+interface WeeklyActionLimits {
+  inspirationAnalyses: number
+  crmEmailsSent: number
+  campaignsSent: number
+}
+
+interface WeeklyActionUsage {
+  inspirationAnalyses: number
+  crmEmailsSent: number
+  campaignsSent: number
+}
 
 interface BillingSnapshot {
   planSlug: PlanSlug
@@ -20,8 +37,14 @@ interface BillingSnapshot {
   subscriptionStatus: string
   creditsRemaining: number
   allowedModules: string[]
+  allowedFeatures: FeatureId[]
   ventureLimit: number
   monthlyCredits: number
+  weeklyCredits: number
+  weeklyActionLimits: WeeklyActionLimits
+  weeklyActionUsage: WeeklyActionUsage
+  weeklyPeriodStart: string
+  weeklyPeriodEnd: string
   activeVentureCount: number
   canCreateVenture: boolean
   nextRenewalAt: string | null
@@ -191,6 +214,16 @@ export function BillingPanel() {
   const nextRenewalLabel = billing?.nextRenewalAt
     ? new Date(billing.nextRenewalAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     : null
+  const nextWeeklyResetLabel = billing?.weeklyPeriodEnd
+    ? new Date(billing.weeklyPeriodEnd).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null
 
   const paymentSummary = useMemo(() => billing?.payments.slice(0, 5) ?? [], [billing])
 
@@ -227,29 +260,50 @@ export function BillingPanel() {
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
                 Owner override is active. Billing gates and usage debits are bypassed on the server.
               </div>
-            ) : nextRenewalLabel ? (
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-                Renews on {nextRenewalLabel}
-                {billing?.cancelAtPeriodEnd ? ' • canceling at period end' : ''}
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, display: 'grid', gap: 4 }}>
+                {nextWeeklyResetLabel && (
+                  <div>Weekly credits reset {nextWeeklyResetLabel} IST</div>
+                )}
+                {nextRenewalLabel && (
+                  <div>
+                    Subscription renews on {nextRenewalLabel}
+                    {billing?.cancelAtPeriodEnd ? ' • canceling at period end' : ''}
+                  </div>
+                )}
               </div>
-            ) : null}
+            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, width: '100%', maxWidth: 420 }}>
             <MetricCard
               label="Venture limit"
-              value={hasUnlimitedAccess ? `${billing?.activeVentureCount ?? 0}/Unlimited` : `${billing?.activeVentureCount ?? 0}/${currentPlan.ventureLimit}`}
+              value={
+                hasUnlimitedAccess
+                  ? `${billing?.activeVentureCount ?? 0}/∞`
+                  : currentPlan.ventureLimit >= UNLIMITED_BILLING_VENTURE_LIMIT
+                    ? `${billing?.activeVentureCount ?? 0}/∞`
+                    : `${billing?.activeVentureCount ?? 0}/${currentPlan.ventureLimit}`
+              }
             />
             <MetricCard
-              label="Monthly credits"
-              value={hasUnlimitedAccess ? 'Unlimited' : String(currentPlan.monthlyCredits)}
+              label="Weekly credits"
+              value={hasUnlimitedAccess ? 'Unlimited' : String(currentPlan.weeklyCredits)}
             />
             <MetricCard
               label="Status"
               value={hasUnlimitedAccess ? 'owner override' : billing?.subscriptionStatus ?? 'free'}
             />
             <MetricCard
-              label="Modules"
-              value="All modules"
+              label="Premium features"
+              value={
+                hasUnlimitedAccess
+                  ? 'All unlocked'
+                  : currentPlan.allowedFeatures.length === ALL_FEATURES.length
+                    ? 'All unlocked'
+                    : currentPlan.allowedFeatures.length === 0
+                      ? 'Locked'
+                      : currentPlan.allowedFeatures.map((f) => FEATURE_LABELS[f]).join(', ')
+              }
             />
           </div>
         </div>
@@ -326,9 +380,17 @@ export function BillingPanel() {
                 {isCurrent && <div style={activeBadgeStyle}>Active</div>}
               </div>
               <div style={{ marginTop: 12, display: 'grid', gap: 8, fontSize: 13, color: 'var(--text-soft)' }}>
-                <div>{plan.ventureLimit} ventures</div>
-                <div>{plan.monthlyCredits} credits / month</div>
-                <div>All modules included</div>
+                <div>
+                  {plan.ventureLimit >= UNLIMITED_BILLING_VENTURE_LIMIT
+                    ? 'Unlimited ventures'
+                    : `${plan.ventureLimit} venture${plan.ventureLimit === 1 ? '' : 's'}`}
+                </div>
+                <div>{plan.weeklyCredits} credits / week</div>
+                <div>
+                  {plan.allowedFeatures.length === ALL_FEATURES.length
+                    ? 'Outreach + CRM + Inspiration unlocked'
+                    : 'Validation modules only'}
+                </div>
               </div>
               <button
                 type="button"
@@ -354,8 +416,37 @@ export function BillingPanel() {
         })}
       </div>
 
+      {billing && !hasUnlimitedAccess && currentPlan.allowedFeatures.length > 0 && (
+        <div className="glass-card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>This week so far</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>
+            Resets {nextWeeklyResetLabel ?? 'Monday'} IST. Independent of your credit balance.
+          </div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <UsageBar
+              label="Inspiration analyses"
+              used={billing.weeklyActionUsage.inspirationAnalyses}
+              limit={currentPlan.weeklyActionLimits.inspirationAnalyses}
+            />
+            <UsageBar
+              label="CRM emails sent"
+              used={billing.weeklyActionUsage.crmEmailsSent}
+              limit={currentPlan.weeklyActionLimits.crmEmailsSent}
+            />
+            <UsageBar
+              label="Campaign sends"
+              used={billing.weeklyActionUsage.campaignsSent}
+              limit={currentPlan.weeklyActionLimits.campaignsSent}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="glass-card" style={{ padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Credit top-ups</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Credit top-ups</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+          Top-ups never expire. They live in a separate pool from your weekly credits and survive every Monday reset.
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
           {TOPUP_SEQUENCE.map((slug) => {
             const topup = TOPUP_PRODUCTS[slug]
@@ -437,6 +528,33 @@ function MetricCard({ label, value }: { label: string; value: string }) {
     <div style={{ padding: '12px 14px', borderRadius: 14, background: 'var(--glass-bg)', border: '1px solid var(--border)' }}>
       <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</div>
       <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }}>{value}</div>
+    </div>
+  )
+}
+
+function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
+  const isUnlimited = limit >= UNLIMITED_WEEKLY_ACTION_LIMIT
+  const isLocked = limit === 0
+  const pct = isUnlimited || isLocked ? 0 : Math.min(100, Math.round((used / limit) * 100))
+  const nearCap = !isUnlimited && !isLocked && pct >= 80
+  const atCap = !isUnlimited && !isLocked && used >= limit
+  const fillColor = atCap ? '#d85b5b' : nearCap ? '#d49a4a' : 'var(--accent)'
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+        <span style={{ color: 'var(--text-soft)', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {isLocked
+            ? 'Not in your plan'
+            : isUnlimited
+              ? `${used} / ∞`
+              : `${used} / ${limit}`}
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 999, background: 'var(--glass-bg-strong)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: fillColor, transition: 'width 0.3s' }} />
+      </div>
     </div>
   )
 }
