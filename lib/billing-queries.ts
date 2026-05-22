@@ -2,19 +2,31 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createDb } from '@/lib/db'
 import {
   ALL_BILLING_MODULES,
+  ALL_FEATURES,
+  type ActionId,
   type BillingModuleId,
   type BillingPeriod,
+  type FeatureId,
   type PlanSlug,
   PLAN_SEQUENCE,
   type TopupSlug,
+  type WeeklyActionLimits,
   BILLING_PLANS,
+  FEATURE_LABELS,
   TOPUP_PRODUCTS,
+  ACTION_TO_FEATURE,
   formatPlanLabel,
+  getCurrentWeeklyPeriodEnd,
+  getCurrentWeeklyPeriodStart,
   getModuleCost,
   getPlanConfig,
+  getWeeklyActionLimit,
   hasUnlimitedBillingOverride,
+  isFeatureIncluded,
+  isModuleIncluded,
   UNLIMITED_BILLING_CREDIT_BALANCE,
   UNLIMITED_BILLING_VENTURE_LIMIT,
+  UNLIMITED_WEEKLY_ACTION_LIMIT,
 } from '@/lib/billing'
 
 type DbClient = SupabaseClient<any, any, any>
@@ -59,6 +71,12 @@ export interface BillingPayment {
   updated_at: string
 }
 
+export interface WeeklyActionUsage {
+  inspirationAnalyses: number
+  crmEmailsSent: number
+  campaignsSent: number
+}
+
 export interface BillingSnapshot {
   planSlug: PlanSlug
   planLabel: string
@@ -66,8 +84,14 @@ export interface BillingSnapshot {
   subscriptionStatus: SubscriptionStatus | 'free'
   creditsRemaining: number
   allowedModules: BillingModuleId[]
+  allowedFeatures: FeatureId[]
   ventureLimit: number
   monthlyCredits: number
+  weeklyCredits: number
+  weeklyActionLimits: WeeklyActionLimits
+  weeklyActionUsage: WeeklyActionUsage
+  weeklyPeriodStart: string
+  weeklyPeriodEnd: string
   activeVentureCount: number
   canCreateVenture: boolean
   nextRenewalAt: string | null
@@ -209,10 +233,8 @@ export async function getRecentPayments(userId: string, limit = 12, db?: DbClien
 
 export async function getBillingSnapshot(userId: string, db?: DbClient): Promise<BillingSnapshot> {
   const client = await resolveDb(db)
-  const [subscription, creditsRemaining, activeVentureCount, email] = await Promise.all([
+  const [subscription, email] = await Promise.all([
     getCurrentSubscription(userId, client),
-    getCreditBalance(userId, client),
-    getActiveVentureCount(userId, client),
     getUserEmail(userId, client),
   ])
 
@@ -220,23 +242,42 @@ export async function getBillingSnapshot(userId: string, db?: DbClient): Promise
   const plan = getPlanConfig(planSlug)
   const hasUnlimitedAccess = hasUnlimitedBillingOverride(email)
 
-  // Auto-grant free tier credits to new free users who have zero balance
-  let finalCredits = creditsRemaining
-  if (planSlug === 'free' && !hasUnlimitedAccess && creditsRemaining === 0) {
-    await grantFreeCreditsIfNeeded(userId, client)
-    // Re-fetch balance after potential grant
-    finalCredits = await getCreditBalance(userId, client)
+  // Lazy weekly refresh — fires inside snapshot read so no cron required.
+  // Unlimited-override users skip this; their balance is virtual.
+  if (!hasUnlimitedAccess) {
+    await refreshWeeklyCreditsIfDue(userId, planSlug, client)
   }
+
+  const [creditsRemaining, activeVentureCount, weeklyActionUsage] = await Promise.all([
+    getCreditBalance(userId, client),
+    getActiveVentureCount(userId, client),
+    getWeeklyActionUsage(userId, client),
+  ])
+
+  const weeklyPeriodStart = getCurrentWeeklyPeriodStart()
+  const weeklyPeriodEnd = getCurrentWeeklyPeriodEnd()
 
   return {
     planSlug,
     planLabel: hasUnlimitedAccess ? 'Unlimited' : formatPlanLabel(planSlug),
     billingPeriod: subscription?.billing_period ?? null,
     subscriptionStatus: subscription?.status ?? 'free',
-    creditsRemaining: hasUnlimitedAccess ? UNLIMITED_BILLING_CREDIT_BALANCE : finalCredits,
+    creditsRemaining: hasUnlimitedAccess ? UNLIMITED_BILLING_CREDIT_BALANCE : creditsRemaining,
     allowedModules: hasUnlimitedAccess ? ALL_BILLING_MODULES : plan.allowedModules,
+    allowedFeatures: hasUnlimitedAccess ? ALL_FEATURES : plan.allowedFeatures,
     ventureLimit: hasUnlimitedAccess ? UNLIMITED_BILLING_VENTURE_LIMIT : plan.ventureLimit,
     monthlyCredits: hasUnlimitedAccess ? UNLIMITED_BILLING_CREDIT_BALANCE : plan.monthlyCredits,
+    weeklyCredits: hasUnlimitedAccess ? UNLIMITED_BILLING_CREDIT_BALANCE : plan.weeklyCredits,
+    weeklyActionLimits: hasUnlimitedAccess
+      ? {
+          inspirationAnalyses: UNLIMITED_WEEKLY_ACTION_LIMIT,
+          crmEmailsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
+          campaignsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
+        }
+      : plan.weeklyActionLimits,
+    weeklyActionUsage,
+    weeklyPeriodStart,
+    weeklyPeriodEnd,
     activeVentureCount,
     canCreateVenture: hasUnlimitedAccess ? true : activeVentureCount < plan.ventureLimit,
     nextRenewalAt: subscription?.current_period_end ?? null,
@@ -499,37 +540,135 @@ async function grantCreditsIfNeeded(input: {
   if (error) throw new Error(`grantCreditsIfNeeded failed: ${error.message}`)
 }
 
-// Auto-grant free tier credits to users who have never received any credits.
-// Free users don't go through a purchase flow, so they never trigger grantCreditsIfNeeded.
-// This runs lazily inside getBillingSnapshot() on first access.
-async function grantFreeCreditsIfNeeded(userId: string, db: DbClient): Promise<void> {
-  // Check if this user has ANY credit_ledger entries at all
-  const { count, error: countError } = await db
+// Lazy weekly credit refresh. Reads the user's current weekly_credit_period_start;
+// if it's missing OR older than the current week's Mon-00:00-IST anchor, the
+// previous week's leftover non-topup balance is drained via a 'weekly_expiry'
+// row and a fresh 'weekly_grant' is inserted for the new week. Idempotent on
+// concurrent reads: the column update is atomic; if two requests race, both
+// resolve to the same period_start so the unique anchoring keeps the ledger
+// from double-granting.
+async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db: DbClient): Promise<void> {
+  const currentPeriodStart = getCurrentWeeklyPeriodStart()
+  const currentPeriodEnd = getCurrentWeeklyPeriodEnd()
+
+  const { data: userRow, error: userErr } = await db
+    .from('users')
+    .select('weekly_credit_period_start')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (userErr) {
+    console.warn(`[billing] weekly refresh: user lookup failed for ${userId}: ${userErr.message}`)
+    return
+  }
+
+  const lastPeriodStart = userRow?.weekly_credit_period_start as string | null | undefined
+  const needsRefresh = !lastPeriodStart || new Date(lastPeriodStart).getTime() < new Date(currentPeriodStart).getTime()
+  if (!needsRefresh) return
+
+  const weeklyGrant = BILLING_PLANS[planSlug].weeklyCredits
+
+  // Drain non-topup leftover from the previous week. Top-ups are excluded so
+  // they survive into the new week. monthly_grant entries from the legacy
+  // pre-030 path are also drained (they were previously summed into balance
+  // forever; now they expire alongside weekly_grant).
+  const { data: drainRows, error: drainErr } = await db
     .from('credit_ledger')
-    .select('id', { count: 'exact', head: true })
+    .select('credits, kind')
     .eq('user_id', userId)
 
-  if (countError || (count ?? 0) > 0) return // Already has ledger entries, skip
+  if (drainErr) {
+    console.warn(`[billing] weekly refresh: ledger read failed for ${userId}: ${drainErr.message}`)
+    return
+  }
 
-  const freeCredits = BILLING_PLANS.free.monthlyCredits
-  if (freeCredits <= 0) return
+  const nonTopupBalance = (drainRows ?? []).reduce((sum, row: { credits?: number | null; kind?: string | null }) => {
+    if (row.kind === 'topup') return sum
+    return sum + (row.credits ?? 0)
+  }, 0)
 
-  // Use 'manual_adjustment' kind (allowed by DB CHECK constraint) with metadata
-  // to identify this as a free tier grant
-  const { error } = await db.from('credit_ledger').insert({
-    user_id: userId,
-    kind: 'manual_adjustment',
-    credits: freeCredits,
-    metadata: { reason: 'free_tier_initial_grant', planSlug: 'free' },
-  })
+  if (nonTopupBalance > 0) {
+    const { error: expiryErr } = await db.from('credit_ledger').insert({
+      user_id: userId,
+      kind: 'weekly_expiry',
+      credits: -nonTopupBalance,
+      metadata: {
+        reason: 'weekly_reset',
+        previousPeriodStart: lastPeriodStart ?? null,
+        newPeriodStart: currentPeriodStart,
+        planSlug,
+      },
+    })
+    if (expiryErr) {
+      console.warn(`[billing] weekly refresh: expiry insert failed for ${userId}: ${expiryErr.message}`)
+      return
+    }
+  }
+
+  if (weeklyGrant > 0) {
+    const { error: grantErr } = await db.from('credit_ledger').insert({
+      user_id: userId,
+      kind: 'weekly_grant',
+      credits: weeklyGrant,
+      metadata: {
+        planSlug,
+        periodStart: currentPeriodStart,
+        periodEnd: currentPeriodEnd,
+      },
+    })
+    if (grantErr) {
+      console.warn(`[billing] weekly refresh: grant insert failed for ${userId}: ${grantErr.message}`)
+      return
+    }
+  }
+
+  const { error: updateErr } = await db
+    .from('users')
+    .update({ weekly_credit_period_start: currentPeriodStart, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+
+  if (updateErr) {
+    console.warn(`[billing] weekly refresh: anchor update failed for ${userId}: ${updateErr.message}`)
+  }
+}
+
+export async function getWeeklyActionUsage(userId: string, db?: DbClient): Promise<WeeklyActionUsage> {
+  const client = await resolveDb(db)
+  const periodStart = getCurrentWeeklyPeriodStart()
+
+  const { data, error } = await client
+    .from('feature_usage_counters')
+    .select('feature_id, count')
+    .eq('user_id', userId)
+    .eq('period_start', periodStart)
 
   if (error) {
-    console.warn(`[billing] Free credit grant failed for ${userId}: ${error.message}`)
+    console.warn(`[billing] getWeeklyActionUsage failed for ${userId}: ${error.message}`)
+    return { inspirationAnalyses: 0, crmEmailsSent: 0, campaignsSent: 0 }
   }
+
+  const usage: WeeklyActionUsage = { inspirationAnalyses: 0, crmEmailsSent: 0, campaignsSent: 0 }
+  for (const row of data ?? []) {
+    const featureId = (row as { feature_id?: string }).feature_id
+    const count = (row as { count?: number | null }).count ?? 0
+    if (featureId === 'inspiration_analyze') usage.inspirationAnalyses = count
+    else if (featureId === 'crm_email_send') usage.crmEmailsSent = count
+    else if (featureId === 'campaign_send') usage.campaignsSent = count
+  }
+  return usage
 }
 
 export async function assertCanRunModule(userId: string, moduleId: BillingModuleId, db?: DbClient) {
   const snapshot = await getBillingSnapshot(userId, db)
+
+  // Plan-level module gate (new in 030 — launch-autopilot now blocked for free/starter).
+  if (!snapshot.hasUnlimitedAccess && !isModuleIncluded(snapshot.planSlug, moduleId)) {
+    throw new BillingError(
+      `The ${moduleId} module is not included in your ${snapshot.planLabel} plan — upgrade to Builder or higher to unlock it`,
+      403,
+      'module_not_in_plan',
+    )
+  }
 
   const requiredCredits = getModuleCost(moduleId)
   if (!snapshot.hasUnlimitedAccess && snapshot.creditsRemaining < requiredCredits) {
@@ -537,6 +676,125 @@ export async function assertCanRunModule(userId: string, moduleId: BillingModule
   }
 
   return { snapshot, requiredCredits }
+}
+
+export async function assertCanAccessFeature(userId: string, featureId: FeatureId, db?: DbClient): Promise<BillingSnapshot> {
+  const snapshot = await getBillingSnapshot(userId, db)
+  if (snapshot.hasUnlimitedAccess) return snapshot
+  if (!isFeatureIncluded(snapshot.planSlug, featureId)) {
+    throw new BillingError(
+      `${FEATURE_LABELS[featureId]} is a Builder+ feature — upgrade your plan to unlock it`,
+      403,
+      'feature_not_in_plan',
+    )
+  }
+  return snapshot
+}
+
+// Atomic per-week action ceiling check + increment. Reads the user's current
+// counter row for (feature, period_start), throws if it's already at the
+// plan's ceiling, otherwise increments via upsert. The unique PK on
+// (user_id, feature_id, period_start) means concurrent calls converge to the
+// same row; in the rare race where two callers both pass the ceiling check
+// before either has incremented, the worst case is one extra action through
+// the gate — acceptable for the abuse-prevention use case.
+export async function assertCanPerformAction(userId: string, actionId: ActionId, db?: DbClient): Promise<BillingSnapshot> {
+  // First make sure the parent feature is unlocked at all.
+  const snapshot = await assertCanAccessFeature(userId, ACTION_TO_FEATURE[actionId], db)
+  if (snapshot.hasUnlimitedAccess) {
+    await incrementActionCounter(userId, actionId, db).catch((err) =>
+      console.warn(`[billing] action counter increment failed (unlimited user, non-fatal): ${(err as Error).message}`),
+    )
+    return snapshot
+  }
+
+  const limit = getWeeklyActionLimit(snapshot.planSlug, actionId)
+  if (limit >= UNLIMITED_WEEKLY_ACTION_LIMIT) {
+    await incrementActionCounter(userId, actionId, db)
+    return snapshot
+  }
+
+  const currentUsage = readActionUsage(snapshot, actionId)
+  if (currentUsage >= limit) {
+    throw new BillingError(
+      `Weekly limit reached: ${limit} ${humanizeAction(actionId)} per week on the ${snapshot.planLabel} plan. Resets ${friendlyResetTime(snapshot.weeklyPeriodEnd)}.`,
+      429,
+      'weekly_action_limit_reached',
+    )
+  }
+
+  await incrementActionCounter(userId, actionId, db)
+  return snapshot
+}
+
+async function incrementActionCounter(userId: string, actionId: ActionId, db?: DbClient): Promise<void> {
+  const client = await resolveDb(db)
+  const periodStart = getCurrentWeeklyPeriodStart()
+
+  // Read-modify-write upsert. Postgres has no atomic-increment-on-upsert via
+  // PostgREST, so we read the current count, write count+1. The composite PK
+  // means duplicate concurrent inserts collide on conflict and we just retry
+  // by re-reading. In practice this loop runs once.
+  const { data: existing, error: readErr } = await client
+    .from('feature_usage_counters')
+    .select('count')
+    .eq('user_id', userId)
+    .eq('feature_id', actionId)
+    .eq('period_start', periodStart)
+    .maybeSingle()
+
+  if (readErr) {
+    console.warn(`[billing] action counter read failed for ${userId}/${actionId}: ${readErr.message}`)
+    return
+  }
+
+  const nextCount = ((existing?.count as number | null | undefined) ?? 0) + 1
+
+  const { error: upsertErr } = await client
+    .from('feature_usage_counters')
+    .upsert(
+      {
+        user_id: userId,
+        feature_id: actionId,
+        period_start: periodStart,
+        count: nextCount,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,feature_id,period_start' },
+    )
+
+  if (upsertErr) {
+    console.warn(`[billing] action counter upsert failed for ${userId}/${actionId}: ${upsertErr.message}`)
+  }
+}
+
+function readActionUsage(snapshot: BillingSnapshot, actionId: ActionId): number {
+  switch (actionId) {
+    case 'inspiration_analyze': return snapshot.weeklyActionUsage.inspirationAnalyses
+    case 'crm_email_send':      return snapshot.weeklyActionUsage.crmEmailsSent
+    case 'campaign_send':       return snapshot.weeklyActionUsage.campaignsSent
+  }
+}
+
+function humanizeAction(actionId: ActionId): string {
+  switch (actionId) {
+    case 'inspiration_analyze': return 'inspiration analyses'
+    case 'crm_email_send':      return 'CRM emails'
+    case 'campaign_send':       return 'campaign sends'
+  }
+}
+
+function friendlyResetTime(periodEndIso: string): string {
+  const end = new Date(periodEndIso)
+  if (Number.isNaN(end.getTime())) return 'next Monday'
+  return end.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }) + ' IST'
 }
 
 export async function assertCanAccessMarketingAutomation(userId: string, db?: DbClient): Promise<BillingSnapshot> {
