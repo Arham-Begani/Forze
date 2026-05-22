@@ -2,12 +2,18 @@ import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import {
   ALL_BILLING_MODULES,
+  ALL_FEATURES,
   BILLING_MODULE_LABELS,
   BILLING_PLANS,
+  FEATURE_LABELS,
   MODULE_CREDIT_COSTS,
   PLAN_SEQUENCE,
   TOPUP_PRODUCTS,
   TOPUP_SEQUENCE,
+  UNLIMITED_BILLING_VENTURE_LIMIT,
+  UNLIMITED_WEEKLY_ACTION_LIMIT,
+  isFeatureIncluded,
+  isModuleIncluded,
 } from '@/lib/billing'
 
 function formatPrice(amount: number) {
@@ -55,7 +61,7 @@ export default function PricingPage() {
               India-first pricing for idea validation and launch
             </h1>
             <p style={{ maxWidth: 720, margin: 0, fontSize: 16, color: 'var(--text-soft)', lineHeight: 1.7 }}>
-              Every plan includes every module. Choose the credit volume that matches how many ideas you want to validate, rerun, and package.
+              Credits refresh every Monday at 00:00 IST. Outreach, CRM, and Inspiration unlock on Builder and above — Free + Starter focus on validation. Top-ups never expire.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -126,10 +132,25 @@ export default function PricingPage() {
                 )}
                 <div style={{ marginTop: 18, display: 'grid', gap: 8, fontSize: 13, color: 'var(--text-soft)' }}>
                   <div>
-                    {plan.ventureLimit} active venture{plan.ventureLimit === 1 ? '' : 's'}
+                    {plan.ventureLimit >= UNLIMITED_BILLING_VENTURE_LIMIT
+                      ? 'Unlimited active ventures'
+                      : `${plan.ventureLimit} active venture${plan.ventureLimit === 1 ? '' : 's'}`}
                   </div>
-                  <div>{plan.monthlyCredits} credits/month</div>
-                  <div>All {ALL_BILLING_MODULES.length} modules included</div>
+                  <div>
+                    <strong style={{ color: 'var(--text)' }}>{plan.weeklyCredits}</strong> credits / week
+                  </div>
+                  <div>
+                    {plan.allowedFeatures.length === ALL_FEATURES.length
+                      ? 'Outreach + CRM + Inspiration unlocked'
+                      : 'Validation modules only'}
+                  </div>
+                  {plan.allowedFeatures.includes('outreach') && (
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      {plan.weeklyActionLimits.campaignsSent >= UNLIMITED_WEEKLY_ACTION_LIMIT
+                        ? 'Unlimited campaign sends'
+                        : `${plan.weeklyActionLimits.campaignsSent} campaign send${plan.weeklyActionLimits.campaignsSent === 1 ? '' : 's'} / week`}
+                    </div>
+                  )}
                 </div>
                 <Link href="/signup" style={{ ...primaryBtnStyle, marginTop: 22, width: '100%', justifyContent: 'center' }}>
                   {plan.cta}
@@ -138,6 +159,86 @@ export default function PricingPage() {
             )
           })}
         </div>
+
+        <section className="glass-card" style={{ padding: 24, marginBottom: 24 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>What unlocks on which plan</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
+            Validation modules (Research, Branding, Landing, Feasibility, Full Launch) work on every plan and burn credits when you run them. Outreach, CRM, and Inspiration unlock from Builder up.
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 540 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={tableHeadStyle}>Feature</th>
+                  {PLAN_SEQUENCE.map((slug) => (
+                    <th key={slug} style={{ ...tableHeadStyle, textAlign: 'center' as const }}>
+                      {BILLING_PLANS[slug].label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ALL_FEATURES.map((featureId) => (
+                  <tr key={featureId} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={tableCellLabelStyle}>{FEATURE_LABELS[featureId]}</td>
+                    {PLAN_SEQUENCE.map((slug) => {
+                      const included = isFeatureIncluded(slug, featureId)
+                      return (
+                        <td key={slug} style={{ ...tableCellStyle, color: included ? 'var(--accent)' : 'var(--muted)' }}>
+                          {included ? '✓' : '—'}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={tableCellLabelStyle}>Launch Autopilot module</td>
+                  {PLAN_SEQUENCE.map((slug) => {
+                    const included = isModuleIncluded(slug, 'launch-autopilot')
+                    return (
+                      <td key={slug} style={{ ...tableCellStyle, color: included ? 'var(--accent)' : 'var(--muted)' }}>
+                        {included ? '✓' : '—'}
+                      </td>
+                    )
+                  })}
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={tableCellLabelStyle}>Inspiration analyses / week</td>
+                  {PLAN_SEQUENCE.map((slug) => {
+                    const limit = BILLING_PLANS[slug].weeklyActionLimits.inspirationAnalyses
+                    return (
+                      <td key={slug} style={tableCellStyle}>
+                        {limit === 0 ? '—' : limit >= UNLIMITED_WEEKLY_ACTION_LIMIT ? '∞' : limit}
+                      </td>
+                    )
+                  })}
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={tableCellLabelStyle}>CRM emails sent / week</td>
+                  {PLAN_SEQUENCE.map((slug) => {
+                    const limit = BILLING_PLANS[slug].weeklyActionLimits.crmEmailsSent
+                    return (
+                      <td key={slug} style={tableCellStyle}>
+                        {limit === 0 ? '—' : limit >= UNLIMITED_WEEKLY_ACTION_LIMIT ? '∞' : limit}
+                      </td>
+                    )
+                  })}
+                </tr>
+                <tr>
+                  <td style={tableCellLabelStyle}>Campaign sends / week</td>
+                  {PLAN_SEQUENCE.map((slug) => {
+                    const limit = BILLING_PLANS[slug].weeklyActionLimits.campaignsSent
+                    return (
+                      <td key={slug} style={tableCellStyle}>
+                        {limit === 0 ? '—' : limit >= UNLIMITED_WEEKLY_ACTION_LIMIT ? '∞' : limit}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <section className="glass-card" style={{ padding: 24, marginBottom: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Top-ups</div>
@@ -200,6 +301,28 @@ const primaryBtnStyle: CSSProperties = {
   textDecoration: 'none',
   fontWeight: 700,
   boxShadow: '0 16px 32px -18px var(--accent-glow)',
+}
+
+const tableHeadStyle: CSSProperties = {
+  textAlign: 'left',
+  padding: '10px 8px',
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'var(--muted)',
+}
+
+const tableCellLabelStyle: CSSProperties = {
+  padding: '10px 8px',
+  color: 'var(--text-soft)',
+  fontWeight: 500,
+}
+
+const tableCellStyle: CSSProperties = {
+  padding: '10px 8px',
+  textAlign: 'center',
+  fontWeight: 600,
 }
 
 const secondaryBtnStyle: CSSProperties = {
