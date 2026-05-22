@@ -15,6 +15,16 @@ export type PlanSlug = 'free' | 'starter' | 'builder' | 'pro' | 'studio'
 export type BillingPeriod = 'monthly' | 'yearly'
 export type TopupSlug = 'topup-50' | 'topup-175'
 
+// Gated non-credit features (CRM read/list, inspiration analyze list, etc).
+// Distinct from BillingModuleId because these aren't priced in credits — they
+// have per-week action ceilings on top of plan-level access gating.
+export type FeatureId = 'crm' | 'inspiration' | 'outreach'
+
+// Action-counter keys. Each maps to a feature_usage_counters row keyed by
+// (user_id, feature_id, period_start). The string values match the DB CHECK
+// constraint in migration 030.
+export type ActionId = 'inspiration_analyze' | 'crm_email_send' | 'campaign_send'
+
 export const ALL_BILLING_MODULES: BillingModuleId[] = [
   'research',
   'branding',
@@ -29,10 +39,38 @@ export const ALL_BILLING_MODULES: BillingModuleId[] = [
   'mvp-scalpel',
 ]
 
+export const ALL_FEATURES: FeatureId[] = ['crm', 'inspiration', 'outreach']
+
+// Modules every plan gets (Free + Starter included). Excludes launch-autopilot
+// because that's part of the Outreach feature gate (Builder+).
+export const CORE_BILLING_MODULES: BillingModuleId[] = [
+  'research',
+  'branding',
+  'marketing',
+  'landing',
+  'feasibility',
+  'full-launch',
+  'general',
+  'shadow-board',
+  'investor-kit',
+  'mvp-scalpel',
+]
+
 export const UNLIMITED_BILLING_CREDIT_BALANCE = 1_000_000_000
 export const UNLIMITED_BILLING_VENTURE_LIMIT = 1_000_000
+export const UNLIMITED_WEEKLY_ACTION_LIMIT = 1_000_000
 
 const DEFAULT_UNLIMITED_BILLING_EMAILS: string[] = []
+
+// Per-week action ceilings on the un-credited gated surfaces. Independent
+// of credit balance. UNLIMITED_WEEKLY_ACTION_LIMIT means "monitor but don't
+// enforce". Set to 0 for plans that don't have the feature at all (they're
+// blocked at the assertCanAccessFeature gate before this is consulted).
+export interface WeeklyActionLimits {
+  inspirationAnalyses: number
+  crmEmailsSent: number
+  campaignsSent: number
+}
 
 export interface BillingPlan {
   slug: PlanSlug
@@ -40,8 +78,11 @@ export interface BillingPlan {
   monthlyPriceInr: number
   yearlyPriceInr: number
   ventureLimit: number
-  monthlyCredits: number
+  monthlyCredits: number          // legacy display + razorpay subscription metadata
+  weeklyCredits: number           // new: per-week grant inserted every Mon 00:00 IST
   allowedModules: BillingModuleId[]
+  allowedFeatures: FeatureId[]
+  weeklyActionLimits: WeeklyActionLimits
   cta: string
   highlight?: boolean
 }
@@ -88,8 +129,15 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     monthlyPriceInr: 0,
     yearlyPriceInr: 0,
     ventureLimit: 1,
-    monthlyCredits: 25,
-    allowedModules: ALL_BILLING_MODULES,
+    monthlyCredits: 40,         // 10/wk * 4 weeks — kept for legacy display + razorpay
+    weeklyCredits: 10,
+    allowedModules: CORE_BILLING_MODULES, // no launch-autopilot
+    allowedFeatures: [],                  // no CRM, inspiration, outreach
+    weeklyActionLimits: {
+      inspirationAnalyses: 0,
+      crmEmailsSent: 0,
+      campaignsSent: 0,
+    },
     cta: 'Start free',
   },
   starter: {
@@ -98,8 +146,15 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     monthlyPriceInr: 299,
     yearlyPriceInr: 2990,
     ventureLimit: 2,
-    monthlyCredits: 40,
-    allowedModules: ALL_BILLING_MODULES,
+    monthlyCredits: 80,         // 20/wk * 4
+    weeklyCredits: 20,
+    allowedModules: CORE_BILLING_MODULES, // no launch-autopilot
+    allowedFeatures: [],                  // no CRM, inspiration, outreach
+    weeklyActionLimits: {
+      inspirationAnalyses: 0,
+      crmEmailsSent: 0,
+      campaignsSent: 0,
+    },
     cta: 'Get Started',
   },
   builder: {
@@ -108,8 +163,15 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     monthlyPriceInr: 899,
     yearlyPriceInr: 8990,
     ventureLimit: 5,
-    monthlyCredits: 120,
+    monthlyCredits: 240,        // 60/wk * 4
+    weeklyCredits: 60,
     allowedModules: ALL_BILLING_MODULES,
+    allowedFeatures: ALL_FEATURES,
+    weeklyActionLimits: {
+      inspirationAnalyses: 20,
+      crmEmailsSent: 50,
+      campaignsSent: 3,
+    },
     cta: 'Upgrade to Builder',
   },
   pro: {
@@ -118,8 +180,15 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     monthlyPriceInr: 2999,
     yearlyPriceInr: 29990,
     ventureLimit: 15,
-    monthlyCredits: 400,
+    monthlyCredits: 1200,       // 300/wk * 4
+    weeklyCredits: 300,
     allowedModules: ALL_BILLING_MODULES,
+    allowedFeatures: ALL_FEATURES,
+    weeklyActionLimits: {
+      inspirationAnalyses: 75,
+      crmEmailsSent: 250,
+      campaignsSent: 15,
+    },
     cta: 'Go Pro',
     highlight: true,
   },
@@ -129,10 +198,29 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     monthlyPriceInr: 7999,
     yearlyPriceInr: 79990,
     ventureLimit: UNLIMITED_BILLING_VENTURE_LIMIT,
-    monthlyCredits: 1500,
+    monthlyCredits: 2400,       // 600/wk * 4
+    weeklyCredits: 600,
     allowedModules: ALL_BILLING_MODULES,
+    allowedFeatures: ALL_FEATURES,
+    weeklyActionLimits: {
+      inspirationAnalyses: 300,
+      crmEmailsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
+      campaignsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
+    },
     cta: 'Scale with Studio',
   },
+}
+
+export const FEATURE_LABELS: Record<FeatureId, string> = {
+  crm: 'CRM',
+  inspiration: 'Inspiration',
+  outreach: 'Outreach',
+}
+
+export const ACTION_TO_FEATURE: Record<ActionId, FeatureId> = {
+  inspiration_analyze: 'inspiration',
+  crm_email_send: 'crm',
+  campaign_send: 'outreach',
 }
 
 export const TOPUP_PRODUCTS: Record<TopupSlug, TopupProduct> = {
@@ -164,6 +252,51 @@ export function getModuleCost(moduleId: BillingModuleId): number {
 
 export function isModuleIncluded(planSlug: PlanSlug, moduleId: BillingModuleId): boolean {
   return BILLING_PLANS[planSlug].allowedModules.includes(moduleId)
+}
+
+export function isFeatureIncluded(planSlug: PlanSlug, featureId: FeatureId): boolean {
+  return BILLING_PLANS[planSlug].allowedFeatures.includes(featureId)
+}
+
+export function getWeeklyActionLimit(planSlug: PlanSlug, actionId: ActionId): number {
+  const limits = BILLING_PLANS[planSlug].weeklyActionLimits
+  switch (actionId) {
+    case 'inspiration_analyze':
+      return limits.inspirationAnalyses
+    case 'crm_email_send':
+      return limits.crmEmailsSent
+    case 'campaign_send':
+      return limits.campaignsSent
+  }
+}
+
+export function getWeeklyCredits(planSlug: PlanSlug): number {
+  return BILLING_PLANS[planSlug].weeklyCredits
+}
+
+// Mon 00:00 IST anchor for the week containing `now`. IST = UTC+5:30, no DST.
+// Returned as a UTC ISO string so it's safe to compare with TIMESTAMPTZ rows.
+export function getCurrentWeeklyPeriodStart(now: Date = new Date()): string {
+  const IST_OFFSET_MIN = 5 * 60 + 30
+  // Shift `now` into IST wall-clock space, snap to Monday 00:00, shift back.
+  const istNow = new Date(now.getTime() + IST_OFFSET_MIN * 60 * 1000)
+  const dayOfWeek = istNow.getUTCDay()           // 0 = Sun, 1 = Mon, ... in shifted clock
+  const daysSinceMonday = (dayOfWeek + 6) % 7    // Mon=0, Tue=1, ..., Sun=6
+  const istMondayMidnight = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate() - daysSinceMonday,
+    0, 0, 0, 0,
+  ))
+  // Shift the IST-midnight back into real UTC.
+  const utcMondayMidnight = new Date(istMondayMidnight.getTime() - IST_OFFSET_MIN * 60 * 1000)
+  return utcMondayMidnight.toISOString()
+}
+
+// End of the current weekly window — exactly +7 days from the start.
+export function getCurrentWeeklyPeriodEnd(now: Date = new Date()): string {
+  const startMs = new Date(getCurrentWeeklyPeriodStart(now)).getTime()
+  return new Date(startMs + 7 * 24 * 60 * 60 * 1000).toISOString()
 }
 
 export function getPlanPrice(planSlug: PlanSlug, billingPeriod: BillingPeriod): number {
