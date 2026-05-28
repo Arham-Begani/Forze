@@ -441,6 +441,7 @@ If you write \`<LucideIcons.Shield />\`, \`<Shield />\`, or \`import { Shield } 
 - Submit button with loading state
 - Success state with checkmark animation and confirmation message
 - Form MUST submit a POST request to \`/api/ventures/\${ventureId}/leads\` with JSON body \`{ email: string, source: 'landing_page' }\`. Resolve ventureId in this exact order — DO NOT hardcode the venture name: \`const ventureId = (typeof window !== 'undefined' && window.__VENTURE_ID__) || (typeof window !== 'undefined' ? (window.location.pathname.split('/v/')[1] || '').split(/[/?#]/)[0] : '') || '';\`. If ventureId is empty, abort the submission and show an error — never POST to an empty or non-UUID id.
+- NEVER post to a third-party form endpoint: not \`api.v0.dev/leads/...\`, not \`formspree.io\`, not \`getform.io\`, not Mailchimp/ConvertKit/Beehiiv embed URLs, not any cross-origin host. The page runs under a strict CSP that allows only same-origin connect-src — any external POST is blocked at the browser and the founder sees a broken waitlist. The ONLY allowed lead endpoint is \`/api/ventures/\${ventureId}/leads\` on the same origin.
 - Handle loading and errors gracefully.
 
 **Analytics Tracking:**
@@ -588,6 +589,8 @@ FORBIDDEN — these are NOT available and WILL crash the page if referenced:
 3. A Tailwind-styled div with a Unicode glyph (e.g. \`<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 text-white">▲</div>\`)
 
 If the existing component already contains forbidden references (\`<LucideIcons.X />\`, \`<Shield />\`, framer-motion, etc.), you MUST emit a fullComponent that REPLACES those references with safe alternatives (inline SVG or emoji) as part of the requested change. Do not preserve broken code just because it was there before.
+
+**Lead-capture endpoint (CRITICAL):** The form MUST POST to \`/api/ventures/\${ventureId}/leads\` on the same origin. NEVER post to \`api.v0.dev/leads\`, \`formspree.io\`, \`getform.io\`, or any third-party host — strict CSP blocks them and the founder sees a broken waitlist. If the existing component references a third-party lead endpoint, REPLACE it with \`/api/ventures/\${ventureId}/leads\` in the fullComponent you emit.
 
 ## Output Format
 
