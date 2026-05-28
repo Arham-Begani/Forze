@@ -27,14 +27,14 @@ function formatInr(amount: number) {
 export default function PricingPage() {
   return (
     <main className="ambient-page" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 24px 80px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(64px, 8vw, 112px) 24px clamp(80px, 10vw, 144px)' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
-            marginBottom: 40,
+            gap: 24,
+            marginBottom: 72,
             flexWrap: 'wrap',
           }}
         >
@@ -52,16 +52,17 @@ export default function PricingPage() {
             </div>
             <h1
               style={{
-                fontSize: 'clamp(34px, 6vw, 56px)',
-                lineHeight: 1,
-                letterSpacing: '-0.05em',
-                margin: '10px 0 12px',
+                fontSize: 'clamp(36px, 6vw, 60px)',
+                lineHeight: 1.05,
+                letterSpacing: '-0.04em',
+                margin: '14px 0 18px',
+                maxWidth: 720,
               }}
             >
               India-first pricing for idea validation and launch
             </h1>
-            <p style={{ maxWidth: 720, margin: 0, fontSize: 16, color: 'var(--text-soft)', lineHeight: 1.7 }}>
-              Credits refresh every Monday at 00:00 IST. Outreach, CRM, and Inspiration unlock on Builder and above — Free + Starter focus on validation. Top-ups never expire.
+            <p style={{ maxWidth: 680, margin: 0, fontSize: 17, color: 'var(--text-soft)', lineHeight: 1.7 }}>
+              Credits refresh every Monday at 00:00 IST. Outreach, CRM, and Inspiration unlock on Builder and above. Top-ups never expire.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -74,7 +75,7 @@ export default function PricingPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))', gap: 18, marginBottom: 28 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: 28, marginBottom: 56, alignItems: 'stretch' }}>
           {PLAN_SEQUENCE.map((slug) => {
             const plan = BILLING_PLANS[slug]
             return (
@@ -82,11 +83,14 @@ export default function PricingPage() {
                 key={slug}
                 className="glass-card"
                 style={{
-                  padding: 24,
+                  padding: 32,
                   position: 'relative',
                   overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 22,
                   borderColor: plan.highlight ? 'var(--accent-glow)' : 'var(--border)',
-                  boxShadow: plan.highlight ? '0 24px 48px -20px var(--accent-glow)' : 'var(--shadow-card)',
+                  boxShadow: plan.highlight ? '0 28px 56px -22px var(--accent-glow)' : 'var(--shadow-card)',
                 }}
               >
                 {plan.highlight && (
@@ -113,25 +117,25 @@ export default function PricingPage() {
                     fontSize: 13,
                     fontWeight: 700,
                     color: 'var(--accent)',
-                    letterSpacing: '0.06em',
+                    letterSpacing: '0.08em',
                     textTransform: 'uppercase',
                   }}
                 >
                   {plan.label}
                 </div>
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-0.05em' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
                     {formatInr(plan.monthlyPriceInr)}
                   </span>
-                  <span style={{ color: 'var(--muted)', fontSize: 13 }}>/month</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 14 }}>/month</span>
                 </div>
                 {plan.yearlyPriceInr > 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: -10 }}>
                     or {formatInr(plan.yearlyPriceInr)}/year
                   </div>
                 )}
-                <div style={{ marginTop: 18, display: 'grid', gap: 8, fontSize: 13, color: 'var(--text-soft)' }}>
-                  <div>
+                <div style={{ display: 'grid', gap: 14, fontSize: 14, color: 'var(--text-soft)', flex: 1, paddingTop: 4, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ paddingTop: 14 }}>
                     {plan.ventureLimit >= UNLIMITED_BILLING_VENTURE_LIMIT
                       ? 'Unlimited active ventures'
                       : `${plan.ventureLimit} active venture${plan.ventureLimit === 1 ? '' : 's'}`}
@@ -145,14 +149,14 @@ export default function PricingPage() {
                       : 'Validation modules only'}
                   </div>
                   {plan.allowedFeatures.includes('outreach') && (
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                       {plan.weeklyActionLimits.campaignsSent >= UNLIMITED_WEEKLY_ACTION_LIMIT
                         ? 'Unlimited campaign sends'
                         : `${plan.weeklyActionLimits.campaignsSent} campaign send${plan.weeklyActionLimits.campaignsSent === 1 ? '' : 's'} / week`}
                     </div>
                   )}
                 </div>
-                <Link href="/signup" style={{ ...primaryBtnStyle, marginTop: 22, width: '100%', justifyContent: 'center' }}>
+                <Link href="/signup" style={{ ...primaryBtnStyle, width: '100%', justifyContent: 'center', padding: '14px 18px' }}>
                   {plan.cta}
                 </Link>
               </section>
@@ -160,9 +164,9 @@ export default function PricingPage() {
           })}
         </div>
 
-        <section className="glass-card" style={{ padding: 24, marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>What unlocks on which plan</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
+        <section className="glass-card" style={{ padding: 36, marginBottom: 40 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.01em' }}>What unlocks on which plan</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 28, lineHeight: 1.6, maxWidth: 720 }}>
             Validation modules (Research, Branding, Landing, Feasibility, Full Launch) work on every plan and burn credits when you run them. Outreach, CRM, and Inspiration unlock from Builder up.
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -240,47 +244,54 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <section className="glass-card" style={{ padding: 24, marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Top-ups</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 14 }}>
+        <section className="glass-card" style={{ padding: 36, marginBottom: 40 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.01em' }}>Top-ups</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.6 }}>
+            Need extra credits mid-week? Top-ups live in a separate pool and never expire.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 20 }}>
             {TOPUP_SEQUENCE.map((slug) => {
               const topup = TOPUP_PRODUCTS[slug]
               return (
                 <div
                   key={slug}
-                  style={{ padding: 18, borderRadius: 14, border: '1px solid var(--border)', background: 'var(--glass-bg)' }}
+                  style={{ padding: 24, borderRadius: 14, border: '1px solid var(--border)', background: 'var(--glass-bg)', display: 'flex', flexDirection: 'column', gap: 8 }}
                 >
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{topup.label}</div>
-                  <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.03em', marginTop: 6 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{topup.label}</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
                     {formatInr(topup.amountInr)}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{topup.credits} extra credits</div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>{topup.credits} extra credits · never expire</div>
                 </div>
               )
             })}
           </div>
         </section>
 
-        <section className="glass-card" style={{ padding: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Credit cost per module</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))', gap: 10 }}>
+        <section className="glass-card" style={{ padding: 36 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.01em' }}>Credit cost per module</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.6 }}>
+            Each agent run deducts the listed amount from your weekly credits.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: 14 }}>
             {Object.entries(MODULE_CREDIT_COSTS).map(([moduleId, cost]) => (
               <div
                 key={moduleId}
                 style={{
-                  padding: '12px 14px',
+                  padding: '16px 18px',
                   borderRadius: 12,
                   border: '1px solid var(--border)',
                   background: 'var(--glass-bg)',
                   display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
                   gap: 12,
                 }}
               >
-                <span style={{ fontSize: 13, color: 'var(--text-soft)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-soft)', fontWeight: 500 }}>
                   {BILLING_MODULE_LABELS[moduleId as keyof typeof BILLING_MODULE_LABELS] ?? moduleId}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{cost}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)' }}>{cost}</span>
               </div>
             ))}
           </div>
@@ -305,24 +316,26 @@ const primaryBtnStyle: CSSProperties = {
 
 const tableHeadStyle: CSSProperties = {
   textAlign: 'left',
-  padding: '10px 8px',
-  fontSize: 11,
+  padding: '14px 12px',
+  fontSize: 12,
   fontWeight: 700,
-  letterSpacing: '0.06em',
+  letterSpacing: '0.08em',
   textTransform: 'uppercase',
   color: 'var(--muted)',
 }
 
 const tableCellLabelStyle: CSSProperties = {
-  padding: '10px 8px',
+  padding: '14px 12px',
   color: 'var(--text-soft)',
   fontWeight: 500,
+  fontSize: 14,
 }
 
 const tableCellStyle: CSSProperties = {
-  padding: '10px 8px',
+  padding: '14px 12px',
   textAlign: 'center',
   fontWeight: 600,
+  fontSize: 14,
 }
 
 const secondaryBtnStyle: CSSProperties = {
