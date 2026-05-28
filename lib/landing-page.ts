@@ -296,6 +296,71 @@ export const LANDING_RUNTIME_SHIM = `<script>
     } catch (e) {}
   }
 
+  // ── Third-party lead-capture endpoint hijack ──
+  // Gemini occasionally hallucinates a v0.dev-style POST endpoint
+  // (\`https://api.v0.dev/leads/<uuid>\`) instead of the local
+  // \`/api/ventures/<id>/leads\` we instruct it to use. The CSP blocks the
+  // cross-origin request and the founder sees a broken waitlist form. We
+  // monkey-patch fetch + XHR to rewrite those URLs to the local endpoint
+  // when ventureId is available, or short-circuit them with a fake 200 so
+  // preview surfaces don't show a network error.
+  (function () {
+    var THIRD_PARTY_LEAD_HOST = /^https?:\\/\\/(?:[\\w-]+\\.)*v0\\.dev\\/(?:api\\/)?leads(?:\\/|$|\\?)/i;
+    function localLeadsUrl() {
+      var vid = window.__VENTURE_ID__;
+      return (typeof vid === 'string' && vid) ? '/api/ventures/' + vid + '/leads' : '';
+    }
+    function rewriteLeadUrl(input) {
+      try {
+        var url = typeof input === 'string'
+          ? input
+          : (input && typeof input === 'object' && typeof input.url === 'string')
+            ? input.url
+            : '';
+        if (!url || !THIRD_PARTY_LEAD_HOST.test(url)) return { matched: false, value: input };
+        var fixed = localLeadsUrl();
+        if (!fixed) return { matched: true, value: null };
+        if (typeof input === 'string') return { matched: true, value: fixed };
+        try { return { matched: true, value: new Request(fixed, input) }; }
+        catch (e) { return { matched: true, value: fixed }; }
+      } catch (e) { return { matched: false, value: input }; }
+    }
+    try {
+      var origFetch = window.fetch && window.fetch.bind(window);
+      if (origFetch) {
+        window.fetch = function (input, init) {
+          var r = rewriteLeadUrl(input);
+          if (r.matched && r.value === null) {
+            return Promise.resolve(new Response(
+              JSON.stringify({ ok: true, message: 'Preview mode — signup recorded locally only.' }),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            ));
+          }
+          return origFetch(r.matched ? r.value : input, init);
+        };
+      }
+    } catch (e) {}
+    try {
+      var XHR = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+      if (XHR && XHR.open) {
+        var origOpen = XHR.open;
+        XHR.open = function (method, url) {
+          try {
+            if (typeof url === 'string' && THIRD_PARTY_LEAD_HOST.test(url)) {
+              var fixed = localLeadsUrl();
+              if (fixed) {
+                arguments[1] = fixed;
+              } else {
+                arguments[1] = 'data:application/json,' + encodeURIComponent('{"ok":true}');
+              }
+            }
+          } catch (e) {}
+          return origOpen.apply(this, arguments);
+        };
+      }
+    } catch (e) {}
+  })();
+
   // Catch errors that happen outside React (script parse errors, async
   // throws, dynamic imports, etc.). These never reach the error boundary.
   window.addEventListener('error', function (event) {
@@ -454,6 +519,20 @@ const VALIDATOR_RULES: ValidatorRule[] = [
     severity: 'error',
     buildMessage: () => 'Calls document.write — replaces the iframe contents entirely',
     suggestion: 'Render with React instead.',
+  },
+
+  // ── Third-party lead endpoint (Gemini hallucinates v0.dev) ──
+  // The agent is told to POST to `/api/ventures/${ventureId}/leads`, but
+  // the model occasionally emits a v0.dev-style URL it picked up from
+  // training data. Rewrite to a template string the component already
+  // resolves via window.__VENTURE_ID__, so the saved source matches what
+  // the runtime shim will fall back to anyway.
+  {
+    pattern: /["'`]https?:\/\/(?:[\w-]+\.)*v0\.dev\/(?:api\/)?leads(?:\/[^"'`\s]*)?["'`]/g,
+    severity: 'error',
+    buildMessage: () => 'Posts to v0.dev/leads (third-party endpoint blocked by CSP)',
+    suggestion: 'Replaced with `/api/ventures/${ventureId}/leads` so the lead lands in your CRM.',
+    replacement: '`/api/ventures/${(typeof window!=="undefined"&&window.__VENTURE_ID__)||""}/leads`',
   },
 
   // ── Drift detection (shim catches these, but report them) ──
