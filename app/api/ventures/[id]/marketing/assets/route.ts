@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { buildInstagramDraftSeeds, buildLinkedInDraftSeeds, buildYouTubeDraftSeed } from '@/lib/marketing-drafts'
 import { generateFreshInstagramDrafts } from '@/lib/instagram-content-ai'
+import { generateFreshLinkedInDrafts } from '@/lib/linkedin-content-ai'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
 import {
   createMarketingAssets,
@@ -57,9 +58,27 @@ export async function POST(
     let assets
     if (parsed.data.mode === 'generate_from_marketing') {
       const marketing = venture.context?.marketing as Record<string, unknown> | null | undefined
+      const research = venture.context?.research as Record<string, unknown> | null | undefined
       let seeds: CreateMarketingAssetSeed[]
       if (parsed.data.provider === 'linkedin') {
-        seeds = buildLinkedInDraftSeeds(venture.name, marketing)
+        // Try the LinkedInRocket AI generator first (varied hook+tone per
+        // draft, no em-dashes, founder voice). Fall back to the deterministic
+        // socialCalendar reader if Gemini fails or the venture has no
+        // marketing brief yet — same defence-in-depth pattern as Instagram.
+        const LINKEDIN_DRAFT_COUNT = 3
+        try {
+          seeds = await generateFreshLinkedInDrafts(
+            venture.name,
+            marketing,
+            research,
+            LINKEDIN_DRAFT_COUNT
+          )
+          if (seeds.length === 0) {
+            seeds = buildLinkedInDraftSeeds(venture.name, marketing, LINKEDIN_DRAFT_COUNT)
+          }
+        } catch {
+          seeds = buildLinkedInDraftSeeds(venture.name, marketing, LINKEDIN_DRAFT_COUNT)
+        }
       } else if (parsed.data.provider === 'instagram') {
         // Instagram drafts are capped at INSTAGRAM_DRAFT_QUEUE_CAP across the
         // venture so the queue never grows unboundedly. Each click generates
