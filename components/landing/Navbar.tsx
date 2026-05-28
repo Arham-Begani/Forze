@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ThemeToggle } from './ThemeToggle'
 
 interface SessionData { userId: string }
 
@@ -26,7 +27,7 @@ export function Navbar() {
   }, [])
 
   useEffect(() => {
-    const sectionIds = ['how-it-works', 'agents', 'compare', 'pricing']
+    const sectionIds = ['how-it-works', 'agents', 'modules', 'compare', 'pricing']
     const observers: IntersectionObserver[] = []
     sectionIds.forEach(id => {
       const el = document.getElementById(id)
@@ -49,6 +50,7 @@ export function Navbar() {
   const navLinks = [
     { label: 'How it works', id: 'how-it-works' },
     { label: 'Agents', id: 'agents' },
+    { label: 'Modules', id: 'modules' },
     { label: 'Compare', id: 'compare' },
     { label: 'Pricing', id: 'pricing' },
   ]
@@ -166,6 +168,7 @@ export function Navbar() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }} className="hide-mobile">
+          <ThemeToggle />
           {isLoggedIn ? (
             <button
               onClick={() => router.push('/dashboard')}
@@ -365,6 +368,7 @@ export function Navbar() {
             gap: '10px',
             flexShrink: 0,
           }}>
+            <ThemeToggle variant="wide" />
             {isLoggedIn ? (
               <button
                 onClick={() => { setMobileOpen(false); router.push('/dashboard') }}

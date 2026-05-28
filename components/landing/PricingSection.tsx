@@ -67,14 +67,14 @@ export function PricingSection() {
 
   return (
     <section id="pricing" ref={sectionRef} style={{
-      padding: 'clamp(64px, 8vw, 112px) 24px',
+      padding: 'clamp(80px, 10vw, 136px) 24px',
       background: 'var(--sidebar)',
     }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1180px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{
           textAlign: 'center',
-          marginBottom: '48px',
+          marginBottom: '64px',
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(24px)',
           transition: 'opacity 0.6s ease, transform 0.6s ease',
@@ -142,8 +142,9 @@ export function PricingSection() {
         {/* Plan cards */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(190px, 100%), 1fr))',
-          gap: '16px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
+          gap: '24px',
+          alignItems: 'stretch',
         }}>
           {PLAN_ORDER.map((slug, i) => {
             const plan = BILLING_PLANS[slug]
@@ -158,10 +159,10 @@ export function PricingSection() {
                 key={slug}
                 style={{
                   borderRadius: 'var(--radius-xl)',
-                  padding: '28px 22px',
+                  padding: '36px 28px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '20px',
+                  gap: '24px',
                   position: 'relative',
                   background: isHighlighted
                     ? 'linear-gradient(160deg, hsla(28,62%,42%,0.12), hsla(28,62%,42%,0.04))'
@@ -238,10 +239,10 @@ export function PricingSection() {
 
                 {/* Plan name + desc */}
                 <div>
-                  <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '16px', fontWeight: 800, color: 'var(--text)', marginBottom: '4px' }}>
+                  <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '17px', fontWeight: 800, color: 'var(--text)', marginBottom: '8px', letterSpacing: '-0.01em' }}>
                     {plan.label}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.4 }}>
+                  <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.55, minHeight: '40px' }}>
                     {PLAN_DESCRIPTIONS[slug]}
                   </div>
                 </div>
@@ -249,20 +250,20 @@ export function PricingSection() {
                 {/* Price */}
                 <div>
                   {price === 0 ? (
-                    <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '32px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                    <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '40px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.025em', lineHeight: 1 }}>
                       Free
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
-                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '13px', color: 'var(--muted)', marginBottom: '6px' }}>₹</span>
-                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '32px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '15px', color: 'var(--muted)', marginBottom: '8px' }}>₹</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '40px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.025em', lineHeight: 1 }}>
                         {yearly ? effectiveMonthly.toLocaleString('en-IN') : price.toLocaleString('en-IN')}
                       </span>
-                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '13px', color: 'var(--muted)', marginBottom: '6px' }}>/mo</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '14px', color: 'var(--muted)', marginBottom: '8px' }}>/mo</span>
                     </div>
                   )}
                   {yearly && price > 0 && (
-                    <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                    <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '12px', color: 'var(--muted)', marginTop: '6px' }}>
                       ₹{price.toLocaleString('en-IN')} billed yearly
                     </div>
                   )}
@@ -272,14 +273,14 @@ export function PricingSection() {
                 <div style={{ height: '1px', background: 'var(--border)' }} />
 
                 {/* Features */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
                   {PLAN_HIGHLIGHTS[slug].map((item, j) => (
-                    <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                      <span style={{ color: isHighlighted ? 'var(--accent)' : '#22c55e', fontSize: '12px', flexShrink: 0, marginTop: '2px' }}>✓</span>
-                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '13px', color: 'var(--text-soft)', lineHeight: 1.4 }}>{item}</span>
+                    <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <span style={{ color: isHighlighted ? 'var(--accent)' : '#22c55e', fontSize: '12px', flexShrink: 0, marginTop: '3px' }}>✓</span>
+                      <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '13px', color: 'var(--text-soft)', lineHeight: 1.55 }}>{item}</span>
                     </div>
                   ))}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', paddingTop: '12px', borderTop: '1px dashed var(--border)' }}>
                     <span style={{ color: 'var(--muted)', fontSize: '12px', flexShrink: 0 }}>◎</span>
                     <span style={{ fontFamily: 'var(--font-jetbrains-mono), monospace', fontSize: '12px', color: 'var(--muted)' }}>
                       {plan.ventureLimit >= 1_000_000 ? 'Unlimited' : plan.ventureLimit} venture{plan.ventureLimit !== 1 ? 's' : ''}
@@ -292,7 +293,7 @@ export function PricingSection() {
                   onClick={() => router.push('/signup')}
                   style={{
                     width: '100%',
-                    padding: '11px 16px',
+                    padding: '14px 18px',
                     borderRadius: 'var(--radius-md)',
                     border: isHighlighted ? 'none' : '1px solid var(--border-strong)',
                     background: isHighlighted ? 'var(--accent)' : 'transparent',
@@ -332,13 +333,17 @@ export function PricingSection() {
         <p style={{
           textAlign: 'center',
           fontFamily: 'var(--font-dm-sans), sans-serif',
-          fontSize: '13px',
+          fontSize: '14px',
           color: 'var(--muted)',
-          marginTop: '32px',
+          marginTop: '56px',
+          lineHeight: 1.6,
+          maxWidth: '560px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
           opacity: visible ? 1 : 0,
           transition: 'opacity 0.6s 0.4s ease',
         }}>
-          Start free with 25 monthly credits and validate one venture before you spend anything on build or consultants.
+          Start free with weekly credits. No card required. Top-ups never expire.
         </p>
       </div>
     </section>

@@ -8,24 +8,24 @@ const STEPS = [
     icon: 'V',
     accent: '#6B8F71',
     title: 'Describe The Venture',
-    description: 'Give Forze the problem, customer, and angle you want to validate.',
+    description: 'One paragraph. The problem, the customer, the angle. Forze takes it from there.',
     detail: 'Example: "AI scheduling for insurance agents"',
   },
   {
     number: '02',
-    icon: 'P',
+    icon: 'F',
     accent: '#C4975A',
-    title: 'Forze Builds The Case',
-    description: 'Research, feasibility, Shadow Board critique, and validation assets are generated as one connected story.',
-    detail: 'TAM · competition · GO/NO-GO · risks · landing test',
+    title: 'The Workforce Runs',
+    description: '11 connected AI agents handle research, branding, a live landing page, feasibility, marketing, and the first round of outreach — in parallel, in minutes.',
+    detail: 'Research · Brand · Landing · Feasibility · CRM · Outreach',
   },
   {
     number: '03',
-    icon: 'M',
+    icon: 'L',
     accent: '#8C7A5A',
-    title: 'Move With Evidence',
-    description: 'Share the outputs with co-founders, customers, or investors and decide what deserves to be built next.',
-    detail: 'Use the page, memo, deck, and verdict immediately',
+    title: 'Ship & Iterate',
+    description: 'Your venture is live with a real page, real leads in the CRM, real campaigns going out, and an investor-ready story. Edit any agent. Re-run any module.',
+    detail: 'Live URL · leads captured · campaigns sent · deck ready',
   },
 ]
 
@@ -75,7 +75,7 @@ export function HowItWorks() {
           letterSpacing: '-0.02em',
           lineHeight: 1.2,
         }}>
-          From Idea to Validation in 3 Steps
+          From Idea to a Live Venture in 3 Steps
         </h2>
         <p style={{
           fontFamily: 'var(--font-dm-sans), sans-serif',
@@ -85,7 +85,7 @@ export function HowItWorks() {
           margin: '0 auto',
           lineHeight: 1.6,
         }}>
-          Forze helps you prove whether the idea deserves execution before you burn months building it.
+          Stop spending months on a deck. Forze ships the venture itself — validated, live, and reaching its first customers.
         </p>
       </div>
 

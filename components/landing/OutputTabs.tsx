@@ -358,10 +358,10 @@ export function OutputTabs() {
             Deliverables
           </p>
           <h2 style={{ fontFamily: 'var(--font-dm-sans)', fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, color: 'var(--text)', margin: '0 0 16px', letterSpacing: '-0.02em' }}>
-            Validation Assets, Not AI Fluff
+            Real Outputs. Not AI Fluff.
           </h2>
           <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '17px', color: 'var(--text-soft)', maxWidth: '620px', margin: '0 auto', lineHeight: 1.6 }}>
-            Every output strengthens the same case: is this venture real, should you pursue it, and how do you explain it clearly to the market and investors?
+            A deployed landing page. A working CRM. Outreach in motion. An investor-ready deck. Every agent ships something usable — and every output stays connected to the same venture story.
           </p>
         </div>
 

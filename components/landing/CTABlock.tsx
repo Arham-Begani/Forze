@@ -104,14 +104,14 @@ export function CTABlock() {
           letterSpacing: '-0.025em',
           lineHeight: 1.1,
         }}>
-          Stop guessing which ideas deserve your time.<br />
+          Stop building decks.<br />
           <span style={{
             background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>
-            Validate in 5 minutes.
+            Start running a venture.
           </span>
         </h2>
 
@@ -122,7 +122,7 @@ export function CTABlock() {
           margin: 0,
           lineHeight: 1.6,
         }}>
-          Get the research, feasibility verdict, live page, and investor narrative you need to move with confidence.
+          A live landing page, a working CRM, real outreach in motion, and an investor-ready story — in the time it takes to brief a freelancer. Join the 100+ founders already building on Forze.
         </p>
 
         <button
@@ -150,7 +150,7 @@ export function CTABlock() {
             e.currentTarget.style.boxShadow = '0 12px 36px -4px hsla(28,62%,42%,0.45)'
           }}
         >
-          Validate Your Idea Now {'->'}
+          Launch Your Venture Free {'->'}
         </button>
 
         <p style={{

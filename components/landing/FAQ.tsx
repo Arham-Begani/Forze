@@ -4,40 +4,48 @@ import { useEffect, useRef, useState } from 'react'
 
 const FAQS = [
   {
+    q: 'What does Forze actually do?',
+    a: 'Forze is an autonomous startup workforce. You describe an idea once and 11 connected AI agents take it through research, branding, a live landing page, feasibility analysis, multi-channel marketing, a CRM, and cold outreach. You walk away with a deployed venture — not a folder of prompts and PDFs.',
+  },
+  {
     q: 'How is Forze different from ChatGPT?',
-    a: 'ChatGPT gives you disconnected answers. Forze gives you a connected validation system. Research informs branding, branding informs the landing page, feasibility stress-tests the thesis, Shadow Board attacks your assumptions, and Investor Kit packages the case. The value is the continuity, not just the text generation.',
+    a: 'ChatGPT gives you disconnected answers. Forze gives you a connected venture. Research drives positioning, positioning drives the brand, the brand drives the landing page, the landing page captures leads into a real CRM, and outreach sends real campaigns to those leads. Every agent shares the same venture context — the value is the continuity, not just the text.',
   },
   {
     q: 'Do I need technical skills to use Forze?',
-    a: 'None. You describe your idea in plain English. Forze handles the research, positioning, validation page, feasibility modeling, and investor materials. If you can explain the problem clearly, you can use Forze.',
+    a: 'None. You describe your idea in plain English. Forze handles the research, positioning, deployed landing page, CRM, outreach campaigns, feasibility modeling, and investor materials. If you can explain the problem clearly, you can run a venture on Forze.',
   },
   {
-    q: 'How long does a Full Launch actually take?',
-    a: 'Typically 3-7 minutes depending on idea complexity and model latency. Research, branding, landing page generation, and feasibility analysis run together, so you get a usable validation package in one pass instead of stitching outputs together manually.',
+    q: 'How long does a Full Launch take?',
+    a: 'Typically 3-7 minutes. Research, branding, landing page deployment, and feasibility analysis run in parallel and stay context-connected — so you get a usable launched venture in one pass instead of stitching outputs together manually.',
+  },
+  {
+    q: 'What can the landing page actually do?',
+    a: 'It is a real deployed page on a real URL with lead capture, analytics, and design grounded in your inspiration sources (paste Stripe, Linear, anything — Forze measures the real fonts and colors and applies them). Leads land directly in the built-in CRM. You can edit any section by chatting with the agent.',
+  },
+  {
+    q: 'How do the CRM and Outreach modules work?',
+    a: 'The CRM is your lead inbox — every signup from your landing page lands here, with history, tags, and 1:1 or bulk email send. Outreach builds full cold-email campaigns: lead enrichment, sequence drafting, dispatch, and reply tracking. You can also publish drafts directly to LinkedIn and Instagram from your connected accounts.',
+  },
+  {
+    q: 'What does the Shadow Board do?',
+    a: 'Three adversarial AI personas — Silicon Skeptic, UX Evangelist, Growth Alchemist — simulate a hard board review. They attack CAC assumptions, onboarding risk, and strategic weakness so you find the cracks before the market does. You get a Venture Survival Score, pivot recommendations, and synthetic user feedback.',
+  },
+  {
+    q: 'Is the Investor Kit based on my real venture data?',
+    a: 'Yes. It is not a generic template. Investor Kit pulls from your venture research, feasibility findings, brand context, and live landing-page proof — then packages a memo, deck outline, ask details, and data room summary that defends itself in a real conversation.',
+  },
+  {
+    q: 'How do credits and plans work?',
+    a: 'Credits refresh every Monday 00:00 IST. Free gets 10/week, Builder gets 60/week with Outreach + CRM + Inspiration unlocked, Studio gets 600/week with unlimited sends. Top-ups never expire. Simple agents cost 1 credit, Full Launch costs 30. Free + Starter focus on validation; Builder and up run the full workforce.',
   },
   {
     q: 'Can I edit the outputs?',
-    a: 'Yes. Every agent supports edit mode. Ask for the specific change you want and Forze updates only the relevant fields instead of regenerating everything. That makes it practical to tighten a thesis, rerun positioning, or refine a landing page without losing context.',
-  },
-  {
-    q: 'What does the Shadow Board actually do?',
-    a: 'Three AI personas - a Silicon Skeptic, UX Evangelist, and Growth Alchemist - simulate a hard board review of your venture. They challenge CAC assumptions, onboarding risk, and strategic weakness so you find the cracks early. You get a Venture Survival Score, pivot recommendations, and synthetic user feedback.',
-  },
-  {
-    q: 'How should I use the feasibility analysis?',
-    a: 'Use it as a high-quality decision tool, not audited finance. Forze combines market context, competitor information, and structured assumption testing to tell you whether the idea looks investable, fragile, or worth changing. It is strongest as a way to decide what to test next and what to stop believing too early.',
-  },
-  {
-    q: 'Is the Investor Kit based on the real venture outputs?',
-    a: 'Yes. Investor Kit is not a generic deck generator. It pulls from the venture research, feasibility findings, brand context, and launch materials already produced inside Forze, then turns that into a coherent memo, deck outline, ask details, and data room summary.',
-  },
-  {
-    q: 'What are credits and how do they work?',
-    a: 'Credits are consumed per agent run. Simple agents like Co-pilot cost 1 credit. Complex agents like Full Launch cost 30 credits. Your plan includes a monthly credit allowance. Credits roll over within your billing cycle, and top-ups are available if you need more.',
+    a: 'Yes. Every agent supports edit mode — describe the change you want and Forze updates only the relevant section instead of regenerating from scratch. Re-run any single module without losing the rest of the venture context.',
   },
   {
     q: 'What happens to my venture data?',
-    a: 'Your data is stored securely in your account and is not shared with other users. You own the outputs, including the research, landing page assets, and investor materials generated from your venture. Delete your account at any time to remove the data.',
+    a: 'Your data is stored securely in your account and is not shared with other users. You own the outputs — the research, landing page, CRM leads, campaigns, and investor materials. Delete your account at any time to remove everything.',
   },
 ]
 

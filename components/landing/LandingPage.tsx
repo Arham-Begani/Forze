@@ -7,6 +7,7 @@ import { Marquee } from './Marquee'
 import { HowItWorks } from './HowItWorks'
 import { AgentGrid } from './AgentGrid'
 import { OutputTabs } from './OutputTabs'
+import { ModuleShowcase } from './ModuleShowcase'
 import { ComparisonTable } from './ComparisonTable'
 import { PricingSection } from './PricingSection'
 import { Testimonials } from './Testimonials'
@@ -54,6 +55,7 @@ export function LandingPage() {
       <HowItWorks />
       <AgentGrid />
       <OutputTabs />
+      <ModuleShowcase />
       <Testimonials />
       <ComparisonTable />
       <PricingSection />

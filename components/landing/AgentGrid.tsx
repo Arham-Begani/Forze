@@ -6,8 +6,8 @@ const FEATURED = {
   icon: 'FL',
   accent: '#C4975A',
   title: 'Full Launch',
-  tagline: 'Validation, launch assets, and investor context in one run.',
-  description: 'Research informs your positioning. Positioning informs the landing page. Feasibility pressure-tests the numbers. Investor Kit packages the story. Full Launch keeps the chain intact so you are not pitching disconnected AI fragments.',
+  tagline: 'Idea in. Live, validated venture out. One run.',
+  description: 'Research drives positioning. Positioning drives the brand. Brand drives the landing page. Feasibility stress-tests the numbers. The whole chain runs in parallel, stays connected, and hands you a real venture — not a folder of disconnected AI fragments. Plug in Outreach, CRM, and Launch Autopilot the moment the page goes live.',
   subAgents: [
     { icon: 'R', label: 'Research', accent: '#5A8C6E' },
     { icon: 'B', label: 'Branding', accent: '#5A6E8C' },
@@ -21,29 +21,29 @@ const AGENTS = [
     icon: 'R',
     accent: '#5A8C6E',
     title: 'Research',
-    description: 'Validate demand, map the market, and identify where the opening really is.',
+    description: 'Validate demand, map the market, and identify where the real opening is.',
     outputs: ['TAM / SAM / SOM', 'Top competitors + gaps', 'Recommended next test'],
   },
   {
     icon: 'B',
     accent: '#5A6E8C',
     title: 'Branding',
-    description: 'Create positioning and identity that actually match the market you are entering.',
+    description: 'Positioning and identity that actually match the market you are entering.',
     outputs: ['Names + positioning', 'Color + typography guide', 'Brand voice system'],
-  },
-  {
-    icon: 'M',
-    accent: '#8C5A7A',
-    title: 'Marketing',
-    description: 'Turn validated insight into a launch plan your market can actually respond to.',
-    outputs: ['GTM playbook', 'Launch content system', 'Email launch sequence'],
   },
   {
     icon: 'L',
     accent: '#8C7A5A',
     title: 'Landing Page',
-    description: 'Deploy a live validation page that turns positioning into an actual market test.',
-    outputs: ['Live deployed URL', 'Full page copy', 'Lead capture ready'],
+    description: 'A live, deployed page with copy, design, and lead capture — ready to send traffic.',
+    outputs: ['Live deployed URL', 'Inspiration-grounded design', 'Lead capture + analytics'],
+  },
+  {
+    icon: 'M',
+    accent: '#8C5A7A',
+    title: 'Marketing',
+    description: 'Multi-channel content factory — LinkedIn, Instagram, email, and direct mail, all on-brand.',
+    outputs: ['LinkedIn + IG drafts', 'Email launch sequence', 'Direct mail copy + assets'],
   },
   {
     icon: 'F',
@@ -53,25 +53,39 @@ const AGENTS = [
     outputs: ['Revenue forecast', 'Profitability timeline', 'GO/NO-GO verdict'],
   },
   {
-    icon: 'C',
-    accent: '#6B8F71',
-    title: 'Advisor',
-    description: 'Ask follow-up questions across every output without losing venture context.',
-    outputs: ['Contextual answers', 'Strategic pivots', 'Refinement ideas'],
+    icon: 'LA',
+    accent: '#C4975A',
+    title: 'Launch Autopilot',
+    description: 'Set a launch date. Forze schedules content, outreach, and announcements across every channel.',
+    outputs: ['Launch calendar', 'Cross-channel orchestration', 'Hands-off execution'],
+  },
+  {
+    icon: 'IK',
+    accent: '#7A8C5A',
+    title: 'Investor Kit',
+    description: 'Memo, deck outline, and data room summary — built from your real venture, not a template.',
+    outputs: ['Executive summary', 'Pitch deck outline', 'Data room + ask'],
   },
   {
     icon: 'SB',
     accent: '#E04848',
-    title: 'Reality Check',
-    description: 'Pressure-test assumptions before they become expensive mistakes.',
+    title: 'Shadow Board',
+    description: 'Three adversarial AI personas pressure-test your venture before the market does.',
     outputs: ['Survival Score (0-100)', 'Critical blind spots', 'Pivot recommendations'],
   },
   {
     icon: 'MVP',
     accent: '#C45A5A',
-    title: 'MVP Scope',
+    title: 'MVP Scalpel',
     description: 'Cut the product down to the smallest version that can validate the thesis.',
     outputs: ['Must-have features', 'Weekend sprint spec', 'First success metric'],
+  },
+  {
+    icon: 'A',
+    accent: '#5A8C6E',
+    title: 'Advisor',
+    description: 'Chat with your venture. Ask follow-ups across every output without losing context.',
+    outputs: ['Contextual answers', 'Strategic pivots', 'Refinement ideas'],
   },
 ]
 
@@ -121,7 +135,7 @@ export function AgentGrid() {
           margin: '0 0 16px',
           letterSpacing: '-0.02em',
         }}>
-          The Validation Stack
+          Your AI Workforce
         </h2>
         <p style={{
           fontFamily: 'var(--font-dm-sans), sans-serif',
@@ -131,7 +145,7 @@ export function AgentGrid() {
           margin: '0 auto',
           lineHeight: 1.6,
         }}>
-          Each module does one hard job. Together they turn conviction into evidence.
+          Each agent does one hard job extremely well. Together they take you from raw idea to launched venture.
         </p>
       </div>
 

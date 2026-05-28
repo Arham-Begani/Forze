@@ -4,24 +4,25 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const CYCLING_PHRASES = [
-  'evidence before you build',
-  'validation in minutes',
-  'a real go-to-market read',
-  'a live validation page',
-  'your investor story ready',
+  'launched.',
+  'live.',
+  'shipped.',
+  'validated.',
+  'running.',
+  'earning.',
 ]
 
 const STREAM_LINES = [
-  { prefix: 'Research', text: 'Demand mapped, TAM/SAM/SOM sized, competitive gaps identified...', delay: 0 },
-  { prefix: 'Feasibility', text: 'GO/NO-GO verdict drafted with CAC, LTV, margin, and risk pressure tests...', delay: 800 },
-  { prefix: 'Landing', text: 'Validation page live with positioning, proof, and lead capture ready...', delay: 1600 },
-  { prefix: 'Investor Kit', text: 'Executive summary, memo, and deck outline packaged from existing outputs...', delay: 2400 },
+  { prefix: 'Research', text: 'Demand mapped, TAM/SAM/SOM sized, top-3 competitive gaps surfaced...', delay: 0 },
+  { prefix: 'Branding', text: 'Names, positioning, brand voice, color system, and typography generated...', delay: 800 },
+  { prefix: 'Landing', text: 'Live page deployed with copy, lead capture, and inspiration-grounded design...', delay: 1600 },
+  { prefix: 'Outreach', text: 'Cold-email sequences drafted, segmented, and dispatched to your first leads...', delay: 2400 },
 ]
 
 const STAT_CHIPS = [
-  { icon: '01', label: 'Proof in minutes' },
-  { icon: '02', label: 'GO/NO-GO clarity' },
-  { icon: '03', label: 'Investor-ready outputs' },
+  { icon: '01', label: '11 connected AI agents' },
+  { icon: '02', label: 'Launched, not just pitched' },
+  { icon: '03', label: 'Real leads in your CRM' },
 ]
 
 export function Hero() {
@@ -176,7 +177,7 @@ export function Hero() {
             margin: 0,
             letterSpacing: '-0.02em',
           }}>
-            Your idea deserves
+            Your startup,
             <br />
             <span className="hero-typewriter-line" style={{
               background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
@@ -184,7 +185,7 @@ export function Hero() {
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
               display: 'inline-block',
-              minWidth: 'min(420px, 82vw)',
+              minWidth: 'min(320px, 80vw)',
             }}>
               {displayed}
               <span style={{
@@ -209,7 +210,7 @@ export function Hero() {
           margin: 0,
           animation: 'fade-in-scale 0.7s 0.2s ease both',
         }}>
-          Forze turns a raw idea into market research, feasibility analysis, a live landing page, and investor-ready materials in minutes. Everything stays connected, so your validation story is coherent from first prompt to first meeting.
+          Your autonomous AI workforce — from raw idea to a launched, validated venture in minutes, not months.
         </p>
 
         <div style={{
@@ -305,7 +306,7 @@ export function Hero() {
             color: 'var(--muted)',
             fontFamily: 'var(--font-dm-sans), sans-serif',
           }}>
-            <strong style={{ color: 'var(--text-soft)' }}>70+ founders</strong> use Forze to pressure-test ideas before they build
+            <strong style={{ color: 'var(--text-soft)' }}>100+ founders</strong> are running real ventures on Forze — not just decks
           </span>
         </div>
 
@@ -341,7 +342,7 @@ export function Hero() {
               flex: 1,
               textAlign: 'center',
             }}>
-              Forze · Full Launch Validation Run
+              Forze · Full Launch Run
             </span>
             <div style={{
               width: '8px',
@@ -410,7 +411,7 @@ export function Hero() {
                 fontSize: '13px',
                 color: 'var(--muted)',
               }}>
-                Validation package ready · 4m 12s
+                Venture launched · landing live · 4m 12s
               </span>
             </div>
           </div>
