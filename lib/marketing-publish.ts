@@ -301,6 +301,136 @@ async function getAccessToken(connection: SocialConnectionSecretRecord): Promise
   return refreshLinkedInAccessToken(connection)
 }
 
+// LinkedIn rewards posts that include native media (image or video) — text-only
+// posts are demoted in the feed. We always try to attach a generated image
+// before publishing. Two-step LinkedIn flow: register the upload to get an
+// asset URN + upload URL, then PUT the image bytes. Returned URN is then
+// referenced in the ugcPost media[] array with shareMediaCategory='IMAGE'.
+async function uploadLinkedInImage(input: {
+  accessToken: string
+  ownerUrn: string
+  imageBytes: Buffer
+  contentType: string
+}): Promise<string> {
+  const registerRes = await fetch(
+    'https://api.linkedin.com/v2/assets?action=registerUpload',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+      body: JSON.stringify({
+        registerUploadRequest: {
+          recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+          owner: input.ownerUrn,
+          serviceRelationships: [
+            {
+              relationshipType: 'OWNER',
+              identifier: 'urn:li:userGeneratedContent',
+            },
+          ],
+        },
+      }),
+    }
+  )
+
+  if (!registerRes.ok) {
+    const text = await registerRes.text()
+    throw new MarketingProviderError(`LinkedIn image registerUpload failed: ${text}`, {
+      retryable: registerRes.status >= 500 || registerRes.status === 429,
+    })
+  }
+
+  const registerData = await parseJson<{
+    value?: {
+      uploadMechanism?: {
+        'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'?: {
+          uploadUrl?: string
+        }
+      }
+      asset?: string
+    }
+  }>(registerRes)
+
+  const uploadUrl =
+    registerData.value?.uploadMechanism?.[
+      'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'
+    ]?.uploadUrl
+  const assetUrn = registerData.value?.asset
+  if (!uploadUrl || !assetUrn) {
+    throw new MarketingProviderError('LinkedIn registerUpload returned no upload URL or asset URN', {
+      retryable: false,
+    })
+  }
+
+  const putRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+      'Content-Type': input.contentType,
+    },
+    body: new Uint8Array(input.imageBytes),
+  })
+
+  if (!putRes.ok) {
+    const text = await putRes.text()
+    throw new MarketingProviderError(`LinkedIn image upload failed: ${text}`, {
+      retryable: putRes.status >= 500 || putRes.status === 429,
+    })
+  }
+
+  return assetUrn
+}
+
+// Generate (or fetch) the image and hand the bytes off to LinkedIn's asset
+// uploader. Returns null on any failure so the post can still go out as
+// text-only — a transient image-gen error should never kill a working post.
+async function resolveLinkedInImageAsset(input: {
+  accessToken: string
+  ownerUrn: string
+  asset: MarketingAsset
+  payload: Record<string, unknown>
+}): Promise<string | null> {
+  if (input.payload.skipImage === true) return null
+
+  const ventureName = stringValue(input.payload.ventureName) || input.asset.title || 'Brand'
+  const brandColors = Array.isArray(input.payload.brandColors)
+    ? (input.payload.brandColors as unknown[]).filter((c): c is string => typeof c === 'string')
+    : []
+
+  try {
+    let imageUrl = stringValue(input.payload.imageUrl)
+    if (!imageUrl) {
+      imageUrl = await generatePostImage(input.asset.body.trim(), ventureName, brandColors)
+    }
+
+    const fetchRes = await fetch(imageUrl, { cache: 'no-store' })
+    if (!fetchRes.ok) {
+      return null
+    }
+    const contentType = fetchRes.headers.get('content-type') || 'image/jpeg'
+    if (!contentType.startsWith('image/')) {
+      return null
+    }
+    const bytes = Buffer.from(await fetchRes.arrayBuffer())
+    if (bytes.byteLength === 0) {
+      return null
+    }
+
+    return await uploadLinkedInImage({
+      accessToken: input.accessToken,
+      ownerUrn: input.ownerUrn,
+      imageBytes: bytes,
+      contentType,
+    })
+  } catch (err) {
+    console.warn('[linkedin] image attachment failed, falling back to text-only post:', err)
+    return null
+  }
+}
+
 async function publishLinkedInAsset(
   asset: MarketingAsset,
   connection: SocialConnectionSecretRecord
@@ -315,13 +445,38 @@ async function publishLinkedInAsset(
     throw new MarketingProviderError('LinkedIn post body is required', { retryable: false })
   }
 
-  const mediaEntries = linkUrl
-    ? [{
-      status: 'READY',
-      originalUrl: linkUrl,
-      title: { text: asset.title || 'Learn more' },
-    }]
-    : []
+  // Prefer image over link card — LinkedIn only allows one media category per
+  // post, and native images get the biggest algorithmic boost.
+  const imageAssetUrn = await resolveLinkedInImageAsset({
+    accessToken,
+    ownerUrn: author,
+    asset,
+    payload,
+  })
+
+  let shareMediaCategory: 'IMAGE' | 'ARTICLE' | 'NONE' = 'NONE'
+  let mediaEntries: Array<Record<string, unknown>> = []
+
+  if (imageAssetUrn) {
+    shareMediaCategory = 'IMAGE'
+    mediaEntries = [
+      {
+        status: 'READY',
+        media: imageAssetUrn,
+        title: { text: asset.title || 'Post image' },
+        description: { text: asset.title || '' },
+      },
+    ]
+  } else if (linkUrl) {
+    shareMediaCategory = 'ARTICLE'
+    mediaEntries = [
+      {
+        status: 'READY',
+        originalUrl: linkUrl,
+        title: { text: asset.title || 'Learn more' },
+      },
+    ]
+  }
 
   const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
     method: 'POST',
@@ -336,7 +491,7 @@ async function publishLinkedInAsset(
       specificContent: {
         'com.linkedin.ugc.ShareContent': {
           shareCommentary: { text: body },
-          shareMediaCategory: linkUrl ? 'ARTICLE' : 'NONE',
+          shareMediaCategory,
           media: mediaEntries,
         },
       },
@@ -362,10 +517,21 @@ async function publishLinkedInAsset(
   }
 
   const restliId = response.headers.get('x-restli-id')
+  // LinkedIn returns the share/ugcPost URN in the X-Restli-Id header (e.g.
+  // "urn:li:share:7..." or "urn:li:ugcPost:7..."). The public permalink is
+  // https://www.linkedin.com/feed/update/{urlencoded-urn}/ — encoding the
+  // colons is required because LinkedIn's router treats raw `urn:li:share:`
+  // as a different segment and 404s.
+  const permalink = restliId
+    ? `https://www.linkedin.com/feed/update/${encodeURIComponent(restliId)}/`
+    : null
+  const metadata: Record<string, unknown> = {}
+  if (restliId) metadata.restliId = restliId
+  if (imageAssetUrn) metadata.imageAssetUrn = imageAssetUrn
   return {
     providerAssetId: restliId,
-    permalink: null,
-    metadata: restliId ? { restliId } : {},
+    permalink,
+    metadata,
   }
 }
 
