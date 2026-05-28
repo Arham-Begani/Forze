@@ -78,51 +78,51 @@
 }
 
 .dark {
-  /* Amber dark — true black with orange accent */
-  --bg-h: 20;
-  --bg-s: 5%;
-  --bg-l: 4%;
+  /* Amber dark — soft warm charcoal with orange accent */
+  --bg-h: 24;
+  --bg-s: 7%;
+  --bg-l: 12%;
   --bg: hsl(var(--bg-h), var(--bg-s), var(--bg-l));
-  --bg-deep: hsl(var(--bg-h), var(--bg-s), 2%);
+  --bg-deep: hsl(var(--bg-h), var(--bg-s), 9%);
 
   --text-h: 35;
-  --text-s: 8%;
-  --text-l: 92%;
+  --text-s: 10%;
+  --text-l: 94%;
   --text: hsl(var(--text-h), var(--text-s), var(--text-l));
-  --text-soft: hsl(var(--text-h), var(--text-s), 75%);
-  --muted: hsl(var(--text-h), 5%, 45%);
+  --text-soft: hsl(var(--text-h), var(--text-s), 80%);
+  --muted: hsl(var(--text-h), 7%, 58%);
 
   --accent-h: 30;
-  --accent-s: 60%;
-  --accent-l: 55%;
+  --accent-s: 62%;
+  --accent-l: 58%;
   --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
-  --accent-soft: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.15);
-  --accent-glow: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.25);
+  --accent-soft: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.16);
+  --accent-glow: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.28);
 
-  --border: hsla(var(--bg-h), 10%, 100%, 0.08);
-  --border-strong: hsla(var(--bg-h), 10%, 100%, 0.15);
+  --border: hsla(var(--bg-h), 10%, 100%, 0.10);
+  --border-strong: hsla(var(--bg-h), 10%, 100%, 0.18);
 
   /* Dark Glass — uses bg-h so it tints with the theme */
-  --glass-bg: hsla(var(--bg-h), var(--bg-s), calc(var(--bg-l) + 4%), 0.72);
-  --glass-bg-strong: hsla(var(--bg-h), var(--bg-s), calc(var(--bg-l) + 6%), 0.88);
-  --glass-border: hsla(var(--bg-h), 10%, 100%, 0.07);
+  --glass-bg: hsla(var(--bg-h), var(--bg-s), calc(var(--bg-l) + 5%), 0.72);
+  --glass-bg-strong: hsla(var(--bg-h), var(--bg-s), calc(var(--bg-l) + 8%), 0.88);
+  --glass-border: hsla(var(--bg-h), 10%, 100%, 0.09);
   --glass-blur: 24px;
   --glass-blur-strong: 48px;
 
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.5);
-  --shadow-sm: 0 4px 12px rgba(0,0,0,0.6);
-  --shadow-md: 0 12px 24px rgba(0,0,0,0.7);
-  --shadow-lg: 0 24px 48px rgba(0,0,0,0.8);
-  --shadow-xl: 0 32px 64px rgba(0,0,0,0.9);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-md: 0 12px 24px rgba(0,0,0,0.5);
+  --shadow-lg: 0 24px 48px rgba(0,0,0,0.55);
+  --shadow-xl: 0 32px 64px rgba(0,0,0,0.6);
 
   --noise-opacity: 0.05;
   --blob-opacity: 0.20;
 
-  --sidebar: hsl(var(--bg-h), var(--bg-s), 6%);
-  --card-solid: hsl(var(--bg-h), var(--bg-s), 10%);
-  --nav-active: hsl(var(--bg-h), var(--bg-s), 10%);
-  --shadow-card: 0 2px 8px -2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-premium: 0 20px 40px -8px rgba(0,0,0,0.5), 0 8px 16px -4px rgba(0,0,0,0.3);
+  --sidebar: hsl(var(--bg-h), var(--bg-s), 15%);
+  --card-solid: hsl(var(--bg-h), var(--bg-s), 18%);
+  --nav-active: hsl(var(--bg-h), var(--bg-s), 19%);
+  --shadow-card: 0 2px 8px -2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-premium: 0 20px 40px -8px rgba(0,0,0,0.35), 0 8px 16px -4px rgba(0,0,0,0.22);
 }
 
 /* ─── Themes ─────────────────────────────────────────────────────────────── */

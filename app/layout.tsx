@@ -49,13 +49,18 @@ export const viewport: Viewport = {
     initialScale: 1,
     themeColor: [
         { media: '(prefers-color-scheme: light)', color: '#faf9f6' },
-        { media: '(prefers-color-scheme: dark)', color: '#111110' },
+        { media: '(prefers-color-scheme: dark)', color: '#211f1d' },
     ],
 }
+
+const THEME_INIT_SCRIPT = `(function(){try{var d=localStorage.getItem('Forze-dark-mode');if(d==='true'){document.documentElement.classList.add('dark');}var t=localStorage.getItem('Forze-theme');if(t&&t!=='amber'){document.documentElement.classList.add('theme-'+t);}}catch(e){}})();`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang='en' suppressHydrationWarning className={`${dmSans.variable} ${jetbrainsMono.variable}`}>
+            <head>
+                <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+            </head>
             <body className='antialiased'>{children}</body>
         </html>
     )
