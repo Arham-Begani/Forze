@@ -37,3 +37,6 @@ next-env.d.ts
 
 # Documentation (may contain secrets)
 docs/*.md
+
+# Antigravity CLI local config
+.antigravitycli/
