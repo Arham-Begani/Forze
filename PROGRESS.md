@@ -9,7 +9,47 @@ This file is the Agent's memory between sessions.
 
 ## Current Status
 **Phase:** 18 — Plan Tiers + Weekly Credit Refresh + Feature Gating
-**Last updated:** May 28, 2026
+**Last updated:** June 5, 2026
+
+### Latest Session (June 13 2026) — Forze IDE Download + Updater Wiring
+- User built the Forze IDE (a **Tauri** app, ~10 MB, in a separate repo) and wants the main platform to be where logged-in users download it. The two projects stay separate; they connect only through a single hosted `manifest.json` (installer URLs + signed update bundles) that the IDE CI publishes and the platform reads.
+- **Decisions captured:** stack = Tauri; access = logged-in users only; hosting recommended = **Vercel Blob (private)** (10 MB makes egress a non-issue; native to stack); gate the *initial* download, leave the *update* feed public (the Tauri updater has no web session, and bundles are signature-verified).
+- **`lib/ide-release.ts` (new):** types + reader for the combined manifest. Platform keys reuse Tauri's `{target}-{arch}` (`windows-x86_64`, `darwin-aarch64`, `darwin-x86_64`, `linux-x86_64`) so the download page and updater share one vocabulary. `getIdeManifest()` fetches `process.env.IDE_MANIFEST_URL` (60s revalidate); returns a STUB manifest when unset so everything runs locally with no external setup. Helpers: `isValidPlatformKey`, `isNewerVersion` (dotted-numeric), `IDE_PLATFORM_META`. Not `server-only` so the client UI can type-only-import the key/OS types.
+- **`app/api/download/[platform]/route.ts` (new):** `requireAuth()` gate → resolve installer from manifest → 302 to bucket URL (browser downloads directly, platform never proxies bytes). On 401 redirects to `/signin?redirect=/download` (browser nav, not JSON). 503 when no build exists for the platform yet. TODO noted: swap raw URL for a short-lived signed URL in v1.5.
+- **`app/api/update/[target]/[arch]/[current]/route.ts` (new):** public Tauri v2 updater feed. 204 when up-to-date / unknown platform / no signed bundle; else `{ version, pub_date, url, signature, notes }`. The IDE's `tauri.conf.json` points `plugins.updater.endpoints` at `…/api/update/{{target}}/{{arch}}/{{current_version}}`.
+- **`components/download/DownloadClient.tsx` (new):** client UI, OS auto-detect via `userAgentData`/UA (macOS defaults primary CTA to Apple Silicon, Intel surfaced below — arch isn't reliably detectable from UA). Primary CTA + "other platforms" grid; "coming soon"/disabled when a platform has no build. Forze design tokens.
+- **`app/download/page.tsx` (new):** server component; `getSession()` → redirect `/signin?redirect=/download` if unauthenticated; builds the platform item list and hands it to the client. Degrades to "coming soon" if the manifest fetch fails.
+- **Env to provision:** `IDE_MANIFEST_URL` (the published manifest.json) — not set yet, so the page currently shows "coming soon". Vercel Blob store (→ `BLOB_READ_WRITE_TOKEN`) still to be created when CI starts uploading.
+- Verification: `npx tsc --noEmit` exit 0. Pure-additive feature; no existing files touched, no schema/agent changes.
+- **Next:** (1) user generates Tauri signing keys + wires `tauri.conf.json` endpoints; (2) I hand over the GitHub Actions release workflow (build → sign → upload to Blob → write manifest.json in the `IdeManifest` shape); (3) set `IDE_MANIFEST_URL`; (4) add a "Download" nav/CTA link into the landing/dashboard; (5) v1.5 hardening: signed download URLs + optional gated updates via per-user license token.
+
+### Latest Session (June 5 2026) — LinkedIn Routine Channel
+- User: "make routines work for LinkedIn as well." Routines previously supported only `gmail` and `instagram`. LinkedIn posting was already fully built in the marketing pipeline (`publishLinkedInAsset` in `lib/marketing-publish.ts`, content gen in `lib/linkedin-content-ai.ts`), so this was a wiring job, not new infrastructure.
+- **`db/migrations/031_routines_linkedin.sql` (new):** (1) guarded `ALTER TYPE routine_channel ADD VALUE 'linkedin'` (same `pg_enum` existence-check pattern as 018). (2) Relaxed the `routine_channel_audience` CHECK from hard-coded `… OR channel = 'instagram'` to `… OR channel <> 'gmail'` so any social channel (instagram, linkedin, future) can run without a linked campaign while gmail still requires one.
+- **`lib/schemas/routine.ts`:** added `'linkedin'` to `ROUTINE_CHANNELS`. The gmail-requires-campaign `superRefine` is unchanged, so LinkedIn needs no campaign.
+- **`lib/routine-executor.ts`:** new `executeLinkedInRoutine` mirroring the Instagram branch — generates one fresh post via `generateFreshLinkedInDrafts(ventureName, marketing, research, 1, seed)` (note: LinkedIn gen also takes `research` from `context.research`, unlike IG), inserts a pre-approved `linkedin`/`linkedin_post` marketing asset, then queues + dispatches a single publish job inline (`dispatchDuePublishJobs({ jobIds: [job.id] })`) so one routine tick = one published post. Added explicit `else if (routine.channel === 'linkedin')` branch in `executeRoutine` (was falling through to the IG `else`).
+- **`components/venture/RoutinesPanel.tsx`:** added `linkedin: 'LinkedIn'` to `CHANNEL_LABEL` and a third `ChannelChip` in the create form. Campaign picker / submit-disable logic is gmail-gated already, so LinkedIn needs nothing there.
+- Reused existing dispatch + reauth handling — failures surface `last_error` (e.g. "LinkedIn needs to be reconnected") onto the routine_runs row exactly like IG.
+- Verification: `npx tsc --noEmit` exit 0. **Migration 031 must be applied to the DB before a LinkedIn routine can be created** (enum value + relaxed constraint).
+- **Next:** apply migration 031; smoke-test creating a LinkedIn routine and firing it via "Run due now" against a connected LinkedIn account.
+
+### Earlier Session (June 2 2026) — Gemini 3 Pro Model Fix
+- **Bug:** Architect/Feasibility runs crashed with `404 — models/gemini-3-pro-preview is no longer available`. Google discontinued `gemini-3-pro-preview` on March 26, 2026; the replacement is `gemini-3.1-pro-preview` (confirmed via web search).
+- **Fix:** Updated all Pro-model references from `models/gemini-3-pro-preview` → `models/gemini-3.1-pro-preview`:
+  - `lib/gemini.ts` — `getProModelWithThinking` default + `getProModelWithSearchAndThinking` (Grok-fallback path and Gemini path).
+  - `agents/orchestrator.ts` — explicit `getProModelWithThinking(5000, ...)` call for the Architect step.
+- Flash model (`gemini-3-flash-preview`) was NOT erroring in logs and is still serving, so it was left untouched.
+- Grok 403 (xAI credit/spend limit) left as-is per user instruction — Gemini fallback handles it.
+- **Next:** verify a live Full Launch run completes end-to-end now that the Pro model resolves.
+
+### Earlier Session (June 2 2026) — Full Launch Workflow Graph
+- User wanted the Full Launch live progress to render as a connected workflow graph (nodes + lines + glow) instead of the flat stack of `AgentStatusRow` rectangles.
+- **New file `components/ui/FullLaunchGraph.tsx`:** self-contained graph that lays out the four Full Launch agents in their real dependency order — Genesis → Identity → (Pipeline + Feasibility in parallel, per the CLAUDE.md launch order; Marketing stays excluded). Nodes positioned in a `0–100` coordinate space; an absolutely-positioned `<svg viewBox="0 0 100 100" preserveAspectRatio="none">` draws the connecting edges *behind* the node cards. Lines use `vectorEffect="non-scaling-stroke"` so stroke width stays crisp under the non-uniform viewBox scaling, and glow comes from screen-space `drop-shadow(...)` filters (not feGaussianBlur, which would distort under the same scaling).
+- **Edge states:** idle (source pending/failed → dim `--border-strong` track), active (source running/complete but target unfinished → accent track + flowing dashed `motion.path` animating `strokeDashoffset` with a glow), done (both endpoints complete → solid bright accent + steady glow). Edge color keys off the *target* node accent so the "energy" reads as flowing into the next agent.
+- **Node cards:** icon disc + name + role + status chip (Queued / Running / Done / Failed). Running nodes get a pulsing box-shadow ring + scaling icon; complete nodes get a steady soft glow. Colors match the module accents (Research `#5A8C6E`, Branding `#5A6E8C`, Landing `#8C7A5A`, Feasibility `#7A5A8C`). Uses existing design tokens (`--card-solid`, `--border`, `--nav-active`, `--muted`, `--text`).
+- **Wiring in `app/dashboard/venture/[id]/[module]/page.tsx`:** replaced the `FULL_LAUNCH_AGENTS.map(... <AgentStatusRow/>)` block (~line 1620) with `<FullLaunchGraph statuses={{ genesis, identity, pipeline, feasibility }} />`, mapping each from `entry.agentStatuses['research'|'branding'|'landing'|'feasibility'].status` (defaulting to `'pending'`). Removed the now-unused `AgentStatusRow` import. `FULL_LAUNCH_AGENTS` is still used by the status-init helpers so it stayed.
+- `AgentStatusRow.tsx` is left in place (no other importers right now, but kept as a reusable primitive).
+- Verification: `npx tsc --noEmit` exit 0. No schema, API, agent, or env changes — pure UI.
 
 ### Latest Session (May 28 2026) — LinkedIn Auto-Generated Post Images
 - User reported: text-only LinkedIn posts get demoted by the algorithm; wants images attached automatically (matching the existing Instagram behaviour). Scope: a single surgical change in `lib/marketing-publish.ts`. No new files, no schema changes, no UI changes — the LinkedIn payload type already carried `imageUrl`/`brandColors`/`ventureName` from the Instagram path; nothing to migrate.
