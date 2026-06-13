@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 // ─── Enums (match db/migrations/019_routines.sql) ─────────────────────────────
 
-export const ROUTINE_CHANNELS = ['gmail', 'instagram'] as const
+export const ROUTINE_CHANNELS = ['gmail', 'instagram', 'linkedin'] as const
 export const ROUTINE_CADENCES = ['every_3_days', 'weekly', 'monthly'] as const
 export const ROUTINE_STATUSES = ['active', 'paused', 'archived'] as const
 export const ROUTINE_RUN_STATUSES = ['success', 'failed', 'skipped'] as const

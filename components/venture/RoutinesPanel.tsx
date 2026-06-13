@@ -26,6 +26,7 @@ const CADENCE_LABEL: Record<RoutineCadence, string> = {
 const CHANNEL_LABEL: Record<RoutineChannel, string> = {
   gmail: 'Gmail',
   instagram: 'Instagram',
+  linkedin: 'LinkedIn',
 }
 
 interface FireMineSummary {
@@ -469,6 +470,12 @@ function CreateRoutineForm({
             onClick={() => setChannel('instagram')}
             label="Instagram"
             sub="Queues a fresh feed post via your connected IG account."
+          />
+          <ChannelChip
+            active={channel === 'linkedin'}
+            onClick={() => setChannel('linkedin')}
+            label="LinkedIn"
+            sub="Publishes a fresh founder-voice post to your connected LinkedIn."
           />
         </div>
       </Field>

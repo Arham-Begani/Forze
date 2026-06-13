@@ -23,6 +23,7 @@ import {
   upsertDailyAnalytics,
 } from '@/lib/queries/campaign-queries'
 import { generateFreshInstagramDrafts } from '@/lib/instagram-content-ai'
+import { generateFreshLinkedInDrafts } from '@/lib/linkedin-content-ai'
 import {
   createMarketingAssets,
   createOrReplaceQueuedPublishJob,
@@ -437,6 +438,114 @@ async function executeInstagramRoutine(
   }
 }
 
+// ─── LinkedIn branch ───────────────────────────────────────────────────────────
+
+async function executeLinkedInRoutine(
+  routine: ClaimedRoutine,
+  ventureName: string,
+  context: Record<string, unknown>,
+  adminDb: DbClient
+): Promise<ExecuteRoutineResult> {
+  try {
+    const marketing = asObject(context.marketing)
+    const research = asObject(context.research)
+    // One fresh feed post per fire. run_count seeds the hook/tone rotation so
+    // consecutive touches don't read as reworded duplicates. The generator
+    // throws on bad JSON; we let it bubble to the catch below.
+    const seeds = await generateFreshLinkedInDrafts(
+      ventureName,
+      marketing,
+      research,
+      1,
+      Date.now() + routine.run_count
+    )
+    if (seeds.length === 0) {
+      throw new Error('LinkedIn post generator returned no drafts')
+    }
+    const seed = seeds[0]
+
+    // Insert pre-approved (routines are autonomous, no manual review) then
+    // queue + dispatch a single publish job inline — same contract as the
+    // Instagram branch: one routine tick = one published post.
+    const assets = await createMarketingAssets(
+      [
+        {
+          ventureId: routine.venture_id,
+          userId: routine.user_id,
+          provider: 'linkedin',
+          assetType: 'linkedin_post',
+          title: seed.title,
+          body: seed.body,
+          payload: {
+            ...(seed.payload ?? {}),
+            origin: 'routine',
+            routine_id: routine.id,
+            angle_hint: routine.angle_hint ?? null,
+          },
+          status: 'approved',
+        },
+      ],
+      adminDb
+    )
+    if (assets.length === 0) throw new Error('Asset insert returned no rows')
+    const asset = assets[0]
+
+    const job = await createOrReplaceQueuedPublishJob(
+      asset,
+      new Date().toISOString(),
+      routine.user_id,
+      adminDb
+    )
+
+    const summary = await dispatchDuePublishJobs({ jobIds: [job.id] })
+
+    if (summary.completed === 1) {
+      const published = await getMarketingAssetByIdAdmin(asset.id)
+      await recordRoutineRun({
+        routineId: routine.id,
+        userId: routine.user_id,
+        status: 'success',
+        channel: 'linkedin',
+        metadata: {
+          asset_id: asset.id,
+          job_id: job.id,
+          permalink: published?.provider_permalink ?? null,
+        },
+      })
+      return { routineId: routine.id, status: 'success' }
+    }
+
+    const failedAsset = await getMarketingAssetByIdAdmin(asset.id)
+    const errorMessage =
+      failedAsset?.last_error ??
+      (summary.reauth > 0
+        ? 'LinkedIn needs to be reconnected'
+        : summary.requeued > 0
+          ? 'LinkedIn publish failed — queued for retry'
+          : 'LinkedIn publish failed')
+
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'failed',
+      channel: 'linkedin',
+      metadata: { asset_id: asset.id, job_id: job.id, dispatch_summary: summary },
+      errorMessage,
+    })
+    return { routineId: routine.id, status: 'failed', errorMessage }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown error'
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'failed',
+      channel: 'linkedin',
+      errorMessage: msg,
+    })
+    return { routineId: routine.id, status: 'failed', errorMessage: msg }
+  }
+}
+
 // ─── Public entry ────────────────────────────────────────────────────────────
 
 export async function executeRoutine(
@@ -461,6 +570,8 @@ export async function executeRoutine(
       result = { routineId: routine.id, status: 'failed', errorMessage: msg }
     } else if (routine.channel === 'gmail') {
       result = await executeGmailRoutine(routine, venture.name, venture.context ?? {})
+    } else if (routine.channel === 'linkedin') {
+      result = await executeLinkedInRoutine(routine, venture.name, venture.context ?? {}, adminDb)
     } else {
       result = await executeInstagramRoutine(routine, venture.name, venture.context ?? {}, adminDb)
     }
