@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AgentStatusRow } from '@/components/ui/AgentStatusRow'
+import { FullLaunchGraph } from '@/components/ui/FullLaunchGraph'
 import { ResultCard } from '@/components/ui/ResultCard'
 import { ConnectedChannelsPanel } from '@/components/marketing/ConnectedChannelsPanel'
 import ReactMarkdown from 'react-markdown'
@@ -1616,26 +1616,16 @@ export default function ModulePage() {
                       )}
                     </motion.div>
 
-                    {/* Full Launch: status rows + stream */}
+                    {/* Full Launch: workflow graph + stream */}
                     {activeModule === 'full-launch' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {FULL_LAUNCH_AGENTS.map(agent => {
-                          const s = entry.agentStatuses[agent.key] ?? { status: 'pending', detail: agent.detail }
-                          const agentIdMap: Record<string, 'genesis' | 'identity' | 'pipeline' | 'feasibility'> = {
-                            research: 'genesis',
-                            branding: 'identity',
-                            landing: 'pipeline',
-                            feasibility: 'feasibility'
-                          }
-                          return (
-                            <AgentStatusRow
-                              key={agent.key}
-                              agentId={agentIdMap[agent.key]}
-                              status={s.status === 'pending' ? 'waiting' : s.status as 'waiting' | 'running' | 'complete' | 'failed'}
-                            />
-                          )
-                        })}
-                      </div>
+                      <FullLaunchGraph
+                        statuses={{
+                          genesis: entry.agentStatuses['research']?.status ?? 'pending',
+                          identity: entry.agentStatuses['branding']?.status ?? 'pending',
+                          pipeline: entry.agentStatuses['landing']?.status ?? 'pending',
+                          feasibility: entry.agentStatuses['feasibility']?.status ?? 'pending',
+                        }}
+                      />
                     )}
 
                     {/* Stream output (thought process) — hidden for general chat */}
