@@ -31,7 +31,7 @@ export async function runFullLaunch(
 
   await onStream('=== Architect Agent: Planning your venture ===\n\n')
 
-  const architectModel = getProModelWithThinking(5000, 'models/gemini-3-pro-preview')
+  const architectModel = getProModelWithThinking(5000, 'models/gemini-3.1-pro-preview')
 
   const architectRun = async () => {
     return await streamPrompt(
