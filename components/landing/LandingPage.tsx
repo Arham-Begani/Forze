@@ -8,6 +8,7 @@ import { HowItWorks } from './HowItWorks'
 import { AgentGrid } from './AgentGrid'
 import { OutputTabs } from './OutputTabs'
 import { ModuleShowcase } from './ModuleShowcase'
+import { IdeBanner } from './IdeBanner'
 import { ComparisonTable } from './ComparisonTable'
 import { PricingSection } from './PricingSection'
 import { Testimonials } from './Testimonials'
@@ -56,6 +57,7 @@ export function LandingPage() {
       <AgentGrid />
       <OutputTabs />
       <ModuleShowcase />
+      <IdeBanner />
       <Testimonials />
       <ComparisonTable />
       <PricingSection />
