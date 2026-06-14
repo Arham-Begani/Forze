@@ -280,7 +280,7 @@ export function getFlashModelWithSearch(): SearchCapableModel {
 // Pro model with thinking - stays on Gemini because current direct callers depend on Gemini behavior.
 export function getProModelWithThinking(
     thinkingBudget: number = 10000,
-    modelId: string = 'models/gemini-3-pro-preview',
+    modelId: string = 'models/gemini-3.1-pro-preview',
     maxOutputTokens: number = 32768
 ): GenerativeModel {
     return createGeminiModel({
@@ -299,7 +299,7 @@ export function getProModelWithThinking(
 export function getProModelWithSearchAndThinking(_thinkingBudget: number = 12000): SearchCapableModel {
     if (shouldUseGrokForSearch()) {
         return createGrokSearchModel('XAI_FEASIBILITY_MODEL', {
-            model: 'models/gemini-3-pro-preview',
+            model: 'models/gemini-3.1-pro-preview',
             tools: [{ googleSearch: {} } as any],
             generationConfig: {
                 temperature: 0.5,
@@ -312,7 +312,7 @@ export function getProModelWithSearchAndThinking(_thinkingBudget: number = 12000
     }
 
     return createGeminiModel({
-        model: 'models/gemini-3-pro-preview',
+        model: 'models/gemini-3.1-pro-preview',
         tools: [{ googleSearch: {} } as any],
         generationConfig: {
             temperature: 0.5,
