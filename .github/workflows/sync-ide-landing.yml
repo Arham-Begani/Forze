@@ -1,0 +1,72 @@
+name: Sync IDE landing page
+
+# Fires when the Forze_IDE repo reports a feature-doc change (via repository_dispatch),
+# or manually. Pulls the latest product docs, has Claude Code reconcile the /ide landing
+# page content to match, and opens a PR. Never merges automatically.
+on:
+  repository_dispatch:
+    types: [ide-features-updated]
+  workflow_dispatch:
+
+# Avoid stacking redundant syncs if several pushes land close together.
+concurrency:
+  group: sync-ide-landing
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pull latest Forze_IDE feature docs
+        id: docs
+        run: |
+          DOCS_DIR="$RUNNER_TEMP/ide-docs"
+          mkdir -p "$DOCS_DIR"
+          base="https://raw.githubusercontent.com/Arham-Begani/Forze_IDE/main"
+          for f in features.md README.md ide_plan.md; do
+            # Don't fail the whole run if one optional doc is missing.
+            curl -fsSL "$base/$f" -o "$DOCS_DIR/$f" || echo "warning: $f not found, skipping"
+          done
+          echo "IDE_DOCS_DIR=$DOCS_DIR" >> "$GITHUB_ENV"
+          echo "Fetched docs:"; ls -la "$DOCS_DIR"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Reconcile landing page with feature docs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p "$(cat scripts/ide-sync/prompt.md)" \
+            --dangerously-skip-permissions \
+            --max-turns 40
+
+      - name: Open / update sync PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: ide-sync/auto
+          base: main
+          commit-message: "chore(ide): sync landing page with Forze_IDE features"
+          title: "Sync /ide landing page with Forze_IDE features"
+          body: |
+            Automated by **Sync IDE landing page**.
+
+            The `Forze_IDE` feature docs changed, so Claude Code reconciled the
+            `components/ide-landing/*` content to match. Review the diff before merging
+            — this is generated content.
+
+            Trigger: `${{ github.event_name }}`
+            Source ref: `${{ github.event.client_payload.ref || 'manual' }}`
+          add-paths: |
+            components/ide-landing/**
+          delete-branch: false
