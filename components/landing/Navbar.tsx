@@ -42,17 +42,22 @@ export function Navbar() {
     return () => observers.forEach(o => o.disconnect())
   }, [])
 
-  const scrollTo = (id: string) => {
+  const handleNavClick = (link: { id?: string; href?: string }) => {
     setMobileOpen(false)
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+    if (link.href) {
+      router.push(link.href)
+      return
+    }
+    if (link.id) document.getElementById(link.id)?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const navLinks = [
+  const navLinks: { label: string; id?: string; href?: string }[] = [
     { label: 'How it works', id: 'how-it-works' },
     { label: 'Agents', id: 'agents' },
     { label: 'Modules', id: 'modules' },
     { label: 'Compare', id: 'compare' },
     { label: 'Pricing', id: 'pricing' },
+    { label: 'IDE', href: '/ide' },
   ]
 
   const isLoggedIn = session !== 'loading' && session !== null
@@ -117,8 +122,8 @@ export function Navbar() {
             const isActive = activeSection === link.id
             return (
               <button
-                key={link.id}
-                onClick={() => scrollTo(link.id)}
+                key={link.label}
+                onClick={() => handleNavClick(link)}
                 style={{
                   background: isActive ? 'var(--accent-soft)' : 'none',
                   border: 'none',
@@ -336,8 +341,8 @@ export function Navbar() {
           }}>
             {navLinks.map(link => (
               <button
-                key={link.id}
-                onClick={() => scrollTo(link.id)}
+                key={link.label}
+                onClick={() => handleNavClick(link)}
                 style={{
                   background: 'none',
                   border: 'none',
