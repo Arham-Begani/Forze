@@ -11,7 +11,22 @@ This file is the Agent's memory between sessions.
 **Phase:** 18 — Plan Tiers + Weekly Credit Refresh + Feature Gating
 **Last updated:** June 5, 2026
 
-### Latest Session (June 14 2026) — `/download` Page Visual Redesign
+### Latest Session (June 14 2026) — Main-Nav IDE Link + SEO (sitemap/robots) for `/ide`
+- User: add the IDE link to the main navbar + "when I search Forze IDE the /ide page should come up — automatic or manual?"
+- **`components/landing/Navbar.tsx`:** added an **`IDE`** nav item that routes to `/ide` (vs the existing scroll-to-section links). Replaced `scrollTo(id)` with `handleNavClick(link)` that branches on `link.href` (router.push) vs `link.id` (scrollIntoView); `navLinks` is now typed `{ label; id?; href? }[]`; map keys switched to `link.label`. Works in both desktop + mobile menus.
+- **SEO discoverability (new files):** there was **no sitemap or robots** in the repo (only a GSC verification HTML in `public/`, so the domain is already verified in Google Search Console).
+  - **`app/sitemap.ts` (new):** Next App Router sitemap listing public routes — `/`, **`/ide`** (priority 0.9), `/pricing`, `/blog`, legal pages. Auth-gated routes excluded. Uses `NEXT_PUBLIC_BASE_URL` (→ `https://forze.in`). Emits `/sitemap.xml`.
+  - **`app/robots.ts` (new):** allow-all with `/dashboard/ /api/ /auth/ /investor/ /feedback/ /v/ /sites/` disallowed; references the sitemap. Emits `/robots.txt`.
+- **SEO answer (told user):** not automatic/instant — Google must crawl + index the new page first (days–weeks); the sitemap + internal links (navbar + IdeBanner) speed discovery. Manual step only they can do: in Google Search Console, submit `https://forze.in/sitemap.xml` and use "URL Inspection → Request Indexing" on `https://forze.in/ide`. Branded query "forze ide" should rank once indexed since it's their own domain/brand.
+- Verification: `npx tsc --noEmit` exit 0; `npm run build` exit 0 (`/sitemap.xml` + `/robots.txt` generated, `/ide` static).
+
+### Previous Session (June 14 2026) — Forze IDE Promo Section on the Main Landing
+- User: "put a section in the main landing that redirects to the IDE landing page." Added a desktop-app promo band to the **main** forze.in landing.
+- **`components/landing/IdeBanner.tsx` (new):** a glass/gradient promo card (cool `#5A8CA5` accent, scan-line flourish) — eyebrow `FORZE IDE · Desktop app`, headline "Prefer to build in a real IDE?", short blurb, 4 highlight chips (Monaco editor / AI agent control room / Vercel deploys / Local-first · BYOK), a mini IDE window mock (activity rail + code lines + "agent: building" status), and two CTAs: **Explore Forze IDE →** routes to `/ide`, **Download** routes to `/download`. IntersectionObserver reveal, responsive 2-col → 1-col < 880px, `id="desktop"`. Uses existing warm design tokens.
+- **`components/landing/LandingPage.tsx`:** imported `IdeBanner` and rendered it between `<ModuleShowcase />` and `<Testimonials />` (2-line surgical edit).
+- Verification: `npx tsc --noEmit` exit 0; `npm run build` exit 0.
+
+### Previous Session (June 14 2026) — `/download` Page Visual Redesign
 - User: "make the download page look better." Redesigned **only** `components/download/DownloadClient.tsx` (the client UI) to match the Forze/IDE landing aesthetic. Untouched: `app/download/page.tsx` server gate, `requireAuth()`, the manifest fetch, OS-detection logic, the `/api/download/[platform]` links, and the coming-soon/disabled states — all preserved exactly.
 - **What changed (pure visual):** replaced the plain Tailwind layout with the design-token system — ambient blob + dot-grid background, a header with the `FORZE [IDE]` lockup (links to `/ide`) + `ThemeToggle`, a glass version badge, gradient H1, and a big **OS-aware primary CTA** card (per-OS glyph + `Download for {label}` + `arch · ext`). "Other platforms" became hover-lift glass cards with per-OS accents (macOS `#8C7A5A`, Windows `#5A8CA5`, Linux `#5A8C6E`); coming-soon renders as a non-clickable muted card. Added trust chips (Local-first / BYOK / Signed / Free in beta), a "See everything Forze does →" link back to `/ide`, and copy aligned to the new "Sovereign OS" positioning. Responsive (grid collapses to 1 col < 520px).
 - Verification: `npx tsc --noEmit` exit 0; `npm run build` exit 0 (`/download` still `ƒ` dynamic, auth-gated).
