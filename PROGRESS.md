@@ -699,3 +699,28 @@ This file is the Agent's memory between sessions.
 **Broken:** None.
 **Known gaps from audit (next up):** OAuth `state` CSRF hardening (#2), missing `increment_campaign_metric` / `increment_gmail_daily_count` RPCs (#3), serial loop in `/send` (#4), rate limiting + prompt-injection hardening on `/generate-email` (#5, #6), HTML escaping in `personalizeEmail` (#7), atomic analytics upsert (#8), `getCampaignForUser` helper to collapse 2-query auth into 1 (#9), remove auto-`/poll-replies` on CampaignDetail mount (#10).
 **Note:** `gmail-sender.ts` emits `List-Unsubscribe-Post` but no matching `List-Unsubscribe: <url>` header. Mailbox providers need both. Will address when hardening email headers.
+
+### Day 22 — June 17, 2026
+**Goal:** Lay the database foundation for account-gated Forze IDE persistence (the desktop Tauri app authenticates against the same Supabase project; chats + project list sync, source files stay local).
+**Decisions (locked with user):**
+- **Auth flow:** Native email/password + Google sign-in form *inside* the IDE, calling Supabase directly (anon key shipped in the binary; RLS is the boundary). No new bridge endpoints.
+- **Storage split:** Source code / file contents NEVER leave the machine (preserves the "local-first, sovereign" landing-page promise). Only the project list (metadata) and AI conversation history sync to Supabase.
+- **Access tier:** Any authenticated Forze account (free or paid) unlocks the IDE. Billing gate left for later — `/api/auth/session` already returns `plan`/`hasUnlimitedAccess` if we want to upsell.
+**Built:**
+- **DB Migration:** `db/migrations/032_ide_persistence.sql` — 3 new tables, all additive (no existing shape changed):
+  - `ide_projects` — per-user project metadata only (name, last `local_path`, optional `git_remote` for cross-device dedupe via partial unique index, icon/color, `archived`, `last_opened_at`). Explicitly no file contents.
+  - `ide_conversations` — AI agent threads, nullable `project_id` (project-scoped or global), `agent` tag, `archived`.
+  - `ide_messages` — `role` (user/assistant/system/tool), `content`, `metadata` JSONB; `user_id` denormalised so RLS stays a single-column check.
+  - RLS enabled on all three with the standard four owner policies (`auth.uid() = user_id`), matching `027_inspiration_analyses.sql`. Shared `set_ide_updated_at()` trigger.
+**Verification:** SQL file only — not yet applied. (No app code touched, so no build run.)
+**Broken:** None. Additive migration.
+**Next:** (1) Run `032_ide_persistence.sql` in the Supabase SQL editor. (2) IDE-repo work (separate Tauri project): add `@supabase/supabase-js`, wire a keychain-backed session storage adapter (NO localStorage — use the Tauri keyring/Stronghold plugin), build the login gate screen, and add the sync layer (local SQLite ⇄ these tables). (3) Confirm the same Supabase URL + anon key from `.env.local` are referenced in the IDE build.
+
+### Day 23 — June 17, 2026
+**Goal:** Document the end-to-end IDE release + auto-update pipeline. The web app is already the release backend (`lib/ide-release.ts`, `/api/download/[platform]`, `/api/update/[target]/[arch]/[current]`); the missing piece is the IDE CI that produces the manifest + signed artifacts.
+**Built:**
+- **Handoff doc:** `docs/ide-release-prompt.md` — a self-contained brief for the IDE repo's Claude. Covers: the manifest contract (`IdeManifest` shape — `installers` vs `platforms` maps, `windows-x86_64`/`darwin-*`/`linux-x86_64` keys), Tauri update-signing keypair setup, `tauri.conf.json` updater config (`endpoints` → `https://forze.in/api/update/{{target}}/{{arch}}/{{current_version}}` + `pubkey` + `createUpdaterArtifacts`), a GitHub Actions `release.yml` (tag-triggered matrix build via `tauri-action`), a `scripts/build-ide-manifest.mjs` transform (`latest.json` → combined `manifest.json`), GitHub Releases hosting with stable `releases/latest/download/manifest.json` URL, OS code-signing notes, and the repeating tag-to-ship flow.
+- **Companion (earlier today):** `docs/ide-auth-prompt.md` (Supabase auth gate + keychain session + sync) and `db/migrations/032_ide_persistence.sql`.
+**Verification:** Documentation/handoff only — no web app code changed, no build run. The web-side download/updater routes were read and confirmed to already implement the contract the doc targets.
+**Broken:** None.
+**Next (user actions, can't be done from this repo):** (1) In the IDE repo: generate the updater keypair, add `TAURI_SIGNING_PRIVATE_KEY` + `..._PASSWORD` as GitHub secrets, wire `tauri.conf.json`, add the workflow, push a `v*` tag. (2) On Vercel (forze.in): set `IDE_MANIFEST_URL=https://github.com/<owner>/<ide-repo>/releases/latest/download/manifest.json` and redeploy. (3) Optional but recommended: Windows Authenticode + macOS notarization to avoid "unknown developer" warnings.
