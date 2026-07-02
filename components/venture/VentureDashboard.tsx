@@ -13,14 +13,17 @@ interface VentureDashboardProps {
     id: string;
     name: string;
     context: {
-      research: any;
-      branding: any;
-      marketing: any;
       landing: any;
-      feasibility: any;
+      shadowBoard?: any;
     };
   };
 }
+
+// Map tab ids (module slugs) to their venture.context keys.
+const TAB_CONTEXT_KEYS: Record<string, string> = {
+  landing: "landing",
+  "shadow-board": "shadowBoard",
+};
 
 const MODULE_TAB_IDS = VENTURE_TABS
   .filter((t) => t.kind === "module")
@@ -35,7 +38,7 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
   const router = useRouter();
   const initialTab = useMemo<ModuleId>(() => {
     const fromQuery = searchParams?.get("tab");
-    return isModuleTabId(fromQuery) ? fromQuery : "research";
+    return isModuleTabId(fromQuery) ? fromQuery : "landing";
   }, [searchParams]);
 
   const [activeTab, setActiveTab] = useState<ModuleId>(initialTab);
@@ -115,10 +118,10 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
               >
-                {venture.context[activeTab as keyof typeof venture.context] ? (
+                {venture.context[TAB_CONTEXT_KEYS[activeTab] as keyof typeof venture.context] ? (
                   <ResultCard
                     moduleId={activeTab}
-                    result={venture.context[activeTab as keyof typeof venture.context]}
+                    result={venture.context[TAB_CONTEXT_KEYS[activeTab] as keyof typeof venture.context]}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-[var(--border)] py-16 text-center opacity-60 sm:py-24">
@@ -127,7 +130,7 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
                     </div>
                     <h3 className="text-xl font-semibold text-[var(--text)]">Section Pending</h3>
                     <p className="max-w-xs mt-2 text-sm text-[var(--muted)]">
-                      This module hasn&apos;t been run for this venture yet. Run the full launch or individual agent to populate this data.
+                      This module hasn&apos;t been run for this venture yet. Open it from the sidebar to generate this data.
                     </p>
                   </div>
                 )}

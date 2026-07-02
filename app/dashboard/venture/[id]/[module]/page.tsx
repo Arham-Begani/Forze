@@ -10,9 +10,7 @@ import {
 } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FullLaunchGraph } from '@/components/ui/FullLaunchGraph'
 import { ResultCard } from '@/components/ui/ResultCard'
-import { ConnectedChannelsPanel } from '@/components/marketing/ConnectedChannelsPanel'
 import ReactMarkdown from 'react-markdown'
 import { getModuleCost } from '@/lib/billing'
 import { downloadPDFFromResult, downloadPDFFromElement } from '@/lib/client-pdf'
@@ -23,14 +21,9 @@ import { LandingAssetsPopover } from '@/components/venture/LandingAssetsPopover'
 // ─── Module metadata (mirrors ModulePicker) ──────────────────────────────────
 
 const MODULES = [
-  { id: 'full-launch', label: 'Full Launch', accent: '#C4975A', description: 'Run all agents together — research, brand, landing, feasibility', agentName: 'Orchestrator' },
-  { id: 'research', label: 'Research', accent: '#5A8C6E', description: 'Market data, TAM/SAM/SOM, competitors, 10 ranked concepts', agentName: 'Genesis' },
-  { id: 'branding', label: 'Branding', accent: '#5A6E8C', description: 'Brand name, voice, colors, typography, full Brand Bible', agentName: 'Identity' },
-  { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', description: '30-day GTM, 90 social posts, SEO outlines, email sequence', agentName: 'Content Factory' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', description: 'Sitemap, copy, Next.js component, live deployment', agentName: 'Pipeline' },
-  { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', description: 'Financial model, risk matrix, GO/NO-GO verdict', agentName: 'Feasibility' },
-  { id: 'general', label: 'Co-pilot', accent: '#6B8F71', description: 'Your venture-aware co-founder — knows your data, competitors, financials', agentName: 'Co-pilot' },
   { id: 'shadow-board', label: 'Shadow Board', accent: '#E04848', description: 'Silicon board of directors — stress-test your venture from every angle', agentName: 'Shadow Board' },
+  { id: 'general', label: 'Co-pilot', accent: '#6B8F71', description: 'Your venture-aware co-founder — knows your data, competitors, financials', agentName: 'Co-pilot' },
 ] as const
 
 type ModuleId = typeof MODULES[number]['id']
@@ -57,33 +50,14 @@ function getEntryErrorMessage(lines: string[], agentName: string): string {
 // ─── Suggestions ─────────────────────────────────────────────────────────────
 
 const SUGGESTIONS: Record<string, [string, string]> = {
-  'full-launch': ['Orchestrate a complete end-to-end launch plan', 'Build the comprehensive venture blueprint'],
-  'research': ['Conduct a deep dive into my target market', 'Analyze my top competitors and market gaps'],
-  'branding': ['Design a premium brand identity and voice', 'Generate a naming strategy and color palette'],
-  'marketing': ['Create a high-converting 30-day GTM strategy', 'Build a content engine and social roadmap'],
   'landing': ['Draft a high-impact landing page with copy', 'Design a sitemap and wireframe for the app'],
-  'feasibility': ['Run a detailed financial and risk analysis', 'Stress test the business model and scalability'],
-  'general': ["What's my biggest competitive risk?", 'Write me a cold email to investors'],
   'shadow-board': ['Run a full board review of my venture strategy', 'Challenge my assumptions from investor and operator perspectives'],
+  'general': ["What's my biggest competitive risk?", 'Write me a cold email to investors'],
 }
 
-// ─── Full Launch agent rows ───────────────────────────────────────────────────
-
-const FULL_LAUNCH_AGENTS = [
-  { key: 'research', label: 'Market Research', detail: 'Competitor analysis & TAM calc' },
-  { key: 'branding', label: 'Brand Identity', detail: 'Generating logos & color palettes' },
-  { key: 'marketing', label: 'Marketing Strategy', detail: '30-day GTM & Content Plan' },
-  { key: 'landing', label: 'Landing Page', detail: 'Wireframing & Copywriting' },
-  { key: 'feasibility', label: 'Feasibility Check', detail: 'Legal & Technical risk assessment' },
-]
-
 const NEXT_STEP_MAP: Partial<Record<ModuleId, { nextModuleId: ModuleId; description: string }>> = {
-  research: { nextModuleId: 'branding', description: 'Brand Identity is ready to build' },
-  branding: { nextModuleId: 'landing', description: 'Build your landing page next' },
-  marketing: { nextModuleId: 'landing', description: 'See your copy on a live page' },
-  landing: { nextModuleId: 'feasibility', description: 'Now stress-test the business model' },
-  feasibility: { nextModuleId: 'shadow-board', description: "Get your Shadow Board's verdict" },
-  'full-launch': { nextModuleId: 'shadow-board', description: 'Pressure-test your results' },
+  landing: { nextModuleId: 'shadow-board', description: "Get your Shadow Board's verdict" },
+  'shadow-board': { nextModuleId: 'general', description: 'Work through the feedback with your Co-pilot' },
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -120,35 +94,9 @@ interface BillingSummary {
 function ModuleIconSvg({ id, size = 20 }: { id: string; size?: number }) {
   const s = size
   switch (id) {
-    case 'full-launch': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
-      </svg>
-    )
-    case 'research': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-      </svg>
-    )
-    case 'branding': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-      </svg>
-    )
-    case 'marketing': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 11l19-9-9 19-2-8-8-2z" />
-      </svg>
-    )
     case 'landing': return (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" />
-      </svg>
-    )
-    case 'feasibility': return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       </svg>
     )
     case 'general': return (
@@ -470,9 +418,12 @@ export default function ModulePage() {
   const ventureId = params.id as string
   const moduleParam = params.module as string
 
-  const [activeModule, setActiveModule] = useState<ModuleId>(moduleParam as ModuleId)
+  // Normalize retired/unknown module slugs (old bookmarks, deep links) to the
+  // default module so the page never renders a module that no longer exists.
+  const normalizedModule = (MODULES.some(m => m.id === moduleParam) ? moduleParam : 'landing') as ModuleId
+  const [activeModule, setActiveModule] = useState<ModuleId>(normalizedModule)
   const mod = getModule(activeModule)
-  const suggestions = SUGGESTIONS[activeModule] ?? SUGGESTIONS['research']
+  const suggestions = SUGGESTIONS[activeModule] ?? SUGGESTIONS['landing']
 
   const [ventureName, setVentureName] = useState<string>('...')
   const [ventureSubdomain, setVentureSubdomain] = useState<string | null>(null)
@@ -729,7 +680,7 @@ export default function ModulePage() {
   }, [conversations])
 
   // Modules that support pre-run questions (not general/co-pilot)
-  const QUESTION_MODULES = ['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch']
+  const QUESTION_MODULES = ['landing']
 
   async function handleSubmit(e?: FormEvent) {
     e?.preventDefault()
@@ -1009,7 +960,7 @@ export default function ModulePage() {
 
   const canSubmit = !!prompt.trim() && !isSubmitting && !isLoadingQuestions && hasEnoughCredits
   const latestConversation = conversations[conversations.length - 1] ?? null
-  const nextStep = activeModule === 'full-launch' ? null : (NEXT_STEP_MAP[activeModule] ?? null)
+  const nextStep = NEXT_STEP_MAP[activeModule] ?? null
 
   // Compute latest result for reading panel
   const latestResult = [...conversations]
@@ -1026,7 +977,9 @@ export default function ModulePage() {
       })
     : null
   const showLandingPreview = readingPanelOpen && landingFullComponent !== null
-  const showReadingPanel = readingPanelOpen && latestResult !== null && activeModule !== 'general' && !showLandingPreview
+  // The document reading panel only has renderers for landing output — other
+  // modules (shadow board, co-pilot) present results inline in the chat.
+  const showReadingPanel = readingPanelOpen && latestResult !== null && activeModule === 'landing' && !showLandingPreview
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
@@ -1167,8 +1120,8 @@ export default function ModulePage() {
             flexShrink: 0,
           }}
         >
-          {/* Timeline toggle */}
-          {activeModule !== 'full-launch' && (
+          {/* Timeline toggle — landing is the only versioned module */}
+          {activeModule === 'landing' && (
             <motion.button
               onClick={() => setTimelineOpen(p => !p)}
               style={{
@@ -1549,14 +1502,6 @@ export default function ModulePage() {
               </AnimatePresence>
             )}
 
-            {mounted && activeModule === 'marketing' && (
-              <ConnectedChannelsPanel
-                ventureId={ventureId}
-                ventureName={ventureName}
-                billing={billing}
-              />
-            )}
-
             {/* Conversations */}
             {mounted && (
               <AnimatePresence initial={false}>
@@ -1615,18 +1560,6 @@ export default function ModulePage() {
                         <TypingIndicator accent={mod.accent} />
                       )}
                     </motion.div>
-
-                    {/* Full Launch: workflow graph + stream */}
-                    {activeModule === 'full-launch' && (
-                      <FullLaunchGraph
-                        statuses={{
-                          genesis: entry.agentStatuses['research']?.status ?? 'pending',
-                          identity: entry.agentStatuses['branding']?.status ?? 'pending',
-                          pipeline: entry.agentStatuses['landing']?.status ?? 'pending',
-                          feasibility: entry.agentStatuses['feasibility']?.status ?? 'pending',
-                        }}
-                      />
-                    )}
 
                     {/* Stream output (thought process) — hidden for general chat */}
                     {activeModule !== 'general' && showThoughtProcess && entry.lines.length > 0 && (
@@ -1729,8 +1662,6 @@ export default function ModulePage() {
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                          {/* Continue is hidden for search-based modules — they always re-run web searches, wasting tokens */}
-                          {activeModule !== 'research' && activeModule !== 'full-launch' && (
                           <motion.button
                             onClick={() => handleContinue(entry)}
                             style={{
@@ -1747,7 +1678,6 @@ export default function ModulePage() {
                             </svg>
                             Continue
                           </motion.button>
-                          )}
 
                           <motion.button
                             onClick={() => retryEntry(entry)}
@@ -1852,74 +1782,6 @@ export default function ModulePage() {
                 <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
               </svg>
             </motion.button>
-          )}
-        </AnimatePresence>
-      )}
-
-      {/* ── Intensity Selector (only for Research/Full Launch) ── */}
-      {mounted && (
-        <AnimatePresence>
-          {(activeModule === 'research' || activeModule === 'full-launch' || activeModule === 'feasibility') && !isSubmitting && !isDocumentOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              style={{
-                position: 'absolute',
-                bottom: 155,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 10,
-                display: 'flex',
-                gap: 8,
-                padding: '6px',
-                background: 'var(--glass-bg-strong)',
-                backdropFilter: 'blur(20px)',
-                borderRadius: 12,
-                border: '1px solid var(--border)',
-                boxShadow: 'var(--shadow-lg)',
-              }}
-            >
-              {(['brief', 'medium', 'detailed'] as const).map((d) => (
-                <motion.button
-                  key={d}
-                  type="button"
-                  onClick={() => setDepth(d)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 8,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    transition: 'all 0.2s',
-                    background: depth === d ? mod.accent : 'transparent',
-                    color: depth === d ? '#fff' : 'var(--muted)',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {d}
-                </motion.button>
-              ))}
-              <div style={{
-                position: 'absolute',
-                top: -24,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                whiteSpace: 'nowrap',
-                fontSize: 10,
-                fontWeight: 700,
-                color: 'var(--muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                opacity: 0.6,
-              }}>
-                Research Intensity
-              </div>
-            </motion.div>
           )}
         </AnimatePresence>
       )}
@@ -2471,15 +2333,11 @@ export default function ModulePage() {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildInitialStatuses(): Record<string, AgentState> {
-  return Object.fromEntries(
-    FULL_LAUNCH_AGENTS.map(a => [a.key, { status: 'pending' as AgentStatus, detail: a.detail }])
-  )
+  return {}
 }
 
 function buildCompletedStatuses(_accent: string): Record<string, AgentState> {
-  return Object.fromEntries(
-    FULL_LAUNCH_AGENTS.map(a => [a.key, { status: 'complete' as AgentStatus, detail: a.detail }])
-  )
+  return {}
 }
 
 // ─── Timeline Panel ──────────────────────────────────────────────────────────
@@ -2630,12 +2488,8 @@ function TimelinePanel({ moduleId, timeline, activeVersionId, accent, pinningId,
 // ─── Reading Panel (Universal Document Viewer) ──────────────────────────────
 
 const PANEL_TITLES: Record<string, string> = {
-  'full-launch': 'Venture Dossier',
-  research: 'Research Report',
-  branding: 'Brand Bible',
-  marketing: 'GTM Strategy',
   landing: 'Production Pipeline',
-  feasibility: 'Feasibility Report',
+  'shadow-board': 'Shadow Board Review',
   'launch-autopilot': 'Launch Execution Plan',
   'mvp-scalpel': 'MVP Scalpel Report',
 }
@@ -2723,12 +2577,7 @@ function ReadingPanel({ moduleId, result, accent, onClose }: {
 
       {/* Document Content */}
       <div ref={contentRef} style={{ flex: 1, overflowY: 'auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 32 }}>
-        {moduleId === 'full-launch' && <FullLaunchDoc result={result} accent={accent} />}
-        {moduleId === 'research' && <ResearchDoc result={result} />}
-        {moduleId === 'branding' && <BrandingDoc result={result} />}
-        {moduleId === 'marketing' && <MarketingDoc result={result} />}
         {moduleId === 'landing' && <LandingDoc result={result} />}
-        {moduleId === 'feasibility' && <FeasibilityDoc result={result} />}
       </div>
     </motion.div>
   )
@@ -3442,343 +3291,6 @@ function MarkdownBlock({ content }: { content: string }) {
   )
 }
 
-function ResearchDoc({ result }: { result: Record<string, any> }) {
-  if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
-  const r = result.research || result
-  const tam = r.tam?.value || (typeof r.tam === 'string' ? r.tam : r.tam ? JSON.stringify(r.tam) : '')
-  const sam = r.sam?.value || (typeof r.sam === 'string' ? r.sam : '')
-  const som = r.som?.value || (typeof r.som === 'string' ? r.som : '')
-  const competitors = Array.isArray(r.competitors) ? r.competitors : []
-  const painPoints = Array.isArray(r.painPoints) ? r.painPoints : []
-  const concepts = Array.isArray(r.concepts || r.rankedConcepts) ? (r.concepts || r.rankedConcepts) : []
-
-  return (
-    <>
-      <h1 style={docTitleStyle}>Market Research Report</h1>
-
-      {r.marketSummary && (
-        <DocSection title="Executive Summary">
-          <p style={docParaStyle}>{r.marketSummary}</p>
-        </DocSection>
-      )}
-
-      <DocSection title="Market Sizing">
-        <DocKV label="TAM" value={tam} />
-        <DocKV label="SAM" value={sam} />
-        <DocKV label="SOM" value={som} />
-      </DocSection>
-
-      {competitors.length > 0 && (
-        <DocSection title="Competitive Landscape">
-          {competitors.map((c: any, i: number) => {
-            const name = typeof c === 'object' ? (c.name || JSON.stringify(c)) : String(c)
-            const desc = typeof c === 'object' ? (c.description || c.threat || c.weakness || '') : ''
-            return (
-              <div key={i} style={{ padding: '8px 0', borderBottom: i < competitors.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{name}</div>
-                {desc && <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 2 }}>{desc}</div>}
-              </div>
-            )
-          })}
-        </DocSection>
-      )}
-
-      {painPoints.length > 0 && (
-        <DocSection title="Market Pain Points">
-          <DocList items={painPoints} />
-        </DocSection>
-      )}
-
-      {concepts.length > 0 && (
-        <DocSection title="Ranked Concepts">
-          {concepts.map((c: any, i: number) => (
-            <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                #{i + 1} {typeof c === 'object' ? (c.name || c.title || JSON.stringify(c)) : String(c)}
-              </div>
-              {typeof c === 'object' && c.description && (
-                <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 2 }}>{c.description}</div>
-              )}
-            </div>
-          ))}
-        </DocSection>
-      )}
-
-      {r.recommendedConcept && (
-        <DocSection title="Recommended Concept">
-          <p style={docParaStyle}>{typeof r.recommendedConcept === 'object' ? JSON.stringify(r.recommendedConcept) : r.recommendedConcept}</p>
-        </DocSection>
-      )}
-    </>
-  )
-}
-
-function BrandingDoc({ result }: { result: Record<string, any> }) {
-  if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
-  const b = result.branding || result
-  const colors = Array.isArray(b.colorPalette) ? b.colorPalette : (typeof b.colorPalette === 'object' && b.colorPalette ? Object.entries(b.colorPalette) : [])
-
-  return (
-    <>
-      <h1 style={docTitleStyle}>Brand Identity Bible</h1>
-
-      <DocSection title="Brand Foundation">
-        <DocKV label="Name" value={b.brandName} />
-        <DocKV label="Tagline" value={b.tagline} />
-        <DocKV label="Archetype" value={b.brandArchetype} />
-        <DocKV label="Personality" value={b.brandPersonality} />
-      </DocSection>
-
-      {b.brandVoice && (
-        <DocSection title="Brand Voice">
-          <p style={docParaStyle}>{typeof b.brandVoice === 'string' ? b.brandVoice : JSON.stringify(b.brandVoice)}</p>
-        </DocSection>
-      )}
-
-      {colors.length > 0 && (
-        <DocSection title="Color Palette">
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {colors.map((c: any, i: number) => {
-              const hex = typeof c === 'string' ? c : (Array.isArray(c) ? String(c[1]) : (c.hex || c.code || '#666'))
-              const name = Array.isArray(c) ? c[0] : (typeof c === 'object' ? (c.name || '') : '')
-              return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: String(hex), border: '1px solid var(--border)', boxShadow: `0 2px 6px ${hex}30` }} />
-                  <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--muted)' }}>{String(hex)}</span>
-                  {name && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{name}</span>}
-                </div>
-              )
-            })}
-          </div>
-        </DocSection>
-      )}
-
-      {b.typography && (
-        <DocSection title="Typography">
-          <DocKV label="Heading" value={b.typography.heading || b.typography.headingFont} />
-          <DocKV label="Body" value={b.typography.body || b.typography.bodyFont} />
-        </DocSection>
-      )}
-
-      {b.messaging && (
-        <DocSection title="Key Messaging">
-          <p style={docParaStyle}>{typeof b.messaging === 'string' ? b.messaging : JSON.stringify(b.messaging)}</p>
-        </DocSection>
-      )}
-    </>
-  )
-}
-
-function MarketingDoc({ result }: { result: Record<string, any> }) {
-  if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
-  const m = result.marketing || result
-  const gtm = m.gtmStrategy || {}
-  const weeks = Array.isArray(gtm.weeks) ? gtm.weeks : []
-  const socialPosts = Array.isArray(m.socialCalendar) ? m.socialCalendar : []
-  const seoOutlines = Array.isArray(m.seoOutlines) ? m.seoOutlines : []
-  const emailSequence = Array.isArray(m.emailSequence) ? m.emailSequence : []
-  const hashtags = m.hashtagStrategy || {}
-
-  // Group social posts by platform for organized display
-  const postsByPlatform: Record<string, any[]> = {}
-  socialPosts.forEach((post: any) => {
-    const plat = typeof post === 'object' ? (post.platform || 'other') : 'other'
-    if (!postsByPlatform[plat]) postsByPlatform[plat] = []
-    postsByPlatform[plat].push(post)
-  })
-
-  return (
-    <>
-      <h1 style={docTitleStyle}>Marketing Strategy</h1>
-
-      {/* ── Full Marketing Plan (markdown) ── */}
-      {m.marketingPlan && (
-        <DocSection title="Marketing Plan">
-          <MarkdownBlock content={m.marketingPlan} />
-        </DocSection>
-      )}
-
-      {/* ── GTM Strategy Overview ── */}
-      {gtm.overview && (
-        <DocSection title="GTM Strategy Overview">
-          <p style={docParaStyle}>{gtm.overview}</p>
-        </DocSection>
-      )}
-
-      {/* ── Weekly Breakdown ── */}
-      {weeks.length > 0 && (
-        <DocSection title={`30-Day GTM Breakdown (${weeks.length} weeks)`}>
-          {weeks.map((w: any, i: number) => (
-            <div key={i} style={{ padding: '12px 0', borderBottom: i < weeks.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
-                Week {w.week || i + 1}: {w.theme}
-              </div>
-              {Array.isArray(w.actions) && w.actions.length > 0 && (
-                <div style={{ marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.04em' }}>Actions</div>
-                  {w.actions.map((a: string, j: number) => (
-                    <div key={j} style={{ fontSize: 11, color: 'var(--text-soft)', lineHeight: 1.5, paddingLeft: 10, position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 0, color: 'var(--muted)' }}>•</span>
-                      {a}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {Array.isArray(w.kpis) && w.kpis.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.04em' }}>KPIs</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {w.kpis.map((k: string, j: number) => (
-                      <span key={j} style={{ padding: '2px 8px', background: '#8C5A7A10', borderRadius: 4, fontSize: 10, color: '#8C5A7A', border: '1px solid #8C5A7A20', fontWeight: 500 }}>{k}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </DocSection>
-      )}
-
-      {/* ── Social Calendar — all posts by platform ── */}
-      {socialPosts.length > 0 && (
-        <DocSection title={`Social Calendar (${socialPosts.length} posts)`}>
-          {Object.entries(postsByPlatform).map(([platform, posts]) => (
-            <div key={platform} style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#8C5A7A', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
-                {platform === 'x' ? '𝕏 (Twitter)' : platform === 'linkedin' ? 'LinkedIn' : platform === 'instagram' ? 'Instagram' : platform} — {posts.length} posts
-              </div>
-              {posts.map((post: any, i: number) => (
-                <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 11 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                      Day {typeof post === 'object' ? post.day : i + 1}
-                    </span>
-                    {typeof post === 'object' && post.postType && (
-                      <span style={{ fontSize: 9, padding: '1px 6px', background: 'var(--glass-bg)', borderRadius: 3, color: 'var(--muted)', border: '1px solid var(--border)' }}>{post.postType}</span>
-                    )}
-                  </div>
-                  <div style={{ color: 'var(--text-soft)', lineHeight: 1.5 }}>
-                    {typeof post === 'object' ? (post.caption || post.content || post.text || JSON.stringify(post)) : String(post)}
-                  </div>
-                  {typeof post === 'object' && Array.isArray(post.hashtags) && post.hashtags.length > 0 && (
-                    <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {post.hashtags.map((h: string, j: number) => (
-                        <span key={j} style={{ fontSize: 9, color: '#8C5A7A', opacity: 0.7 }}>#{h}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-        </DocSection>
-      )}
-
-      {/* ── SEO Content Outlines — full detail ── */}
-      {seoOutlines.length > 0 && (
-        <DocSection title={`SEO Content Outlines (${seoOutlines.length} articles)`}>
-          {seoOutlines.map((outline: any, i: number) => (
-            <div key={i} style={{ padding: '10px 0', borderBottom: i < seoOutlines.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
-                {typeof outline === 'object' ? (outline.title || outline.topic || JSON.stringify(outline)) : String(outline)}
-              </div>
-              {typeof outline === 'object' && (
-                <div style={{ display: 'flex', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-                  {outline.targetKeyword && (
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Keyword: <strong style={{ color: 'var(--text-soft)' }}>{outline.targetKeyword}</strong></span>
-                  )}
-                  {outline.searchIntent && (
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Intent: <strong style={{ color: 'var(--text-soft)' }}>{outline.searchIntent}</strong></span>
-                  )}
-                  {outline.estimatedTraffic && (
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Traffic: <strong style={{ color: 'var(--text-soft)' }}>{outline.estimatedTraffic}</strong></span>
-                  )}
-                </div>
-              )}
-              {typeof outline === 'object' && Array.isArray(outline.outline) && outline.outline.length > 0 && (
-                <div style={{ paddingLeft: 10 }}>
-                  {outline.outline.map((section: string, j: number) => (
-                    <div key={j} style={{ fontSize: 11, color: 'var(--text-soft)', lineHeight: 1.5, position: 'relative', paddingLeft: 10 }}>
-                      <span style={{ position: 'absolute', left: 0, color: 'var(--muted)' }}>•</span>
-                      {section}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </DocSection>
-      )}
-
-      {/* ── Email Sequence — full bodies ── */}
-      {emailSequence.length > 0 && (
-        <DocSection title={`Email Launch Sequence (${emailSequence.length} emails)`}>
-          {emailSequence.map((email: any, i: number) => (
-            <div key={i} style={{ padding: '10px 0', borderBottom: i < emailSequence.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#8C5A7A10', color: '#8C5A7A', border: '1px solid #8C5A7A20', textTransform: 'uppercase' }}>
-                  Day {typeof email === 'object' ? email.day : i}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                  {typeof email === 'object' ? (email.subject || email.title || `Email ${i + 1}`) : String(email)}
-                </span>
-              </div>
-              {typeof email === 'object' && email.preview && (
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, fontStyle: 'italic' }}>
-                  Preview: {email.preview}
-                </div>
-              )}
-              {typeof email === 'object' && Array.isArray(email.bodyOutline) && email.bodyOutline.length > 0 && (
-                <div style={{ paddingLeft: 10 }}>
-                  {email.bodyOutline.map((point: string, j: number) => (
-                    <div key={j} style={{ fontSize: 11, color: 'var(--text-soft)', lineHeight: 1.5, position: 'relative', paddingLeft: 10 }}>
-                      <span style={{ position: 'absolute', left: 0, color: 'var(--muted)' }}>•</span>
-                      {point}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {typeof email === 'object' && email.body && (
-                <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4, lineHeight: 1.5 }}>
-                  {email.body}
-                </div>
-              )}
-            </div>
-          ))}
-        </DocSection>
-      )}
-
-      {/* ── Hashtag Strategy ── */}
-      {(Array.isArray(hashtags.x) && hashtags.x.length > 0) || (Array.isArray(hashtags.linkedin) && hashtags.linkedin.length > 0) || (Array.isArray(hashtags.instagram) && hashtags.instagram.length > 0) ? (
-        <DocSection title="Hashtag Strategy">
-          {[
-            { label: '𝕏 (Twitter)', tags: Array.isArray(hashtags.x) ? hashtags.x : [] },
-            { label: 'LinkedIn', tags: Array.isArray(hashtags.linkedin) ? hashtags.linkedin : [] },
-            { label: 'Instagram', tags: Array.isArray(hashtags.instagram) ? hashtags.instagram : [] },
-          ].filter(g => g.tags.length > 0).map((group, i) => (
-            <div key={i} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.04em' }}>{group.label}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {group.tags.map((tag: string, j: number) => (
-                  <span key={j} style={{ padding: '2px 8px', background: 'var(--glass-bg)', borderRadius: 4, fontSize: 10, color: '#8C5A7A', border: '1px solid var(--border)' }}>#{tag}</span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </DocSection>
-      ) : null}
-
-      {/* ── Performance Metrics ── */}
-      <DocSection title="Performance Metrics">
-        <DocKV label="Total Posts" value={socialPosts.length || undefined} />
-        <DocKV label="SEO Articles" value={seoOutlines.length || undefined} />
-        <DocKV label="Email Drips" value={emailSequence.length || undefined} />
-        <DocKV label="Platforms" value={Object.keys(postsByPlatform).length > 0 ? Object.keys(postsByPlatform).join(', ') : undefined} />
-      </DocSection>
-    </>
-  )
-}
-
 function LandingDoc({ result }: { result: Record<string, any> }) {
   if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
   const l = result.landing || result
@@ -3920,312 +3432,6 @@ function LandingDoc({ result }: { result: Record<string, any> }) {
         <DocKV label="Lead Capture" value={l.leadCaptureActive ? 'Active' : 'Inactive'} />
         <DocKV label="Analytics" value={l.analyticsActive ? 'Active' : 'Ready for integration'} />
       </DocSection>
-    </>
-  )
-}
-
-function FeasibilityDoc({ result }: { result: Record<string, any> }) {
-  if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
-  const f = result.feasibility || result
-  const fm = f.financialModel || {}
-  const risks = Array.isArray(f.riskMatrix || f.risks) ? (f.riskMatrix || f.risks) : []
-  const keyAssumptions = Array.isArray(f.keyAssumptions) ? f.keyAssumptions : []
-  const keyRisksToMonitor = Array.isArray(f.keyRisksToMonitor) ? f.keyRisksToMonitor : []
-  const assumptions = fm.assumptions ? Object.entries(fm.assumptions) : []
-
-  const verdictColor = f.verdict?.toLowerCase()?.includes('no') ? '#dc2626' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d97706' : '#16a34a'
-  const verdictBg = f.verdict?.toLowerCase()?.includes('no') ? '#dc262612' : f.verdict?.toLowerCase()?.includes('conditional') ? '#d9770612' : '#16a34a12'
-
-  return (
-    <>
-      <h1 style={docTitleStyle}>Feasibility Assessment</h1>
-
-      {/* Verdict + Timing */}
-      <DocSection title="Verdict & Market Timing">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{
-            fontSize: 13, fontWeight: 700, padding: '6px 14px', borderRadius: 8,
-            color: verdictColor, background: verdictBg,
-            border: `1px solid ${verdictColor}24`, textTransform: 'uppercase',
-          }}>
-            {f.verdict || 'Pending'}
-          </span>
-          {f.marketTimingScore && (
-            <span style={{
-              fontSize: 12, fontWeight: 700, padding: '5px 12px', borderRadius: 8,
-              color: '#7A5A8C', background: '#7A5A8C14', border: '1px solid #7A5A8C24',
-            }}>
-              Timing: {f.marketTimingScore}/10
-            </span>
-          )}
-        </div>
-        {f.verdictRationale && <p style={docParaStyle}>{f.verdictRationale}</p>}
-        {f.marketTimingRationale && (
-          <p style={{ ...docParaStyle, marginTop: 8, fontStyle: 'italic', opacity: 0.85 }}>{f.marketTimingRationale}</p>
-        )}
-      </DocSection>
-
-      {/* Unit Economics */}
-      <DocSection title="Unit Economics">
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-          {[
-            { label: 'CAC', value: fm.cac },
-            { label: 'LTV', value: fm.ltv },
-            { label: 'LTV:CAC', value: fm.ltvCacRatio },
-            { label: 'Break-even', value: fm.breakEvenMonth ? `Month ${fm.breakEvenMonth}` : undefined },
-          ].filter(m => m.value).map((m, i) => (
-            <div key={i} style={{
-              background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px',
-              border: '1px solid var(--border)', flex: '1 1 70px', textAlign: 'center', minWidth: 70,
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{m.value}</div>
-              <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', marginTop: 2 }}>{m.label}</div>
-            </div>
-          ))}
-        </div>
-      </DocSection>
-
-      {/* 3-Year Projections */}
-      <DocSection title="3-Year Projections">
-        {['yearOne', 'yearTwo', 'yearThree'].map((yearKey, i) => {
-          const year = fm[yearKey]
-          if (!year) return null
-          return (
-            <div key={yearKey} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Year {i + 1}
-              </div>
-              <DocKV label="Revenue" value={year.revenue} />
-              <DocKV label="Costs" value={year.costs} />
-              <DocKV label="Net" value={year.netIncome} />
-              <DocKV label="Customers" value={year.customers} />
-            </div>
-          )
-        })}
-      </DocSection>
-
-      {/* Assumptions */}
-      {assumptions.length > 0 && (
-        <DocSection title="Model Assumptions">
-          {assumptions.map(([key, val], i) => (
-            <DocKV key={i} label={key} value={val as string} />
-          ))}
-        </DocSection>
-      )}
-
-      {/* Risks */}
-      {risks.length > 0 && (
-        <DocSection title={`Risk Matrix (${risks.length} risks)`}>
-          {risks.map((risk: any, i: number) => (
-            <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                  textTransform: 'uppercase', letterSpacing: '0.04em',
-                  color: risk.category?.includes('Financial') || risk.category?.includes('Market') ? '#dc2626' : '#7A5A8C',
-                  background: risk.category?.includes('Financial') || risk.category?.includes('Market') ? '#dc262610' : '#7A5A8C10',
-                }}>
-                  {risk.category || 'Risk'}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                  {risk.risk || risk.name || JSON.stringify(risk)}
-                </span>
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 10 }}>
-                {risk.likelihood && <span>Likelihood: <strong style={{ color: risk.likelihood === 'high' ? '#dc2626' : risk.likelihood === 'medium' ? '#d97706' : '#16a34a' }}>{risk.likelihood}</strong></span>}
-                {risk.impact && <span>Impact: <strong style={{ color: risk.impact === 'high' ? '#dc2626' : risk.impact === 'medium' ? '#d97706' : '#16a34a' }}>{risk.impact}</strong></span>}
-              </div>
-              {risk.mitigation && (
-                <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4, lineHeight: 1.5, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
-                  {risk.mitigation}
-                </div>
-              )}
-            </div>
-          ))}
-        </DocSection>
-      )}
-
-      {/* Competitive Moat */}
-      {f.competitiveMoat && (
-        <DocSection title="Competitive Moat">
-          <p style={docParaStyle}>{f.competitiveMoat}</p>
-        </DocSection>
-      )}
-
-      {/* Regulatory */}
-      {f.regulatoryLandscape && (
-        <DocSection title="Regulatory Landscape">
-          <p style={docParaStyle}>{f.regulatoryLandscape}</p>
-        </DocSection>
-      )}
-
-      {/* Key Assumptions */}
-      {keyAssumptions.length > 0 && (
-        <DocSection title="Key Assumptions to Validate">
-          <DocList items={keyAssumptions} />
-        </DocSection>
-      )}
-
-      {/* Key Risks to Monitor */}
-      {keyRisksToMonitor.length > 0 && (
-        <DocSection title="Key Risks to Monitor">
-          <DocList items={keyRisksToMonitor} />
-        </DocSection>
-      )}
-    </>
-  )
-}
-
-function FullLaunchDoc({ result, accent }: { result: Record<string, any>; accent: string }) {
-  if (!result) return <div style={{ color: 'var(--muted)', fontSize: 12 }}>No result data available yet.</div>
-  const research = result.research || {}
-  const branding = result.branding || {}
-  const marketing = result.marketing || {}
-  const landing = result.landing || {}
-  const feasibility = result.feasibility || {}
-  const fm = feasibility.financialModel || {}
-  const gtm = marketing.gtmStrategy || marketing
-  const socialPosts = Array.isArray(marketing.socialCalendar) ? marketing.socialCalendar : []
-  const seoOutlines = Array.isArray(marketing.seoOutlines) ? marketing.seoOutlines : []
-  const competitors = Array.isArray(research.competitors) ? research.competitors : []
-  const risks = Array.isArray(feasibility.riskMatrix || feasibility.risks) ? (feasibility.riskMatrix || feasibility.risks) : []
-  const phases = Array.isArray(gtm.phases || marketing.phases) ? (gtm.phases || marketing.phases) : []
-  const channels = Array.isArray(gtm.channels || marketing.channels) ? (gtm.channels || marketing.channels) : []
-  const tam = research.tam?.value || (typeof research.tam === 'string' ? research.tam : research.tam ? JSON.stringify(research.tam) : '')
-  const colors = Array.isArray(branding.colorPalette)
-    ? branding.colorPalette
-    : (typeof branding.colorPalette === 'object' && branding.colorPalette ? Object.entries(branding.colorPalette) : [])
-
-  return (
-    <>
-      <h1 style={docTitleStyle}>{branding.brandName || 'Venture Dossier'}</h1>
-      {branding.tagline && <p style={{ fontSize: 13, color: 'var(--muted)', margin: '-8px 0 16px', fontStyle: 'italic' }}>{branding.tagline}</p>}
-
-      {/* ── Market Intelligence ── */}
-      <DocSection title="Market Intelligence">
-        <DocKV label="TAM" value={tam} />
-        <DocKV label="Summary" value={research.marketSummary} />
-        {competitors.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Competitors</div>
-            {competitors.slice(0, 5).map((c: any, i: number) => (
-              <div key={i} style={{ fontSize: 11, color: 'var(--text-soft)', padding: '4px 0' }}>
-                {typeof c === 'object' ? (c.name || JSON.stringify(c)) : String(c)}
-              </div>
-            ))}
-          </div>
-        )}
-      </DocSection>
-
-      {/* ── Brand Identity ── */}
-      <DocSection title="Brand Identity">
-        <DocKV label="Name" value={branding.brandName} />
-        <DocKV label="Archetype" value={branding.brandArchetype} />
-        <DocKV label="Voice" value={typeof branding.brandVoice === 'string' ? branding.brandVoice : branding.brandVoice ? JSON.stringify(branding.brandVoice) : undefined} />
-        {colors.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            {colors.map((c: any, i: number) => {
-              const hex = typeof c === 'string' ? c : (Array.isArray(c) ? String(c[1]) : (c.hex || c.code || '#666'))
-              return <div key={i} style={{ width: 28, height: 28, borderRadius: 6, background: String(hex), border: '1px solid var(--border)' }} title={String(hex)} />
-            })}
-          </div>
-        )}
-      </DocSection>
-
-      {/* ── GTM Strategy (expanded) ── */}
-      <DocSection title="Go-To-Market Strategy">
-        {(gtm.overview || marketing.theme) && (
-          <p style={{ ...docParaStyle, marginBottom: 12 }}>{gtm.overview || marketing.theme}</p>
-        )}
-
-        {phases.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Growth Phases</div>
-            {phases.map((p: any, i: number) => (
-              <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 11 }}>
-                <span style={{ fontWeight: 600, color: 'var(--text)' }}>Phase {i + 1}: </span>
-                <span style={{ color: 'var(--text-soft)' }}>{typeof p === 'object' ? (p.name || p.title || p.description || JSON.stringify(p)) : String(p)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {channels.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Channels</div>
-            <DocList items={channels} />
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)', flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{socialPosts.length || '0'}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', marginTop: 2 }}>Social Posts</div>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)', flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{seoOutlines.length || '0'}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', marginTop: 2 }}>SEO Articles</div>
-          </div>
-        </div>
-
-        {socialPosts.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Sample Posts</div>
-            {socialPosts.slice(0, 3).map((post: any, i: number) => (
-              <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-soft)', lineHeight: 1.4 }}>
-                <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                  {typeof post === 'object' ? (post.platform || `Day ${post.day || i + 1}`) : `Post ${i + 1}`}:
-                </span>{' '}
-                {typeof post === 'object' ? (post.content || post.caption || post.text || '') : String(post)}
-              </div>
-            ))}
-          </div>
-        )}
-      </DocSection>
-
-      {/* ── Feasibility ── */}
-      <DocSection title="Investment Assessment">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>Verdict:</span>
-          <span style={{
-            fontSize: 11,
-            fontWeight: 700,
-            padding: '4px 10px',
-            borderRadius: 6,
-            color: feasibility.verdict?.toLowerCase()?.includes('no') ? '#dc2626' : feasibility.verdict?.toLowerCase()?.includes('conditional') ? '#d97706' : '#16a34a',
-            background: feasibility.verdict?.toLowerCase()?.includes('no') ? '#dc262612' : feasibility.verdict?.toLowerCase()?.includes('conditional') ? '#d9770612' : '#16a34a12',
-            textTransform: 'uppercase',
-          }}>
-            {feasibility.verdict || 'Pending'}
-          </span>
-        </div>
-        {feasibility.rationale && <p style={{ ...docParaStyle, marginBottom: 8 }}>{feasibility.rationale}</p>}
-        <DocKV label="CAC" value={fm.cac} />
-        <DocKV label="LTV" value={fm.ltv} />
-        <DocKV label="Margin" value={fm.margin || fm.grossMargin} />
-        {risks.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Key Risks</div>
-            {risks.slice(0, 3).map((r: any, i: number) => (
-              <div key={i} style={{ fontSize: 11, color: 'var(--text-soft)', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                {typeof r === 'object' ? (r.risk || r.name || JSON.stringify(r)) : String(r)}
-              </div>
-            ))}
-          </div>
-        )}
-      </DocSection>
-
-      {/* ── Production ── */}
-      {landing.deploymentUrl && (
-        <DocSection title="Production">
-          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '12px', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#8C7A5A', textTransform: 'uppercase', marginBottom: 4 }}>Live URL</div>
-            <a href={landing.deploymentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, textDecoration: 'none', wordBreak: 'break-all' }}>
-              {landing.deploymentUrl}
-            </a>
-          </div>
-        </DocSection>
-      )}
     </>
   )
 }

@@ -465,7 +465,7 @@ export default function ManageProjectsPage() {
                                       <>
                                         <span
                                           style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                          onClick={() => router.push(`/dashboard/venture/${v.id}/full-launch`)}
+                                          onClick={() => router.push(`/dashboard/venture/${v.id}/landing`)}
                                         >
                                           {v.name}
                                         </span>

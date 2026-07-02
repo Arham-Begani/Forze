@@ -27,20 +27,16 @@ interface Venture {
 // ─── Module data ────────────────────────────────────────────────────────────
 
 const MODULES = [
-  { id: 'full-launch', label: 'Full Launch', accent: '#C4975A', icon: '⬡' },
-  { id: 'research', label: 'Research', accent: '#5A8C6E', icon: '◎' },
-  { id: 'branding', label: 'Branding', accent: '#5A6E8C', icon: '◇' },
-  { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', icon: '▲' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', icon: '▣' },
-  { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', icon: '◈' },
-  { id: 'general', label: 'General', accent: '#6B8F71', icon: '◉' },
+  { id: 'shadow-board', label: 'Shadow Board', accent: '#E04848', icon: '⚔' },
+  { id: 'general', label: 'Co-pilot', accent: '#6B8F71', icon: '◉' },
 ]
 
 const QUICK_ACTIONS = [
   { label: 'New Project', icon: '📁', action: 'new-project' },
-  { label: 'Full Launch', icon: '🚀', action: 'full-launch' },
-  { label: 'Research', icon: '🔍', action: 'research' },
-  { label: 'Branding', icon: '🎨', action: 'branding' },
+  { label: 'Landing Page', icon: '▣', action: 'landing' },
+  { label: 'Shadow Board', icon: '⚔', action: 'shadow-board' },
+  { label: 'Co-pilot', icon: '◉', action: 'general' },
 ]
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -587,7 +583,7 @@ export default function DashboardPage() {
             <div className="stat-divider" style={statDivider} />
             <StatItem label="Modules" value={MODULES.length} delay={0.25} />
             <div className="stat-divider" style={statDivider} />
-            <StatItem label="AI Agents" value={6} delay={0.3} />
+            <StatItem label="AI Agents" value={3} delay={0.3} />
           </motion.div>
 
           {/* Project list (Minimalist Workspace) */}

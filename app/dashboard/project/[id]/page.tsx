@@ -25,13 +25,9 @@ interface Venture {
 }
 
 const MODULES = [
-  { id: 'full-launch', label: 'Full Launch', accent: '#C4975A', icon: '⬡' },
-  { id: 'research', label: 'Research', accent: '#5A8C6E', icon: '◎' },
-  { id: 'branding', label: 'Branding', accent: '#5A6E8C', icon: '◇' },
-  { id: 'marketing', label: 'Marketing', accent: '#8C5A7A', icon: '▲' },
   { id: 'landing', label: 'Landing Page', accent: '#8C7A5A', icon: '▣' },
-  { id: 'feasibility', label: 'Feasibility', accent: '#7A5A8C', icon: '◈' },
-  { id: 'general', label: 'General', accent: '#6B8F71', icon: '◉' },
+  { id: 'shadow-board', label: 'Shadow Board', accent: '#E04848', icon: '⚔' },
+  { id: 'general', label: 'Co-pilot', accent: '#6B8F71', icon: '◉' },
 ]
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -151,9 +147,12 @@ export default function ProjectDetailPage() {
 
   function getCompletedModules(venture: Venture): string[] {
     const ctx = (venture.context || {}) as Record<string, unknown>
-    return ['research', 'branding', 'marketing', 'landing', 'feasibility'].filter(
-      k => ctx[k] !== null && ctx[k] !== undefined
-    )
+    return [
+      { key: 'landing', id: 'landing' },
+      { key: 'shadowBoard', id: 'shadow-board' },
+    ]
+      .filter(({ key }) => ctx[key] !== null && ctx[key] !== undefined)
+      .map(({ id }) => id)
   }
 
   if (!mounted) {

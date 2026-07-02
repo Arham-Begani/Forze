@@ -3,7 +3,7 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Info, Palette, Rocket, Globe, ShieldCheck } from 'lucide-react'
+import { Globe, Swords } from 'lucide-react'
 import type { ModuleId } from '@/components/ui/ResultCard'
 
 export type VentureTabId = ModuleId
@@ -11,11 +11,8 @@ export type VentureTabId = ModuleId
 type TabDef = { id: ModuleId; label: string; icon: React.ReactNode; color: string; kind: 'module' }
 
 export const VENTURE_TABS: TabDef[] = [
-  { id: 'research', label: 'Research', icon: <Info size={16} />, color: '#5A8C6E', kind: 'module' },
-  { id: 'branding', label: 'Branding', icon: <Palette size={16} />, color: '#5A6E8C', kind: 'module' },
-  { id: 'marketing', label: 'Marketing', icon: <Rocket size={16} />, color: '#8C5A7A', kind: 'module' },
   { id: 'landing', label: 'Landing', icon: <Globe size={16} />, color: '#8C7A5A', kind: 'module' },
-  { id: 'feasibility', label: 'Feasibility', icon: <ShieldCheck size={16} />, color: '#7A5A8C', kind: 'module' },
+  { id: 'shadow-board', label: 'Shadow Board', icon: <Swords size={16} />, color: '#E04848', kind: 'module' },
 ]
 
 interface VentureHeaderProps {

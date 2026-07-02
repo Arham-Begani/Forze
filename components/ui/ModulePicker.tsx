@@ -4,14 +4,9 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export type ModuleId =
-  | "full-launch"
-  | "research"
-  | "branding"
-  | "marketing"
   | "landing"
-  | "feasibility"
-  | "general"
-  | "shadow-board";
+  | "shadow-board"
+  | "general";
 
 export interface ModuleDefinition {
   id: ModuleId;
@@ -22,20 +17,13 @@ export interface ModuleDefinition {
 }
 
 const MODULE_GROUPS: { label: string; ids: ModuleId[] }[] = [
-  { label: "LAUNCH", ids: ["full-launch"] },
-  { label: "AGENTS", ids: ["research", "branding", "marketing", "landing", "feasibility"] },
-  { label: "TOOLS", ids: ["general", "shadow-board"] },
+  { label: "BUILD", ids: ["landing", "shadow-board", "general"] },
 ];
 
 export const MODULES: Record<ModuleId, ModuleDefinition> = {
-  "full-launch": { id: "full-launch", icon: "FL", label: "Full Launch", accent: "#C4975A", description: "End-to-end validation run" },
-  "research": { id: "research", icon: "R", label: "Research", accent: "#5A8C6E", description: "Market proof and gaps" },
-  "branding": { id: "branding", icon: "B", label: "Branding", accent: "#5A6E8C", description: "Positioning and identity" },
-  "marketing": { id: "marketing", icon: "M", label: "Marketing", accent: "#8C5A7A", description: "GTM built from context" },
   "landing": { id: "landing", icon: "LP", label: "Landing Page", accent: "#8C7A5A", description: "Live validation page" },
-  "feasibility": { id: "feasibility", icon: "F", label: "Feasibility", accent: "#7A5A8C", description: "Investor-grade verdict" },
-  "general": { id: "general", icon: "CP", label: "Co-pilot", accent: "#6B8F71", description: "Ask across all outputs" },
   "shadow-board": { id: "shadow-board", icon: "SB", label: "Shadow Board", accent: "#E04848", description: "Stress-test assumptions" },
+  "general": { id: "general", icon: "CP", label: "Co-pilot", accent: "#6B8F71", description: "Ask across all outputs" },
 };
 
 export interface ModulePickerProps {
@@ -59,7 +47,7 @@ export function ModulePicker({ selectedModule, onChange }: ModulePickerProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const currentModule = MODULES[selectedModule] || MODULES["full-launch"];
+  const currentModule = MODULES[selectedModule] || MODULES["landing"];
 
   if (!mounted) {
     return (

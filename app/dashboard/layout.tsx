@@ -42,25 +42,14 @@ interface VentureItem {
 }
 
 const MODULES = [
-  { id: 'full-launch',  label: 'Full Launch',  icon: '⬡', accent: '#C4975A' },
-  { id: 'research',     label: 'Research',     icon: '◎', accent: '#5A8C6E' },
-  { id: 'branding',     label: 'Branding',     icon: '◇', accent: '#5A6E8C' },
-  { id: 'marketing',    label: 'Marketing',    icon: '▲', accent: '#8C5A7A' },
   { id: 'landing',      label: 'Landing Page', icon: '▣', accent: '#8C7A5A' },
-  { id: 'feasibility',  label: 'Feasibility',  icon: '◈', accent: '#7A5A8C' },
-  { id: 'general',      label: 'Co-pilot',     icon: '◉', accent: '#6B8F71' },
   { id: 'shadow-board', label: 'Shadow Board', icon: '⚔', accent: '#E04848' },
+  { id: 'general',      label: 'Co-pilot',     icon: '◉', accent: '#6B8F71' },
   { id: 'campaigns',    label: 'Campaigns',    icon: '✉', accent: '#C07A3A' },
   { id: 'crm',          label: 'CRM',          icon: '◐', accent: '#5A8C5A' },
 ] as const
 
-const MODULE_GROUPS = [
-  { group: 'BUILD',         label: 'launch', ids: ['full-launch'] },
-  { group: 'BUILD',         label: 'agents', ids: ['research', 'branding', 'marketing', 'landing', 'feasibility'] },
-  { group: 'BUILD',         label: 'tools',  ids: ['general', 'shadow-board'] },
-  { group: 'OUTREACH',      label: null,     ids: ['campaigns'] },
-  { group: 'CRM DASHBOARD', label: null,     ids: ['crm'] },
-] as const
+const BUILD_MODULE_IDS = ['landing', 'shadow-board', 'general'] as const
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -99,7 +88,6 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionData | null>(null)
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [ventures, setVentures] = useState<VentureItem[]>([])
-  const [cohorts, setCohorts] = useState<{ id: string; name: string; status: string; created_at: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [appReady, setAppReady] = useState(false)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
@@ -109,7 +97,6 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [buildOpen, setBuildOpen] = useState(true)
   // Project icon hover tooltip + context menu (portal-based so they escape overflow:hidden)
   const [projTooltip, setProjTooltip] = useState<{ id: string; name: string; top: number } | null>(null)
   const [projContextMenu, setProjContextMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null)
@@ -205,11 +192,10 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function load() {
       try {
-        const [sessRes, projRes, ventRes, cohRes] = await Promise.all([
+        const [sessRes, projRes, ventRes] = await Promise.all([
           fetch('/api/auth/session'),
           fetch('/api/projects'),
           fetch('/api/ventures'),
-          fetch('/api/cohorts'),
         ])
         if (sessRes.ok) setSession(await sessRes.json())
         if (projRes.ok) setProjects(await projRes.json())
@@ -217,7 +203,6 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
           const data = await ventRes.json()
           setVentures(data.map(normalizeVentureItem))
         }
-        if (cohRes.ok) setCohorts(await cohRes.json())
       } catch (err) {
         console.error('Failed to load dashboard layout data:', err)
       } finally {
@@ -801,13 +786,10 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                         <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 700 }}>Overview</span>
                       </motion.button>
 
-                      {/* Top-level nav: Build (collapsible) / Outreach / CRM */}
+                      {/* Top-level nav: Build modules (flat) / Outreach / CRM */}
                       {(() => {
-                        const buildSubgroups = MODULE_GROUPS.filter(g => g.group === 'BUILD')
-                        const buildIds = buildSubgroups.flatMap(g => g.ids as readonly string[])
                         const campaignsModule = MODULES.find(m => m.id === 'campaigns')!
                         const crmModule = MODULES.find(m => m.id === 'crm')!
-                        const buildActive = buildIds.some(id => isModuleActive(activeVenture.id, id))
                         const outreachActive = isModuleActive(activeVenture.id, 'campaigns')
                         const crmActive = isModuleActive(activeVenture.id, 'crm')
 
@@ -822,111 +804,48 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 
                         return (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 8 }}>
-                            {/* Build — collapsible */}
-                            <motion.button
-                              whileHover={{ backgroundColor: 'var(--nav-active)' }}
-                              onClick={() => setBuildOpen(o => !o)}
-                              aria-expanded={buildOpen}
-                              aria-label="Toggle Build modules"
-                              style={sectionButtonStyle(buildActive, '#C4975A')}
-                            >
-                              <span style={{ color: '#C4975A', fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>⬡</span>
-                              <span style={{ fontSize: 13, color: buildActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: buildActive ? 700 : 600 }}>Build</span>
-                              <motion.span
-                                animate={{ rotate: buildOpen ? 90 : 0 }}
-                                transition={{ duration: 0.18 }}
-                                style={{
-                                  marginLeft: 'auto',
-                                  fontSize: 10,
-                                  color: 'var(--muted)',
-                                  opacity: 0.7,
-                                  display: 'flex', alignItems: 'center',
-                                }}
-                              >
-                                ▶
-                              </motion.span>
-                            </motion.button>
-
-                            <AnimatePresence initial={false}>
-                              {buildOpen && (
-                                <motion.div
-                                  key="build-children"
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  style={{ overflow: 'hidden' }}
+                            {/* Build modules — flat list, one click each */}
+                            {BUILD_MODULE_IDS.map((id, idx) => {
+                              const m = MODULES.find(mod => mod.id === id)!
+                              const active = isModuleActive(activeVenture.id, m.id)
+                              const completed = activeVenture.completedModules.includes(m.id)
+                              return (
+                                <motion.button
+                                  key={m.id}
+                                  initial={{ opacity: 0, x: -4 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: idx * 0.02 }}
+                                  whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                                  onClick={() => router.push(moduleHref(activeVenture.id, m.id))}
+                                  aria-label={`Open ${m.label} module`}
+                                  aria-current={active ? 'page' : undefined}
+                                  style={sectionButtonStyle(active, m.accent)}
                                 >
-                                  <div style={{ paddingLeft: 14, paddingTop: 4, paddingBottom: 4, borderLeft: '1px solid var(--border)', marginLeft: 12 }}>
-                                    {buildSubgroups.map((group) => {
-                                      const groupModules = group.ids.map(id => MODULES.find(m => m.id === id)!).filter(Boolean)
-                                      return (
-                                        <div key={group.label ?? 'main'}>
-                                          {group.label && (
-                                            <div style={{
-                                              fontSize: 9, fontWeight: 600,
-                                              fontStyle: 'italic' as const,
-                                              letterSpacing: '0.06em',
-                                              color: 'var(--muted)',
-                                              padding: '6px 6px 2px', opacity: 0.55,
-                                            }}>
-                                              {group.label}
-                                            </div>
-                                          )}
-                                          {groupModules.map((m, idx) => {
-                                            const active = isModuleActive(activeVenture.id, m.id)
-                                            const completed = activeVenture.completedModules.includes(m.id)
-                                            return (
-                                              <motion.button
-                                                key={m.id}
-                                                initial={{ opacity: 0, x: -4 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: idx * 0.02 }}
-                                                whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
-                                                onClick={() => router.push(moduleHref(activeVenture.id, m.id))}
-                                                aria-label={`Open ${m.label} module`}
-                                                aria-current={active ? 'page' : undefined}
-                                                style={{
-                                                  display: 'flex', alignItems: 'center', gap: 8,
-                                                  padding: '0 8px', height: 34,
-                                                  borderRadius: 7, border: 'none',
-                                                  cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'inherit',
-                                                  background: active ? `${m.accent}12` : 'transparent',
-                                                  borderLeft: active ? `2px solid ${m.accent}` : '2px solid transparent',
-                                                }}
-                                              >
-                                                <span style={{ color: m.accent, fontSize: 12, lineHeight: 1, width: 18, textAlign: 'center' as const, flexShrink: 0 }}>{m.icon}</span>
-                                                <span style={{ fontSize: 13, color: active ? 'var(--text)' : 'var(--text-soft)', fontWeight: active ? 600 : 500 }}>{m.label}</span>
-                                                {(completed || active) && (
-                                                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                                                    {completed && (
-                                                      <span
-                                                        aria-hidden="true"
-                                                        style={{
-                                                          width: 4, height: 4, borderRadius: '50%',
-                                                          background: '#5A8C6E',
-                                                          boxShadow: '0 0 6px rgba(90, 140, 110, 0.45)',
-                                                        }}
-                                                      />
-                                                    )}
-                                                    {active && (
-                                                      <motion.div
-                                                        layoutId="module-active-dot"
-                                                        style={{ width: 4, height: 4, borderRadius: '50%', background: m.accent }}
-                                                      />
-                                                    )}
-                                                  </span>
-                                                )}
-                                              </motion.button>
-                                            )
-                                          })}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                                  <span style={{ color: m.accent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center' as const, flexShrink: 0 }}>{m.icon}</span>
+                                  <span style={{ fontSize: 13, color: active ? 'var(--text)' : 'var(--text-soft)', fontWeight: active ? 700 : 600 }}>{m.label}</span>
+                                  {(completed || active) && (
+                                    <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                      {completed && (
+                                        <span
+                                          aria-hidden="true"
+                                          style={{
+                                            width: 4, height: 4, borderRadius: '50%',
+                                            background: '#5A8C6E',
+                                            boxShadow: '0 0 6px rgba(90, 140, 110, 0.45)',
+                                          }}
+                                        />
+                                      )}
+                                      {active && (
+                                        <motion.div
+                                          layoutId="module-active-dot"
+                                          style={{ width: 4, height: 4, borderRadius: '50%', background: m.accent }}
+                                        />
+                                      )}
+                                    </span>
+                                  )}
+                                </motion.button>
+                              )
+                            })}
 
                             {/* Outreach — single button, routes to campaigns */}
                             <motion.button
@@ -994,55 +913,6 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                       })()}
                     </>
                   )}
-
-                  {/* ── Cohorts section ── */}
-                  <div style={{ padding: '14px 0 4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', marginBottom: 8 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', opacity: 0.5, textTransform: 'uppercase' }}>COHORTS</span>
-                      <motion.button
-                        onClick={() => router.push('/dashboard/cohort/new')}
-                        style={{
-                          fontSize: 9, fontWeight: 600,
-                          color: 'var(--accent)', background: 'var(--accent-soft)',
-                          border: '1px solid var(--accent-glow, var(--border))',
-                          borderRadius: 5, padding: '2px 7px',
-                          cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.02em',
-                        }}
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.96 }}
-                      >
-                        New Cohort
-                      </motion.button>
-                    </div>
-                    {!loading && cohorts.length === 0 && (
-                      <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 8px' }}>No cohorts yet</div>
-                    )}
-                    {!loading && cohorts.map(c => {
-                      const isActive = pathname === `/dashboard/cohort/${c.id}`
-                      const statusColor = c.status === 'complete' ? '#5A8C6E' : c.status === 'running' ? '#C4975A' : c.status === 'comparing' ? '#7A5A8C' : 'var(--muted)'
-                      return (
-                        <motion.button
-                          key={c.id}
-                          onClick={() => router.push(`/dashboard/cohort/${c.id}`)}
-                          whileHover={{ backgroundColor: 'var(--nav-active)' }}
-                          style={{
-                            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                            padding: '0 10px', height: 34,
-                            borderRadius: 7, border: 'none',
-                            background: isActive ? 'var(--nav-active)' : 'transparent',
-                            cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', marginBottom: 2,
-                          }}
-                        >
-                          <span style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--text)' : 'var(--text-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {c.name}
-                          </span>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: `${statusColor}20`, color: statusColor, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
-                            {c.status}
-                          </span>
-                        </motion.button>
-                      )
-                    })}
-                  </div>
 
                   {/* Manage + footer actions */}
                   <div style={{ padding: '8px 0 4px' }}>

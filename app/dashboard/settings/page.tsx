@@ -712,42 +712,6 @@ export default function SettingsPage() {
             </SettingRow>
 
             <SettingRow
-              delay={0.24}
-              icon={
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              }
-              title="Default Research Depth"
-              description="Set the default research intensity for Research and Full Launch modules."
-            >
-              <div style={{ display: 'flex', gap: 4, background: 'var(--glass-bg)', borderRadius: 10, padding: 3, border: '1px solid var(--border)' }}>
-                {(['brief', 'medium', 'detailed'] as const).map(d => (
-                  <motion.button
-                    key={d}
-                    onClick={() => update('defaultDepth', d)}
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.96 }}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: 8,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      textTransform: 'capitalize',
-                      border: 'none',
-                      cursor: 'pointer',
-                      background: settings.defaultDepth === d ? 'var(--accent)' : 'transparent',
-                      color: settings.defaultDepth === d ? '#fff' : 'var(--muted)',
-                      transition: 'background 150ms, color 150ms',
-                    }}
-                  >
-                    {d}
-                  </motion.button>
-                ))}
-              </div>
-            </SettingRow>
-
-            <SettingRow
               delay={0.28}
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

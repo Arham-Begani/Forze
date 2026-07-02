@@ -167,7 +167,7 @@ export default function PricingPage() {
         <section className="glass-card" style={{ padding: 36, marginBottom: 40 }}>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, letterSpacing: '-0.01em' }}>What unlocks on which plan</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 28, lineHeight: 1.6, maxWidth: 720 }}>
-            Validation modules (Research, Branding, Landing, Feasibility, Full Launch) work on every plan and burn credits when you run them. Outreach, CRM, and Inspiration unlock from Builder up.
+            Build modules (Landing Page, Shadow Board, Co-pilot, Investor Kit) work on every plan and burn credits when you run them. Outreach, CRM, and Inspiration unlock from Builder up.
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 540 }}>
