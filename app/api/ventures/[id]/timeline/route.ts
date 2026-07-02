@@ -21,7 +21,7 @@ export async function GET(
         // Determine which conversation is the "active" one for each module
         // by comparing conversation result with current venture context
         const activeVersions: Record<string, string | null> = {}
-        const moduleIds = ['research', 'branding', 'marketing', 'landing', 'feasibility'] as const
+        const moduleIds = ['landing'] as const
 
         for (const moduleId of moduleIds) {
             const currentContext = (venture.context as any)?.[moduleId]

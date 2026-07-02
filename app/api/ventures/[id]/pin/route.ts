@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 const bodySchema = z.object({
     conversationId: z.string().uuid(),
-    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility']),
+    moduleId: z.enum(['landing']),
 })
 
 export async function POST(

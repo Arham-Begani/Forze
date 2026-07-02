@@ -1,10 +1,5 @@
 export type BillingModuleId =
-  | 'research'
-  | 'branding'
-  | 'marketing'
   | 'landing'
-  | 'feasibility'
-  | 'full-launch'
   | 'general'
   | 'shadow-board'
   | 'investor-kit'
@@ -26,12 +21,7 @@ export type FeatureId = 'crm' | 'inspiration' | 'outreach'
 export type ActionId = 'inspiration_analyze' | 'crm_email_send' | 'campaign_send'
 
 export const ALL_BILLING_MODULES: BillingModuleId[] = [
-  'research',
-  'branding',
-  'marketing',
   'landing',
-  'feasibility',
-  'full-launch',
   'general',
   'shadow-board',
   'investor-kit',
@@ -44,12 +34,7 @@ export const ALL_FEATURES: FeatureId[] = ['crm', 'inspiration', 'outreach']
 // Modules every plan gets (Free + Starter included). Excludes launch-autopilot
 // because that's part of the Outreach feature gate (Builder+).
 export const CORE_BILLING_MODULES: BillingModuleId[] = [
-  'research',
-  'branding',
-  'marketing',
   'landing',
-  'feasibility',
-  'full-launch',
   'general',
   'shadow-board',
   'investor-kit',
@@ -95,12 +80,7 @@ export interface TopupProduct {
 }
 
 export const BILLING_MODULE_LABELS: Record<BillingModuleId, string> = {
-  research: 'Research',
-  branding: 'Branding',
-  marketing: 'Marketing',
   landing: 'Landing Page',
-  feasibility: 'Feasibility',
-  'full-launch': 'Full Launch',
   general: 'Co-pilot',
   'shadow-board': 'Shadow Board',
   'investor-kit': 'Investor Kit',
@@ -110,16 +90,11 @@ export const BILLING_MODULE_LABELS: Record<BillingModuleId, string> = {
 
 export const MODULE_CREDIT_COSTS: Record<BillingModuleId, number> = {
   general: 1,
-  branding: 6,
   'mvp-scalpel': 6,
-  research: 8,
-  marketing: 8,
   'launch-autopilot': 8,
   landing: 10,
   'shadow-board': 10,
   'investor-kit': 10,
-  feasibility: 12,
-  'full-launch': 30,
 }
 
 export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {

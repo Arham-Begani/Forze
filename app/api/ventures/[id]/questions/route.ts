@@ -7,7 +7,7 @@ import { getFlashModel, extractJSON } from '@/lib/gemini'
 import { evaluateModuleScope } from '@/lib/module-scope'
 
 const bodySchema = z.object({
-    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch']),
+    moduleId: z.enum(['landing']),
     prompt: z.string().min(1).max(2000),
 })
 
@@ -25,12 +25,7 @@ const QuestionSchema = z.object({
 })
 
 const MODULE_CONTEXT: Record<string, string> = {
-    'research': 'market research, competitive analysis, TAM/SAM/SOM sizing, and pain point discovery',
-    'branding': 'brand identity, naming, color palette, typography, tone of voice, and brand archetype',
-    'marketing': '30-day go-to-market strategy, social media calendar, SEO outlines, and email sequences',
     'landing': 'landing page design, sitemap, copy, hero sections, pricing, and CTA strategy',
-    'feasibility': 'financial modeling, risk assessment, GO/NO-GO verdict, and 3-year projections',
-    'full-launch': 'complete venture package including research, branding, landing page, and feasibility',
 }
 
 export async function POST(
@@ -71,11 +66,8 @@ export async function POST(
         const contextParts: string[] = []
         if (project?.global_idea) contextParts.push(`Global Idea: ${project.global_idea}`)
         if (venture.name) contextParts.push(`Venture Name: ${venture.name}`)
-        if (context?.research) contextParts.push(`Research data exists: yes`)
-        if (context?.branding) contextParts.push(`Branding data exists: yes`)
-        if (context?.marketing) contextParts.push(`Marketing data exists: yes`)
         if (context?.landing) contextParts.push(`Landing page data exists: yes`)
-        if (context?.feasibility) contextParts.push(`Feasibility data exists: yes`)
+        if (context?.shadowBoard) contextParts.push(`Shadow Board feedback exists: yes`)
 
         const systemPrompt = `You are Forze, an AI venture orchestrator. You MUST decide whether the user's prompt requires strategic questions before running the ${moduleId} agent.
 

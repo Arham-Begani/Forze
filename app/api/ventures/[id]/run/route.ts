@@ -1,5 +1,5 @@
 // app/api/ventures/[id]/run/route.ts
-// Allow up to 5 minutes for long-running agents (Full Launch, Shadow Board, etc.)
+// Allow up to 5 minutes for long-running agents (Landing Page, Shadow Board, etc.)
 export const maxDuration = 300
 
 import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
@@ -20,13 +20,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { z } from 'zod'
 import { Content } from '@google/generative-ai'
-import { runGenesisAgent } from '@/agents/genesis'
-import { runIdentityAgent } from '@/agents/identity'
-import { runContentAgent } from '@/agents/content'
 import { runPipelineAgent } from '@/agents/pipeline'
 import { listLandingAssets } from '@/lib/queries/landing-asset-queries'
-import { runFeasibilityAgent } from '@/agents/feasibility'
-import { runFullLaunch } from '@/agents/orchestrator'
 import { runGeneralAgent } from '@/agents/general'
 import { runShadowBoard } from '@/agents/shadow'
 import { runInvestorKitAgent } from '@/agents/investor-kit'
@@ -45,7 +40,7 @@ const DecisionSchema = z.object({
 })
 
 const bodySchema = z.object({
-    moduleId: z.enum(['research', 'branding', 'marketing', 'landing', 'feasibility', 'full-launch', 'general', 'shadow-board', 'investor-kit', 'launch-autopilot', 'mvp-scalpel']),
+    moduleId: z.enum(['landing', 'general', 'shadow-board', 'investor-kit', 'launch-autopilot', 'mvp-scalpel']),
     prompt: z.string().min(1).max(2000),
     depth: z.enum(['brief', 'medium', 'detailed']).optional(),
     decisions: z.array(DecisionSchema).optional(),
@@ -127,11 +122,11 @@ async function runAgent(
         context: venture.context as unknown as Record<string, unknown>,
     }
 
-    // Surface user-uploaded landing-page imagery to the Pipeline agent (it
-    // also runs inside Full Launch). The pipeline reads this from
-    // venture.context.landingAssets and threads asset URLs into the
-    // generated component instead of hallucinating stock photo URLs.
-    if (moduleId === 'landing' || moduleId === 'full-launch') {
+    // Surface user-uploaded landing-page imagery to the Pipeline agent.
+    // The pipeline reads this from venture.context.landingAssets and threads
+    // asset URLs into the generated component instead of hallucinating
+    // stock photo URLs.
+    if (moduleId === 'landing') {
         try {
             const landingAssets = await listLandingAssets(ventureId)
             if (landingAssets.length > 0) {
@@ -154,56 +149,13 @@ async function runAgent(
         }
     }
 
-    const onAgentStatus = async (agentId: string, status: string) => {
-        await appendStreamLine(conversationId, `__STATUS__${agentId}:${status}`)
-    }
-
     try {
         switch (moduleId) {
-            case 'research':
-                await runGenesisAgent(ventureInput, onStream, async (result) => {
-                    await updateVentureContext(ventureId, 'research', result)
-                    await setConversationResult(conversationId, result)
-                }, depth, history)
-                break
-
-            case 'branding':
-                await runIdentityAgent(ventureInput, onStream, async (result) => {
-                    await updateVentureContext(ventureId, 'branding', result)
-                    await setConversationResult(conversationId, result)
-                }, history)
-                break
-
-            case 'marketing':
-                await runContentAgent(ventureInput, onStream, async (result) => {
-                    await updateVentureContext(ventureId, 'marketing', result)
-                    await setConversationResult(conversationId, result)
-                }, history)
-                break
-
             case 'landing':
                 await runPipelineAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'landing', result)
                     await setConversationResult(conversationId, result)
                 }, history)
-                break
-
-            case 'feasibility':
-                await runFeasibilityAgent(ventureInput, onStream, async (result) => {
-                    await updateVentureContext(ventureId, 'feasibility', result)
-                    await setConversationResult(conversationId, result)
-                }, depth, history)
-                break
-
-            case 'full-launch':
-                await runFullLaunch(ventureInput, onStream, onAgentStatus, async (result) => {
-                    if (result.research) await updateVentureContext(ventureId, 'research', result.research)
-                    if (result.branding) await updateVentureContext(ventureId, 'branding', result.branding)
-                    if (result.marketing) await updateVentureContext(ventureId, 'marketing', result.marketing)
-                    if (result.landing) await updateVentureContext(ventureId, 'landing', result.landing)
-                    if (result.feasibility) await updateVentureContext(ventureId, 'feasibility', result.feasibility)
-                    await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
-                }, depth, history)
                 break
 
             case 'general': {

@@ -171,12 +171,6 @@ function scoreModule(moduleId: BillingModuleId, features: PromptFeatures): Scope
   let score = deliverableHits.length * 4 + keywordHits.length * 2
 
   if (deliverableHits.length > 0 && features.hasTaskIntent) score += 3
-  if (moduleId === 'research' && features.hasAnalysisIntent && (deliverableHits.length > 0 || keywordHits.length > 0)) {
-    score += 2
-  }
-  if (moduleId === 'full-launch' && features.hasBroadLaunchIntent) {
-    score += 6
-  }
 
   return {
     moduleId,
@@ -289,10 +283,6 @@ function shouldDeterministicallyBlock(
 ): boolean {
   if (!foreignMatch) return false
 
-  if (selectedModule === 'full-launch') {
-    return foreignMatch.moduleId === 'marketing' && foreignMatch.score >= 7
-  }
-
   if (!features.hasTaskIntent) return false
   if (foreignMatch.deliverableHits.length === 0) return false
 
@@ -306,7 +296,7 @@ function shouldRunClassifier(
   features: PromptFeatures
 ): boolean {
   if (!foreignMatch) return false
-  if (selectedModule === 'general' || selectedModule === 'full-launch') return false
+  if (selectedModule === 'general') return false
   if (!features.hasTaskIntent) return false
   if (foreignMatch.deliverableHits.length === 0) return false
 
@@ -457,10 +447,6 @@ function selectedModuleLooksValid(
   selectedMatch: ScopeMatch,
   features: PromptFeatures
 ): boolean {
-  if (moduleId === 'full-launch') {
-    return features.hasBroadLaunchIntent || selectedMatch.score > 0
-  }
-
   if (selectedMatch.score <= 0) return false
 
   if (selectedMatch.deliverableHits.length > 0) return true

@@ -6,11 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const COMPLETED_MODULE_MAP = [
-    { contextKey: 'research', moduleId: 'research' },
-    { contextKey: 'branding', moduleId: 'branding' },
-    { contextKey: 'marketing', moduleId: 'marketing' },
     { contextKey: 'landing', moduleId: 'landing' },
-    { contextKey: 'feasibility', moduleId: 'feasibility' },
     { contextKey: 'shadowBoard', moduleId: 'shadow-board' },
     { contextKey: 'investorKit', moduleId: 'investor-kit' },
     { contextKey: 'launchAutopilot', moduleId: 'launch-autopilot' },
