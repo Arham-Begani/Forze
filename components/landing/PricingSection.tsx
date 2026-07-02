@@ -7,24 +7,24 @@ import { BILLING_PLANS, type PlanSlug } from '@/lib/billing'
 const PLAN_ORDER: PlanSlug[] = ['free', 'starter', 'builder', 'pro', 'studio']
 
 const PLAN_DESCRIPTIONS: Record<PlanSlug, string> = {
-  free: 'Pressure-test one venture with the validation stack.',
-  starter: 'Rerun research and feasibility with more room to iterate.',
-  builder: 'Outreach, CRM, and Inspiration unlock — go from idea to launched venture.',
-  pro: 'Founder diligence at full tempo with rerun-heavy quotas.',
+  free: 'Ship one venture — live page, board review, co-pilot.',
+  starter: 'Iterate on pages and board reviews with more headroom.',
+  builder: 'Outreach, CRM, and Inspiration unlock — turn the page into pipeline.',
+  pro: 'Founder tempo with rerun-heavy quotas.',
   studio: 'Portfolio-level operations for teams and venture studios.',
 }
 
 const PLAN_HIGHLIGHTS: Record<PlanSlug, string[]> = {
   free: [
-    '1 validation workspace',
+    '1 venture workspace',
     '10 credits / week',
-    'Validation modules only',
+    'Landing Page, Shadow Board, Co-pilot',
     'Community support',
   ],
   starter: [
     '2 ventures',
     '20 credits / week',
-    'Validation modules only',
+    'Landing Page, Shadow Board, Co-pilot',
     'Email support',
   ],
   builder: [

@@ -2,130 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const BARS = [
-  { label: 'TAM', value: '$2.4B', pct: 100, color: '#5A8C6E' },
-  { label: 'SAM', value: '$180M', pct: 75, color: '#6B9F80' },
-  { label: 'SOM', value: '$4.2M', pct: 40, color: '#7AAF90' },
-]
 
 const TABS = [
-  { id: 'research', label: 'Research', icon: 'R', accent: '#5A8C6E' },
-  { id: 'branding', label: 'Branding', icon: 'B', accent: '#5A6E8C' },
   { id: 'landing', label: 'Landing Page', icon: 'L', accent: '#8C7A5A' },
-  { id: 'feasibility', label: 'Feasibility', icon: 'F', accent: '#7A5A8C' },
   { id: 'shadow', label: 'Shadow Board', icon: 'SB', accent: '#E04848' },
   { id: 'investor', label: 'Investor Kit', icon: 'IK', accent: '#7A8C5A' },
 ]
 
-function ResearchPreview({ barsVisible }: { barsVisible: boolean }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-          Market Sizing
-        </p>
-        {BARS.map((bar, index) => (
-          <div key={bar.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '11px', color: 'var(--muted)', width: '32px', flexShrink: 0 }}>{bar.label}</span>
-            <div style={{ flex: 1, height: '8px', borderRadius: '4px', background: 'var(--border)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: barsVisible ? `${bar.pct}%` : '0%', background: bar.color, borderRadius: '4px', transition: `width 1s ${0.1 + index * 0.18}s ease` }} />
-            </div>
-            <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '12px', color: 'var(--text-soft)', fontWeight: 600, width: '48px', textAlign: 'right', flexShrink: 0 }}>{bar.value}</span>
-          </div>
-        ))}
-      </div>
 
-      <div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-          Top Competitors
-        </p>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-          {[
-            { name: 'Notion AI', gap: 'No market validation', score: '6/10' },
-            { name: 'Canva AI', gap: 'Design-only, no research', score: '4/10' },
-            { name: 'Copy.ai', gap: 'Copy only, no strategy', score: '3/10' },
-          ].map((row, i) => (
-            <div key={row.name} style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr auto',
-              gap: '8px',
-              padding: '10px 12px',
-              borderBottom: i < 2 ? '1px solid var(--border)' : 'none',
-              alignItems: 'center',
-              fontSize: '12px',
-            }}>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--text)', fontWeight: 500 }}>{row.name}</span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)', fontSize: '12px' }}>{row.gap}</span>
-              <span style={{ fontFamily: 'var(--font-jetbrains-mono)', color: '#5A8C6E', fontWeight: 700, fontSize: '12px' }}>{row.score}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderRadius: 'var(--radius-md)', background: '#5A8C6E15', border: '1px solid #5A8C6E25' }}>
-        <span style={{ fontSize: '12px', fontWeight: 700, color: '#5A8C6E', fontFamily: 'var(--font-jetbrains-mono), monospace' }}>01</span>
-        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '14px', color: 'var(--text-soft)' }}>
-          <strong style={{ color: '#5A8C6E' }}>10 scored concepts and angles</strong> ranked by opportunity, competitive whitespace, and execution risk
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function BrandingPreview() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-          Brand Palette
-        </p>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {[
-            { hex: '#1A1F2E' },
-            { hex: '#2D6BE4' },
-            { hex: '#6ECFF6' },
-            { hex: '#F5F7FF' },
-            { hex: '#FFB547' },
-          ].map(c => (
-            <div key={c.hex} style={{ flex: '1 1 40px', minWidth: '40px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-              <div style={{ height: '40px', borderRadius: 'var(--radius-sm)', background: c.hex, width: '100%', border: '1px solid var(--border)' }} />
-              <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '8px', color: 'var(--muted)', textAlign: 'center' }}>{c.hex}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-          Name Candidates
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {[
-            { name: 'Vela', score: 'Recommended', tag: '#2D6BE4' },
-            { name: 'Arclo', score: 'Strong', tag: '#5A8C6E' },
-            { name: 'Nuvro', score: 'Creative', tag: '#7A5A8C' },
-          ].map((n, i) => (
-            <div key={n.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 'var(--radius-md)', background: i === 0 ? '#2D6BE415' : 'var(--glass-bg)', border: `1px solid ${i === 0 ? '#2D6BE430' : 'var(--border)'}` }}>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '16px', fontWeight: 700, color: 'var(--text)' }}>{n.name}</span>
-              <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', fontWeight: 600, color: n.tag }}>{n.score}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-          Brand Tone
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {['Confident', 'Approachable', 'Forward-thinking', 'Direct', 'Empowering'].map(t => (
-            <span key={t} style={{ padding: '4px 12px', borderRadius: '999px', background: '#5A6E8C15', border: '1px solid #5A6E8C30', color: '#5A6E8C', fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-dm-sans)' }}>{t}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function LandingPreview() {
   return (
@@ -169,41 +53,6 @@ function LandingPreview() {
   )
 }
 
-function FeasibilityPreview() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px', borderRadius: 'var(--radius-lg)', background: '#22c55e12', border: '1px solid #22c55e30' }}>
-        <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#22c55e20', border: '2px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, animation: 'glow-pulse 2s ease-in-out infinite', flexShrink: 0, color: '#22c55e', fontFamily: 'var(--font-jetbrains-mono), monospace' }}>GO</div>
-        <div>
-          <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '22px', fontWeight: 800, color: '#22c55e', letterSpacing: '-0.01em' }}>GO</div>
-          <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '13px', color: 'var(--text-soft)' }}>Market timing score 8.2/10 · Low competitive density</div>
-        </div>
-      </div>
-
-      <div>
-        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-          3-Year Projections
-        </p>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ minWidth: '420px' }}>
-            {[
-              { year: 'Year 1', rev: '$120K', net: '-$48K', customers: '85' },
-              { year: 'Year 2', rev: '$680K', net: '$142K', customers: '420' },
-              { year: 'Year 3', rev: '$2.1M', net: '$890K', customers: '1,240' },
-            ].map((row, i) => (
-              <div key={row.year} style={{ display: 'grid', gridTemplateColumns: '50px 1fr 1fr 1fr', gap: '6px', padding: '10px 12px', borderBottom: i < 2 ? '1px solid var(--border)' : 'none', alignItems: 'center', fontSize: '12px' }}>
-                <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '11px', color: 'var(--muted)' }}>{row.year}</span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--text)', fontWeight: 600 }}>{row.rev}</span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', color: i === 0 ? '#ef4444' : '#22c55e', fontSize: '12px' }}>{row.net}</span>
-                <span style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)', fontSize: '12px' }}>{row.customers} users</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function ShadowPreview() {
   const personas = [
@@ -262,7 +111,7 @@ function InvestorPreview() {
           Executive Summary
         </div>
         <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '15px', color: 'var(--text)', lineHeight: 1.6 }}>
-          A venture thesis built from research, feasibility, landing proof, and the clearest investment story.
+          A venture thesis built from your live landing page, board findings, and the clearest investment story.
         </div>
       </div>
 
@@ -274,7 +123,7 @@ function InvestorPreview() {
           {[
             'Problem and market gap',
             'Why now and why this wedge',
-            'Validation signals and feasibility verdict',
+            'Validation signals and board verdict',
             'Go-to-market plan and funding ask',
           ].map((item, i) => (
             <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--glass-bg)', border: '1px solid var(--border)' }}>
@@ -294,12 +143,9 @@ function InvestorPreview() {
   )
 }
 
-function getPreviewMap(barsVisible: boolean): Record<string, React.ReactNode> {
+function getPreviewMap(): Record<string, React.ReactNode> {
   return {
-    research: <ResearchPreview barsVisible={barsVisible} />,
-    branding: <BrandingPreview />,
     landing: <LandingPreview />,
-    feasibility: <FeasibilityPreview />,
     shadow: <ShadowPreview />,
     investor: <InvestorPreview />,
   }
@@ -308,8 +154,7 @@ function getPreviewMap(barsVisible: boolean): Record<string, React.ReactNode> {
 export function OutputTabs() {
   const sectionRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
-  const [activeTab, setActiveTab] = useState('research')
-  const [barsVisible, setBarsVisible] = useState(false)
+  const [activeTab, setActiveTab] = useState('landing')
   const [userSelected, setUserSelected] = useState(false)
 
   useEffect(() => {
@@ -320,13 +165,6 @@ export function OutputTabs() {
     if (sectionRef.current) obs.observe(sectionRef.current)
     return () => obs.disconnect()
   }, [])
-
-  useEffect(() => {
-    if (visible) {
-      const t = setTimeout(() => setBarsVisible(true), 300)
-      return () => clearTimeout(t)
-    }
-  }, [visible])
 
   useEffect(() => {
     if (!visible || userSelected) return
@@ -429,7 +267,7 @@ export function OutputTabs() {
             <span style={{ marginLeft: 'auto', padding: '2px 10px', borderRadius: '999px', background: '#22c55e20', color: '#22c55e', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-dm-sans)' }}>Live</span>
           </div>
           <div style={{ padding: '24px' }}>
-            {getPreviewMap(barsVisible)[activeTab]}
+            {getPreviewMap()[activeTab]}
           </div>
         </div>
         </div>

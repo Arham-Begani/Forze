@@ -3,22 +3,19 @@
 import { useState } from 'react'
 
 const ITEMS = [
-  { label: 'Market Research', accent: '#5A8C6E' },
-  { label: 'Brand Identity', accent: '#5A6E8C' },
   { label: 'Live Landing Page', accent: '#8C7A5A' },
   { label: 'Inspiration Engine', accent: '#5A8CA5' },
-  { label: 'Go-to-Market Strategy', accent: '#8C5A7A' },
-  { label: 'Feasibility Study', accent: '#7A5A8C' },
-  { label: 'Smart CRM', accent: '#6B8F71' },
+  { label: 'Shadow Board Review', accent: '#E04848' },
+  { label: 'Venture Co-pilot', accent: '#6B8F71' },
+  { label: 'Smart CRM', accent: '#5A8C5A' },
   { label: 'Outbound Campaigns', accent: '#B8864E' },
   { label: 'Direct Mail Generator', accent: '#A56B5A' },
   { label: 'LinkedIn + Instagram Publishing', accent: '#5A6E8C' },
-  { label: 'Shadow Board Review', accent: '#E04848' },
+  { label: 'Auto-posting Routines', accent: '#C07A3A' },
+  { label: 'Lead Capture + Analytics', accent: '#7A5A8C' },
   { label: 'Investor Kit', accent: '#7A8C5A' },
-  { label: 'MVP Definition', accent: '#C45A5A' },
-  { label: 'Financial Projections', accent: '#C4975A' },
-  { label: 'Launch Autopilot', accent: '#C4975A' },
-  { label: 'Advisor Co-pilot', accent: '#6B8F71' },
+  { label: 'Testimonial Wall', accent: '#B86A8E' },
+  { label: 'Forze IDE', accent: '#5A8CA5' },
 ]
 
 function Row({ reverse = false }: { reverse?: boolean }) {

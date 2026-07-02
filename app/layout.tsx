@@ -15,16 +15,16 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-    title: 'Forze - Validate Startup Ideas and Build Investor-Ready Ventures',
-    description: 'Forze turns a raw startup idea into research, feasibility analysis, a live validation page, and investor-ready materials in minutes.',
-    keywords: ['startup validation', 'AI', 'venture', 'feasibility study', 'investor kit', 'market research'],
+    title: 'Forze - Ship a Live Landing Page and Stress-Test Your Startup',
+    description: 'Forze deploys a live landing page with lead capture, convenes an adversarial Shadow Board, and gives you a venture-aware co-pilot — plus outreach, CRM, and investor materials.',
+    keywords: ['startup validation', 'AI landing page', 'landing page builder', 'shadow board', 'venture co-pilot', 'investor kit', 'startup outreach'],
     authors: [{ name: 'Forze' }],
     icons: {
         icon: '/favicon.png',
     },
     openGraph: {
-        title: 'Forze - From Raw Idea to Validated Venture',
-        description: 'Research the market, pressure-test feasibility, launch a validation page, and package the story for investors.',
+        title: 'Forze - From Raw Idea to a Live, Stress-Tested Venture',
+        description: 'Deploy a live landing page, get brutal board-style feedback, and grow with a venture-aware co-pilot, outreach, and CRM.',
         type: 'website',
         url: process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.in',
         images: [
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'Forze - From Raw Idea to Validated Venture',
-        description: 'Research the market, pressure-test feasibility, launch a validation page, and package the story for investors.',
+        title: 'Forze - From Raw Idea to a Live, Stress-Tested Venture',
+        description: 'Deploy a live landing page, get brutal board-style feedback, and grow with a venture-aware co-pilot, outreach, and CRM.',
         images: [`${process.env.NEXT_PUBLIC_BASE_URL || 'https://forze.in'}/api/og`],
     },
 }

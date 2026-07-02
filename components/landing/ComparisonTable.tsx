@@ -3,17 +3,16 @@
 import { useEffect, useRef, useState } from 'react'
 
 const ROWS = [
-  { feature: 'Market Research', forze: true, freelancers: 'weeks', chatbots: 'partial', tools: 'manual' },
-  { feature: 'Brand Identity', forze: true, freelancers: 'expensive', chatbots: 'partial', tools: 'manual' },
   { feature: 'Live Deployed Landing Page', forze: true, freelancers: 'weeks', chatbots: false, tools: 'manual' },
   { feature: 'Inspiration-Grounded Design', forze: true, freelancers: false, chatbots: false, tools: false },
+  { feature: 'Shadow Board Review', forze: true, freelancers: false, chatbots: false, tools: false },
+  { feature: 'Venture-Aware Co-pilot', forze: true, freelancers: false, chatbots: 'partial', tools: false },
   { feature: 'Built-in CRM + Lead Inbox', forze: true, freelancers: false, chatbots: false, tools: 'separate' },
   { feature: 'Cold Outreach Campaigns', forze: true, freelancers: 'expensive', chatbots: false, tools: 'separate' },
   { feature: 'LinkedIn + Instagram Publishing', forze: true, freelancers: 'manual', chatbots: false, tools: 'separate' },
-  { feature: 'Feasibility Study', forze: true, freelancers: 'expensive', chatbots: false, tools: false },
-  { feature: 'Shadow Board Review', forze: true, freelancers: false, chatbots: false, tools: false },
+  { feature: 'Auto-posting Routines', forze: true, freelancers: false, chatbots: false, tools: 'separate' },
   { feature: 'Investor Kit / Data Room', forze: true, freelancers: 'expensive', chatbots: false, tools: false },
-  { feature: 'Cross-Agent Context', forze: true, freelancers: 'manual', chatbots: false, tools: false },
+  { feature: 'Cross-Module Context', forze: true, freelancers: 'manual', chatbots: false, tools: false },
 ]
 
 const META = [
@@ -232,10 +231,10 @@ export function ComparisonTable() {
           Why Forze
         </p>
         <h2 style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, color: 'var(--text)', margin: '0 0 16px', letterSpacing: '-0.02em' }}>
-          Most tools help you make things. Forze runs the whole company.
+          Most tools give you text. Forze gives you traction.
         </h2>
         <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '17px', color: 'var(--text-soft)', maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
-          Research, design, a live page, feasibility, marketing, CRM, outreach — in one connected system, sharing the same venture context.
+          A live page, brutal board feedback, a co-pilot that knows your venture, CRM, and outreach — in one connected system, sharing the same venture context.
         </p>
       </div>
 

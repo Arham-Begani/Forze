@@ -5,19 +5,19 @@ import { useEffect, useRef, useState } from 'react'
 const FAQS = [
   {
     q: 'What does Forze actually do?',
-    a: 'Forze is an autonomous startup workforce. You describe an idea once and 11 connected AI agents take it through research, branding, a live landing page, feasibility analysis, multi-channel marketing, a CRM, and cold outreach. You walk away with a deployed venture — not a folder of prompts and PDFs.',
+    a: 'Forze ships the parts of a startup that a chatbot cannot. You describe an idea and Forze deploys a live landing page with lead capture, convenes a Shadow Board that stress-tests the venture, and gives you a co-pilot that knows everything about it. Then Outreach, CRM, and the Investor Kit turn the page into pipeline. You walk away with a running venture — not a folder of prompts and PDFs.',
   },
   {
     q: 'How is Forze different from ChatGPT?',
-    a: 'ChatGPT gives you disconnected answers. Forze gives you a connected venture. Research drives positioning, positioning drives the brand, the brand drives the landing page, the landing page captures leads into a real CRM, and outreach sends real campaigns to those leads. Every agent shares the same venture context — the value is the continuity, not just the text.',
+    a: 'Research reports, brand docs, and GTM plans are one prompt away in any chatbot — so we do not sell you those. Forze does the connected, real-world part: the landing page is actually deployed, the leads land in an actual CRM, the campaigns actually go out, and the Shadow Board argues back. Every module shares the same venture context — the value is the deployment and continuity, not the text.',
   },
   {
     q: 'Do I need technical skills to use Forze?',
-    a: 'None. You describe your idea in plain English. Forze handles the research, positioning, deployed landing page, CRM, outreach campaigns, feasibility modeling, and investor materials. If you can explain the problem clearly, you can run a venture on Forze.',
+    a: 'None. You describe your idea in plain English. Forze handles the deployed landing page, CRM, outreach campaigns, and investor materials. If you can explain the problem clearly, you can run a venture on Forze.',
   },
   {
-    q: 'How long does a Full Launch take?',
-    a: 'Typically 3-7 minutes. Research, branding, landing page deployment, and feasibility analysis run in parallel and stay context-connected — so you get a usable launched venture in one pass instead of stitching outputs together manually.',
+    q: 'How fast is a landing page live?',
+    a: 'Typically 2-5 minutes from prompt to a deployed URL on your own subdomain — copy, design, lead capture, and analytics included. Paste inspiration sites first and the page inherits their real fonts and colors.',
   },
   {
     q: 'What can the landing page actually do?',
@@ -33,11 +33,11 @@ const FAQS = [
   },
   {
     q: 'Is the Investor Kit based on my real venture data?',
-    a: 'Yes. It is not a generic template. Investor Kit pulls from your venture research, feasibility findings, brand context, and live landing-page proof — then packages a memo, deck outline, ask details, and data room summary that defends itself in a real conversation.',
+    a: 'Yes. It is not a generic template. Investor Kit pulls from your venture context, Shadow Board findings, and live landing-page proof — then packages a memo, deck outline, ask details, and data room summary that defends itself in a real conversation.',
   },
   {
     q: 'How do credits and plans work?',
-    a: 'Credits refresh every Monday 00:00 IST. Free gets 10/week, Builder gets 60/week with Outreach + CRM + Inspiration unlocked, Studio gets 600/week with unlimited sends. Top-ups never expire. Simple agents cost 1 credit, Full Launch costs 30. Free + Starter focus on validation; Builder and up run the full workforce.',
+    a: 'Credits refresh every Monday 00:00 IST. Free gets 10/week, Builder gets 60/week with Outreach + CRM + Inspiration unlocked, Studio gets 600/week with unlimited sends. Top-ups never expire. Co-pilot chats cost 1 credit, a landing page or Shadow Board run costs 10. Free + Starter focus on shipping pages; Builder and up unlock the growth stack.',
   },
   {
     q: 'Can I edit the outputs?',
@@ -45,7 +45,7 @@ const FAQS = [
   },
   {
     q: 'What happens to my venture data?',
-    a: 'Your data is stored securely in your account and is not shared with other users. You own the outputs — the research, landing page, CRM leads, campaigns, and investor materials. Delete your account at any time to remove everything.',
+    a: 'Your data is stored securely in your account and is not shared with other users. You own the outputs — the landing page, CRM leads, campaigns, and investor materials. Delete your account at any time to remove everything.',
   },
 ]
 

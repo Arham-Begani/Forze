@@ -3,69 +3,20 @@
 import { useEffect, useRef, useState } from 'react'
 
 const FEATURED = {
-  icon: 'FL',
-  accent: '#C4975A',
-  title: 'Full Launch',
-  tagline: 'Idea in. Live, validated venture out. One run.',
-  description: 'Research drives positioning. Positioning drives the brand. Brand drives the landing page. Feasibility stress-tests the numbers. The whole chain runs in parallel, stays connected, and hands you a real venture — not a folder of disconnected AI fragments. Plug in Outreach, CRM, and Launch Autopilot the moment the page goes live.',
+  icon: 'LP',
+  accent: '#8C7A5A',
+  title: 'Landing Page',
+  tagline: 'Idea in. Live, deployed page out. One run.',
+  description: 'ChatGPT can write landing page copy. Forze ships the page — designed from real inspiration, deployed to a live URL on your own subdomain, wired with lead capture and analytics. Then Outreach fills it with traffic, the CRM catches every lead, and the Shadow Board tells you what to fix before the market does.',
   subAgents: [
-    { icon: 'R', label: 'Research', accent: '#5A8C6E' },
-    { icon: 'B', label: 'Branding', accent: '#5A6E8C' },
-    { icon: 'L', label: 'Landing Page', accent: '#8C7A5A' },
-    { icon: 'F', label: 'Feasibility', accent: '#7A5A8C' },
+    { icon: 'CP', label: 'Copy + design', accent: '#8C7A5A' },
+    { icon: 'DP', label: 'Live deploy', accent: '#5A8C6E' },
+    { icon: 'LD', label: 'Lead capture', accent: '#5A6E8C' },
+    { icon: 'AN', label: 'Analytics', accent: '#7A5A8C' },
   ],
 }
 
 const AGENTS = [
-  {
-    icon: 'R',
-    accent: '#5A8C6E',
-    title: 'Research',
-    description: 'Validate demand, map the market, and identify where the real opening is.',
-    outputs: ['TAM / SAM / SOM', 'Top competitors + gaps', 'Recommended next test'],
-  },
-  {
-    icon: 'B',
-    accent: '#5A6E8C',
-    title: 'Branding',
-    description: 'Positioning and identity that actually match the market you are entering.',
-    outputs: ['Names + positioning', 'Color + typography guide', 'Brand voice system'],
-  },
-  {
-    icon: 'L',
-    accent: '#8C7A5A',
-    title: 'Landing Page',
-    description: 'A live, deployed page with copy, design, and lead capture — ready to send traffic.',
-    outputs: ['Live deployed URL', 'Inspiration-grounded design', 'Lead capture + analytics'],
-  },
-  {
-    icon: 'M',
-    accent: '#8C5A7A',
-    title: 'Marketing',
-    description: 'Multi-channel content factory — LinkedIn, Instagram, email, and direct mail, all on-brand.',
-    outputs: ['LinkedIn + IG drafts', 'Email launch sequence', 'Direct mail copy + assets'],
-  },
-  {
-    icon: 'F',
-    accent: '#7A5A8C',
-    title: 'Feasibility',
-    description: 'Stress-test the opportunity with numbers, assumptions, and a clear decision.',
-    outputs: ['Revenue forecast', 'Profitability timeline', 'GO/NO-GO verdict'],
-  },
-  {
-    icon: 'LA',
-    accent: '#C4975A',
-    title: 'Launch Autopilot',
-    description: 'Set a launch date. Forze schedules content, outreach, and announcements across every channel.',
-    outputs: ['Launch calendar', 'Cross-channel orchestration', 'Hands-off execution'],
-  },
-  {
-    icon: 'IK',
-    accent: '#7A8C5A',
-    title: 'Investor Kit',
-    description: 'Memo, deck outline, and data room summary — built from your real venture, not a template.',
-    outputs: ['Executive summary', 'Pitch deck outline', 'Data room + ask'],
-  },
   {
     icon: 'SB',
     accent: '#E04848',
@@ -74,18 +25,39 @@ const AGENTS = [
     outputs: ['Survival Score (0-100)', 'Critical blind spots', 'Pivot recommendations'],
   },
   {
-    icon: 'MVP',
-    accent: '#C45A5A',
-    title: 'MVP Scalpel',
-    description: 'Cut the product down to the smallest version that can validate the thesis.',
-    outputs: ['Must-have features', 'Weekend sprint spec', 'First success metric'],
+    icon: 'CP',
+    accent: '#6B8F71',
+    title: 'Co-pilot',
+    description: 'A venture-aware co-founder. Ask anything — it knows your page, your market, your numbers.',
+    outputs: ['Contextual answers', 'Strategic pivots', 'Cold email + copy on demand'],
   },
   {
-    icon: 'A',
-    accent: '#5A8C6E',
-    title: 'Advisor',
-    description: 'Chat with your venture. Ask follow-ups across every output without losing context.',
-    outputs: ['Contextual answers', 'Strategic pivots', 'Refinement ideas'],
+    icon: 'OR',
+    accent: '#C07A3A',
+    title: 'Outreach',
+    description: 'Campaigns, routines, and direct mail — LinkedIn, Instagram, and email, published on schedule.',
+    outputs: ['Cold-email campaigns', 'Auto-posting routines', 'Direct mail copy + assets'],
+  },
+  {
+    icon: 'CRM',
+    accent: '#5A8C5A',
+    title: 'CRM',
+    description: 'Every lead your landing page captures, tracked, scored, and followed up from one dashboard.',
+    outputs: ['Lead inbox + scoring', 'One-click follow-ups', 'Pipeline analytics'],
+  },
+  {
+    icon: 'IK',
+    accent: '#7A8C5A',
+    title: 'Investor Kit',
+    description: 'Memo, deck outline, and data room summary — built from your real venture, not a template.',
+    outputs: ['Executive summary', 'Pitch deck outline', 'Shareable investor link'],
+  },
+  {
+    icon: 'IN',
+    accent: '#9C7B5A',
+    title: 'Inspiration Studio',
+    description: 'Point Forze at sites you love. It extracts the design DNA and feeds it into your next page.',
+    outputs: ['Design token extraction', 'Style-matched pages', 'Reusable brand looks'],
   },
 ]
 
@@ -135,7 +107,7 @@ export function AgentGrid() {
           margin: '0 0 16px',
           letterSpacing: '-0.02em',
         }}>
-          Your AI Workforce
+          The parts any AI can&apos;t do
         </h2>
         <p style={{
           fontFamily: 'var(--font-dm-sans), sans-serif',
@@ -145,7 +117,7 @@ export function AgentGrid() {
           margin: '0 auto',
           lineHeight: 1.6,
         }}>
-          Each agent does one hard job extremely well. Together they take you from raw idea to launched venture.
+          Docs and decks are a prompt away in any chatbot. Forze focuses on the pieces that touch the real world — live pages, real feedback, real leads.
         </p>
       </div>
 

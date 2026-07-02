@@ -15,9 +15,9 @@ const STEPS = [
     number: '02',
     icon: 'F',
     accent: '#C4975A',
-    title: 'The Workforce Runs',
-    description: '11 connected AI agents handle research, branding, a live landing page, feasibility, marketing, and the first round of outreach — in parallel, in minutes.',
-    detail: 'Research · Brand · Landing · Feasibility · CRM · Outreach',
+    title: 'Ship The Page, Face The Board',
+    description: 'Forze deploys a live landing page with lead capture, then convenes the Shadow Board — three adversarial personas that stress-test the venture before the market does.',
+    detail: 'Live page · Shadow Board verdict · Co-pilot on call',
   },
   {
     number: '03',

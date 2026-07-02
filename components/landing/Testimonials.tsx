@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const TESTIMONIALS = [
   {
-    quote: 'Went from a rough idea to an investor conversation in under a day. The research report, feasibility verdict, and landing page gave us a real validation story instead of hype.',
+    quote: 'Went from a rough idea to an investor conversation in under a day. The live landing page, the Shadow Board verdict, and the investor kit gave us a real validation story instead of hype.',
     name: 'Dhruv Shetty',
     role: 'Founder',
     company: 'Safar Raksha',
@@ -22,7 +22,7 @@ const TESTIMONIALS = [
     stars: 5,
   },
   {
-    quote: 'Used Forze to validate five ideas before choosing one to build. The feasibility scoring and investor-ready packaging gave me conviction I could actually defend in front of other people.',
+    quote: 'Used Forze to validate five ideas before choosing one to build. Shipping a real page for each and watching which one pulled leads gave me conviction I could actually defend in front of other people.',
     name: 'Samarth Mallikarjuna',
     role: 'Product Manager',
     company: 'SwiftGig',

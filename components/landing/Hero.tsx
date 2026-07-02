@@ -13,15 +13,15 @@ const CYCLING_PHRASES = [
 ]
 
 const STREAM_LINES = [
-  { prefix: 'Research', text: 'Demand mapped, TAM/SAM/SOM sized, top-3 competitive gaps surfaced...', delay: 0 },
-  { prefix: 'Branding', text: 'Names, positioning, brand voice, color system, and typography generated...', delay: 800 },
-  { prefix: 'Landing', text: 'Live page deployed with copy, lead capture, and inspiration-grounded design...', delay: 1600 },
+  { prefix: 'Landing', text: 'Live page deployed with copy, lead capture, and inspiration-grounded design...', delay: 0 },
+  { prefix: 'Board', text: 'Shadow Board convened — skeptic, evangelist, and operator tearing into the plan...', delay: 800 },
+  { prefix: 'Co-pilot', text: 'Venture-aware co-founder briefed on your page, your market, your numbers...', delay: 1600 },
   { prefix: 'Outreach', text: 'Cold-email sequences drafted, segmented, and dispatched to your first leads...', delay: 2400 },
 ]
 
 const STAT_CHIPS = [
-  { icon: '01', label: '11 connected AI agents' },
-  { icon: '02', label: 'Launched, not just pitched' },
+  { icon: '01', label: 'Live pages, not mockups' },
+  { icon: '02', label: 'A board that pushes back' },
   { icon: '03', label: 'Real leads in your CRM' },
 ]
 
@@ -210,7 +210,7 @@ export function Hero() {
           margin: 0,
           animation: 'fade-in-scale 0.7s 0.2s ease both',
         }}>
-          Your autonomous AI workforce — from raw idea to a launched, validated venture in minutes, not months.
+          Any AI can write you a plan. Forze ships the parts that touch reality — a live landing page, a Shadow Board that stress-tests it, and a co-pilot that runs the venture with you.
         </p>
 
         <div style={{
@@ -342,7 +342,7 @@ export function Hero() {
               flex: 1,
               textAlign: 'center',
             }}>
-              Forze · Full Launch Run
+              Forze · Launch Run
             </span>
             <div style={{
               width: '8px',

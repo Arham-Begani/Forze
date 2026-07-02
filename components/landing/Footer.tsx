@@ -78,7 +78,7 @@ export function Footer() {
               margin: 0,
               maxWidth: '260px',
             }}>
-              Your Startup Workforce. Transform a raw idea into a market-validated venture in under 5 minutes.
+              Ship a live landing page, face a board that pushes back, and grow it with a venture-aware co-pilot.
             </p>
             {/* Social & Contact Section */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
