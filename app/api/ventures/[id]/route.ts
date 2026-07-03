@@ -20,7 +20,7 @@ const MODULES = [
 ] as const
 
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
@@ -31,13 +31,21 @@ export async function GET(
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
+        // ?module=<id> scopes the conversation payload to one module — the
+        // module page only ever renders one module's history, so this avoids
+        // querying (and shipping) the other modules' conversations.
+        const moduleParam = request.nextUrl.searchParams.get('module')
+        const requestedModules = MODULES.includes(moduleParam as typeof MODULES[number])
+            ? [moduleParam as typeof MODULES[number]]
+            : MODULES
+
         const conversations = await Promise.all(
-            MODULES.map(m => getConversationsByModule(id, m))
+            requestedModules.map(m => getConversationsByModule(id, m))
         )
 
         return NextResponse.json({
             ...venture,
-            conversations: Object.fromEntries(MODULES.map((m, i) => [m, conversations[i]])),
+            conversations: Object.fromEntries(requestedModules.map((m, i) => [m, conversations[i]])),
         })
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()

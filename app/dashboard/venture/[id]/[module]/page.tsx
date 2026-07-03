@@ -104,6 +104,12 @@ function ModuleIconSvg({ id, size = 20 }: { id: string; size?: number }) {
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     )
+    case 'shadow-board': return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" /><line x1="13" x2="19" y1="19" y2="13" /><line x1="16" x2="20" y1="16" y2="20" /><line x1="19" x2="21" y1="21" y2="19" />
+        <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" /><line x1="5" x2="9" y1="14" y2="18" /><line x1="7" x2="4" y1="17" y2="20" /><line x1="3" x2="5" y1="19" y2="21" />
+      </svg>
+    )
     default: return null
   }
 }
@@ -642,7 +648,7 @@ export default function ModulePage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/ventures/${ventureId}`)
+        const res = await fetch(`/api/ventures/${ventureId}?module=${activeModule}`)
         if (!res.ok) return
         const data = await res.json()
         setVentureName(data.name ?? 'Venture')
