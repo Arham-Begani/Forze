@@ -218,7 +218,7 @@ export async function claimLeadForSending(leadId: string): Promise<boolean> {
 
 export async function markLeadSent(
   leadId: string,
-  sent: { subject: string; body: string }
+  sent: { subject: string; body: string; gmailMessageId?: string | null; gmailThreadId?: string | null }
 ): Promise<void> {
   const db = await createDb()
   const now = new Date().toISOString()
@@ -229,6 +229,10 @@ export async function markLeadSent(
       email_sent_at: now,
       email_subject_sent: sent.subject,
       email_body_sent: sent.body,
+      // Thread linkage captured at send time — follow-ups send into this
+      // thread and reply polling matches on it (migration 033).
+      ...(sent.gmailMessageId ? { gmail_message_id: sent.gmailMessageId } : {}),
+      ...(sent.gmailThreadId ? { gmail_thread_id: sent.gmailThreadId } : {}),
       last_send_error: null,
       updated_at: now,
     })

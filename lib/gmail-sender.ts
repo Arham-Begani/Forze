@@ -15,6 +15,10 @@ export interface SendEmailOptions {
   // existing `List-Unsubscribe-Post` (RFC 8058) — both are required; Gmail
   // ignores the Post header without the primary one.
   listUnsubscribeUrl?: string
+  // Gmail thread to send within. Used by follow-up sends so touch #2..N land
+  // in the same conversation as the original email (recipient sees one
+  // thread, and Gmail's dedup/spam heuristics treat it as a reply).
+  threadId?: string
 }
 
 export interface SendEmailResult {
@@ -84,7 +88,7 @@ export async function sendEmailViaGmail(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ raw }),
+      body: JSON.stringify(options.threadId ? { raw, threadId: options.threadId } : { raw }),
     })
 
     if (res.status === 429) {
@@ -199,6 +203,88 @@ export async function pollGmailForReplies(
     return results
   } catch (err) {
     console.error('[gmail-sender] pollGmailForReplies error:', err)
+    return []
+  }
+}
+
+// ─── Poll Gmail for delivery failures (bounces) ───────────────────────────────
+//
+// Gmail surfaces hard bounces as messages from mailer-daemon/postmaster. We
+// list recent ones and extract every email address mentioned in the body —
+// the caller matches those against campaign leads and suppresses the hits.
+// Re-processing the same bounce message is harmless: suppression is guarded
+// by `bounced_at IS NULL`, so it's a no-op after the first pass.
+
+export interface BounceNotice {
+  gmailMessageId: string
+  bouncedEmails: string[]
+  receivedAt: string
+}
+
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+
+export async function pollGmailForBounces(userId: string): Promise<BounceNotice[]> {
+  try {
+    const { accessToken, emailAddress } = await getGmailAccessToken(userId)
+
+    const query = 'from:(mailer-daemon OR postmaster) newer_than:3d'
+    const listRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=25`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (!listRes.ok) return []
+
+    const listData = (await listRes.json()) as { messages?: Array<{ id: string }> }
+    const messages = listData.messages ?? []
+    const notices: BounceNotice[] = []
+
+    for (const msg of messages) {
+      try {
+        const msgRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        )
+        if (!msgRes.ok) continue
+
+        const msgData = (await msgRes.json()) as {
+          id: string
+          internalDate: string
+          payload: {
+            body: { data?: string }
+            parts?: Array<{ mimeType: string; body: { data?: string } }>
+          }
+        }
+
+        const parts = msgData.payload.parts ?? []
+        const textPart = parts.find((p) => p.mimeType === 'text/plain')
+        const bodyData = textPart?.body?.data ?? msgData.payload.body?.data
+        if (!bodyData) continue
+
+        const body = Buffer.from(bodyData, 'base64url').toString('utf8').slice(0, 10000)
+        const found = body.match(EMAIL_REGEX) ?? []
+        // Drop the sender's own address and daemon addresses — everything else
+        // in a bounce body is a candidate failed recipient.
+        const bouncedEmails = [...new Set(
+          found
+            .map((e) => e.toLowerCase())
+            .filter((e) => e !== emailAddress.toLowerCase())
+            .filter((e) => !e.startsWith('mailer-daemon') && !e.startsWith('postmaster'))
+        )]
+        if (bouncedEmails.length === 0) continue
+
+        notices.push({
+          gmailMessageId: msgData.id,
+          bouncedEmails,
+          receivedAt: new Date(Number(msgData.internalDate)).toISOString(),
+        })
+      } catch {
+        continue
+      }
+    }
+
+    return notices
+  } catch (err) {
+    console.error('[gmail-sender] pollGmailForBounces error:', err)
     return []
   }
 }

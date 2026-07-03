@@ -8,7 +8,7 @@ export const CampaignSchema = z.object({
   created_by: z.string().uuid(),
   name: z.string().min(1).max(200),
   description: z.string().nullable().optional(),
-  status: z.enum(['draft', 'active', 'paused', 'completed', 'archived']),
+  status: z.enum(['draft', 'scheduled', 'active', 'paused', 'completed', 'archived']),
   data_source: z.enum(['youtube', 'twitter', 'linkedin', 'manual', 'subreddit', 'direct']),
   data_source_config: z.record(z.unknown()).optional().default({}),
   target_count: z.number().int().min(0).optional(),
@@ -19,6 +19,8 @@ export const CampaignSchema = z.object({
   send_mode: z.enum(['all_now', 'staggered']).optional().default('all_now'),
   stagger_days: z.number().int().min(1).nullable().optional(),
   scheduled_send_time: z.string().nullable().optional(),
+  daily_send_cap: z.number().int().min(1).nullable().optional(),
+  last_replies_polled_at: z.string().nullable().optional(),
   enable_followups: z.boolean().optional().default(false),
   followup_delay_hours: z.number().int().min(1).optional().default(72),
   followup_message: z.string().nullable().optional(),
@@ -57,6 +59,8 @@ export const CampaignLeadSchema = z.object({
   last_followup_sent_at: z.string().nullable().optional(),
   engagement_status: z.enum(['fresh', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed']),
   send_status: z.enum(['pending', 'sending', 'sent', 'failed', 'suppressed']).optional().default('pending'),
+  gmail_message_id: z.string().nullable().optional(),
+  gmail_thread_id: z.string().nullable().optional(),
   unsubscribed_at: z.string().nullable().optional(),
   bounced_at: z.string().nullable().optional(),
   last_send_error: z.string().nullable().optional(),
@@ -79,7 +83,7 @@ export const GmailIntegrationSchema = z.object({
   last_verified_at: z.string().optional(),
   status: z.enum(['active', 'disconnected', 'expired', 'error']),
   error_message: z.string().nullable().optional(),
-  daily_send_limit: z.number().int().optional().default(2000),
+  daily_send_limit: z.number().int().optional().default(500),
   daily_sent_count: z.number().int().optional().default(0),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
@@ -144,8 +148,17 @@ export const SendCampaignSchema = z.object({
   subjectLineApproved: z.string().min(1),
   emailBodyApproved: z.string().min(1),
   sendMode: z.enum(['all_now', 'staggered']).default('all_now'),
-  staggerDays: z.number().int().min(1).optional(),
-  scheduledTime: z.string().optional(),
+  // Drip: max emails per day when sendMode is 'staggered'. The outreach cron
+  // sends batches of this size until the lead pool is exhausted.
+  dailyCap: z.number().int().min(1).max(500).optional(),
+  // ISO datetime to start sending. When set (or sendMode is 'staggered'),
+  // the send is owned by the outreach cron instead of the request.
+  scheduledTime: z.string().datetime({ offset: true }).optional(),
+  // Follow-up sequence settings, persisted at send time so the cron knows
+  // what to do after the initial touch.
+  enableFollowups: z.boolean().optional(),
+  followupDelayHours: z.number().int().min(1).max(720).optional(),
+  maxFollowups: z.number().int().min(1).max(5).optional(),
 })
 
 export const UploadLeadsSchema = z.object({

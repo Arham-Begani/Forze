@@ -32,11 +32,6 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const session = await requireAuth()
-    // One 'campaign_send' counts per invocation (not per recipient) — matches
-    // the user-visible 'campaign sends / week' ceiling on the pricing page.
-    const actionGate = await gateActionForResponse(session.userId, 'campaign_send')
-    if (!actionGate.ok) return actionGate.response
-
     const { id } = await params
 
     const rl = await enforceRateLimit(session.userId, 'campaign:send', SEND_WINDOW_SEC, SEND_LIMIT)
@@ -70,12 +65,73 @@ export async function POST(
         { status: 412 }
       )
     }
+
+    // One 'campaign_send' counts per invocation (not per recipient) — matches
+    // the user-visible 'campaign sends / week' ceiling on the pricing page.
+    // Charged only after we know the send is actually possible (eligible
+    // leads exist + Gmail connected) so a no-op request never burns a unit.
+    const actionGate = await gateActionForResponse(session.userId, 'campaign_send')
+    if (!actionGate.ok) return actionGate.response
+
+    // Persist the approved copy + sequence settings on the campaign row. The
+    // outreach cron reads these for scheduled/drip batches and follow-up
+    // touches — without them a deferred send would have nothing to send.
+    const sequenceSettings = {
+      subject_line: sendInput.subjectLineApproved,
+      email_body: sendInput.emailBodyApproved,
+      send_mode: sendInput.sendMode,
+      daily_send_cap: sendInput.sendMode === 'staggered' ? (sendInput.dailyCap ?? 50) : null,
+      ...(sendInput.enableFollowups !== undefined ? { enable_followups: sendInput.enableFollowups } : {}),
+      ...(sendInput.followupDelayHours !== undefined ? { followup_delay_hours: sendInput.followupDelayHours } : {}),
+      ...(sendInput.maxFollowups !== undefined ? { max_followups: sendInput.maxFollowups } : {}),
+    }
+
+    // Deferred sends: an explicit future start time or drip mode hands the
+    // campaign to the outreach cron instead of blasting inline.
+    const scheduledForFuture =
+      sendInput.scheduledTime && new Date(sendInput.scheduledTime).getTime() > Date.now() + 60 * 1000
+
+    if (scheduledForFuture || sendInput.sendMode === 'staggered') {
+      const scheduledAt = scheduledForFuture ? sendInput.scheduledTime! : new Date().toISOString()
+      await updateCampaign(id, {
+        ...sequenceSettings,
+        status: 'scheduled',
+        scheduled_send_time: scheduledAt,
+      }, session.userId)
+
+      await recordCampaignEvent({
+        campaignId: id,
+        userId: session.userId,
+        eventType: 'send_scheduled',
+        metadata: {
+          leadCount: leads.length,
+          sendMode: sendInput.sendMode,
+          scheduledAt,
+          dailyCap: sendInput.sendMode === 'staggered' ? (sendInput.dailyCap ?? 50) : null,
+        },
+      })
+
+      return NextResponse.json(
+        {
+          status: 'scheduled',
+          scheduledFor: scheduledAt,
+          sendMode: sendInput.sendMode,
+          leadCount: leads.length,
+        },
+        { status: 202 }
+      )
+    }
+
     if (!gmailStatus.canSend) {
       return NextResponse.json(
         { error: 'Gmail daily send limit reached or integration unhealthy.', code: 'gmail_cannot_send' },
         { status: 412 }
       )
     }
+
+    // Immediate send still persists copy + sequence settings so the cron can
+    // run follow-up touches for this campaign afterwards.
+    await updateCampaign(id, sequenceSettings, session.userId)
 
     const baseUrl = getBaseUrl()
     const today = new Date().toISOString().split('T')[0]
@@ -145,7 +201,12 @@ export async function POST(
         })
 
         if (result.status === 'sent') {
-          await markLeadSent(lead.id, { subject: personalizedSubject, body: personalizedBody })
+          await markLeadSent(lead.id, {
+            subject: personalizedSubject,
+            body: personalizedBody,
+            gmailMessageId: result.messageId,
+            gmailThreadId: result.threadId,
+          })
           sentCount++
           await recordCampaignEvent({
             campaignId: id,

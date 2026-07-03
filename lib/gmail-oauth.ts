@@ -173,7 +173,7 @@ export async function handleGmailCallback(
     throw new Error(`Failed to save Gmail integration: ${error.message}`)
   }
 
-  return { emailAddress, dailyLimit: 2000, needsReauth: !hasRealRefreshToken }
+  return { emailAddress, dailyLimit: 500, needsReauth: !hasRealRefreshToken }
 }
 
 // ─── Token retrieval + refresh ────────────────────────────────────────────────
@@ -319,14 +319,14 @@ export async function getGmailStatus(userId: string): Promise<GmailStatus> {
 
   if (!data) {
     return {
-      connected: false, email: null, dailyLimit: 2000, dailySentToday: 0, canSend: false,
+      connected: false, email: null, dailyLimit: 500, dailySentToday: 0, canSend: false,
       state: 'not_connected', errorMessage: null,
     }
   }
 
   if (!data.connected || data.status === 'disconnected') {
     return {
-      connected: false, email: data.email_address ?? null, dailyLimit: 2000, dailySentToday: 0, canSend: false,
+      connected: false, email: data.email_address ?? null, dailyLimit: 500, dailySentToday: 0, canSend: false,
       state: 'disconnected', errorMessage: data.error_message ?? null,
     }
   }
@@ -348,7 +348,7 @@ export async function getGmailStatus(userId: string): Promise<GmailStatus> {
     dailySentToday = 0
   }
 
-  const dailyLimit = data.daily_send_limit ?? 2000
+  const dailyLimit = data.daily_send_limit ?? 500
 
   // needs_reauth covers three situations that all require the user to click
   // "Reconnect Gmail":

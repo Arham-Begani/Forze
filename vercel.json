@@ -8,6 +8,10 @@
     {
       "path": "/api/marketing/publish/dispatch",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/run-outreach",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
