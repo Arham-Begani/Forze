@@ -42,23 +42,28 @@ export async function GET(
     const now = new Date().toISOString()
 
     // Don't downgrade replied → clicked. Lead must be in opened/fresh to bump.
+    // Campaign counters only increment on the FIRST click per lead — link
+    // scanners and repeat clicks otherwise inflate the click rate.
     db.from('campaign_leads')
       .update({ email_clicked_at: now, engagement_status: 'clicked', updated_at: now })
       .eq('id', leadId)
       .is('email_clicked_at', null)
       .in('engagement_status', ['fresh', 'opened'])
-      .then(() => {}, () => {})
+      .select('id')
+      .then(({ data }) => {
+        if ((data ?? []).length === 0) return
 
-    db.rpc('increment_campaign_metric', {
-      p_campaign_id: campaignId,
-      p_metric: 'clicked_count',
-    }).then(() => {}, () => {})
+        db.rpc('increment_campaign_metric', {
+          p_campaign_id: campaignId,
+          p_metric: 'clicked_count',
+        }).then(() => {}, () => {})
 
-    db.rpc('upsert_campaign_analytics', {
-      p_campaign_id: campaignId,
-      p_date: now.split('T')[0],
-      p_clicked: 1,
-    }).then(() => {}, () => {})
+        db.rpc('upsert_campaign_analytics', {
+          p_campaign_id: campaignId,
+          p_date: now.split('T')[0],
+          p_clicked: 1,
+        }).then(() => {}, () => {})
+      }, () => {})
   }
 
   return NextResponse.redirect(safeUrl, { status: 302 })

@@ -28,30 +28,37 @@ export async function GET(
       const now = new Date().toISOString()
 
       // Don't downgrade a replied/clicked lead to opened. First open wins.
-      await db
+      // `.select('id')` tells us whether this hit was the first open — the
+      // campaign counter and daily analytics must only increment on the first
+      // open per lead, otherwise every reload/Gmail-proxy prefetch inflates
+      // the open rate.
+      const { data: firstOpen } = await db
         .from('campaign_leads')
         .update({ email_opened_at: now, engagement_status: 'opened', updated_at: now })
         .eq('id', leadId)
         .is('email_opened_at', null)
         .in('engagement_status', ['fresh'])
+        .select('id')
 
-      // Increment campaign opened_count
-      const { error: rpcErr } = await db.rpc('increment_campaign_metric', {
-        p_campaign_id: campaignId,
-        p_metric: 'opened_count',
-      })
-      if (rpcErr) {
-        const { data: camp } = await db.from('campaigns').select('opened_count').eq('id', campaignId).single()
-        if (camp) {
-          await db.from('campaigns').update({ opened_count: (camp.opened_count ?? 0) + 1, updated_at: now }).eq('id', campaignId)
+      if ((firstOpen ?? []).length > 0) {
+        // Increment campaign opened_count
+        const { error: rpcErr } = await db.rpc('increment_campaign_metric', {
+          p_campaign_id: campaignId,
+          p_metric: 'opened_count',
+        })
+        if (rpcErr) {
+          const { data: camp } = await db.from('campaigns').select('opened_count').eq('id', campaignId).single()
+          if (camp) {
+            await db.from('campaigns').update({ opened_count: (camp.opened_count ?? 0) + 1, updated_at: now }).eq('id', campaignId)
+          }
         }
-      }
 
-      await db.rpc('upsert_campaign_analytics', {
-        p_campaign_id: campaignId,
-        p_date: now.split('T')[0],
-        p_opened: 1,
-      }).then(() => {}, () => {})
+        await db.rpc('upsert_campaign_analytics', {
+          p_campaign_id: campaignId,
+          p_date: now.split('T')[0],
+          p_opened: 1,
+        }).then(() => {}, () => {})
+      }
     }
   } catch {
     // Tracking failure must never break the pixel response
