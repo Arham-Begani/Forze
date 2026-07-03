@@ -48,8 +48,36 @@ function StepIndicator({ current, total }: { current: Step; total: number }) {
   )
 }
 
+// RFC-4180-ish line splitter: honors double-quoted fields so values like
+// "Acme, Inc." survive as one column instead of being split on the comma.
+function splitCsvLine(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { current += '"'; i += 1 } // escaped quote
+        else inQuotes = false
+      } else {
+        current += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      fields.push(current)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  fields.push(current)
+  return fields.map((s) => s.trim())
+}
+
 function parseCSV(text: string): Array<{ first_name: string; email: string; company?: string; job_title?: string }> {
-  const lines = text.trim().split('\n').filter(Boolean)
+  const lines = text.trim().split(/\r?\n/).filter(Boolean)
   if (lines.length === 0) return []
 
   // Check if first line looks like a header
@@ -58,9 +86,9 @@ function parseCSV(text: string): Array<{ first_name: string; email: string; comp
   const dataLines = hasHeader ? lines.slice(1) : lines
 
   return dataLines.map((line) => {
-    const parts = line.split(',').map((s) => s.trim().replace(/^"|"$/g, ''))
+    const parts = splitCsvLine(line)
     return {
-      first_name: parts[0] ?? 'Friend',
+      first_name: parts[0] || 'Friend',
       email: parts[1] ?? '',
       company: parts[2] || undefined,
       job_title: parts[3] || undefined,
@@ -93,6 +121,14 @@ export function CreateCampaignFlow({
   const [gmail, setGmail] = useState<GmailUI | null>(null)
   const [uploadSummary, setUploadSummary] = useState<{ created: number; duplicates: number; invalid: number } | null>(null)
   const [connectingGmail, setConnectingGmail] = useState(false)
+  // Delivery settings — all executed by the outreach cron when deferred.
+  const [sendMode, setSendMode] = useState<'all_now' | 'staggered'>('all_now')
+  const [dailyCap, setDailyCap] = useState(50)
+  const [scheduleEnabled, setScheduleEnabled] = useState(false)
+  const [scheduledTime, setScheduledTime] = useState('') // datetime-local value
+  const [enableFollowups, setEnableFollowups] = useState(true)
+  const [followupDelayDays, setFollowupDelayDays] = useState(3)
+  const [maxFollowups, setMaxFollowups] = useState(2)
   const [form, setForm] = useState<FormData>({
     name: '',
     description: '',
@@ -257,11 +293,23 @@ export function CreateCampaignFlow({
     }
   }
 
+  const isDeferredSend = scheduleEnabled || sendMode === 'staggered'
+
   const handleSend = async () => {
     if (!campaignId) return
     if (!selectedSubject || !selectedBody) { setError('Please generate or write an email first'); return }
-    if (!gmail?.connected || !gmail.canSend) {
+    if (!gmail?.connected) {
       setError('Connect your Gmail account before sending.')
+      return
+    }
+    // Immediate blasts need send headroom right now; deferred sends are
+    // executed by the cron, which checks the daily limit at send time.
+    if (!isDeferredSend && !gmail.canSend) {
+      setError('Gmail daily send limit reached — schedule the send or try tomorrow.')
+      return
+    }
+    if (scheduleEnabled && !scheduledTime) {
+      setError('Pick a date and time for the scheduled send.')
       return
     }
     setLoading(true)
@@ -291,20 +339,29 @@ export function CreateCampaignFlow({
         invalid: (leadsBody.invalidEmails ?? []).length,
       })
 
-      // Send campaign
+      // Send campaign — deferred sends (schedule/drip) return 202 and are
+      // executed by the outreach cron; immediate sends return counts.
       const sendRes = await fetch(`/api/campaigns/${campaignId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subjectLineApproved: selectedSubject,
           emailBodyApproved: selectedBody,
-          sendMode: 'all_now',
+          sendMode,
+          ...(sendMode === 'staggered' ? { dailyCap } : {}),
+          ...(scheduleEnabled && scheduledTime
+            ? { scheduledTime: new Date(scheduledTime).toISOString() }
+            : {}),
+          enableFollowups,
+          followupDelayHours: Math.max(1, followupDelayDays * 24),
+          maxFollowups,
         }),
       })
 
       const sendBody = await sendRes.json().catch(() => ({})) as {
         error?: string
         code?: string
+        status?: string
         sentCount?: number
         failedCount?: number
         errors?: string[]
@@ -319,6 +376,12 @@ export function CreateCampaignFlow({
             ? sendBody.error
             : 'Failed to send campaign'
         )
+      }
+
+      // Deferred: the cron owns delivery from here.
+      if (sendBody.status === 'scheduled') {
+        onComplete(campaignId)
+        return
       }
 
       // 2xx with 0 sent shouldn't happen after the 502 change, but guard anyway.
@@ -433,6 +496,25 @@ export function CreateCampaignFlow({
               Paste CSV data — one lead per line: <code className="rounded bg-[var(--border)] px-1 py-0.5 text-xs">firstName,email,company,jobTitle</code>
             </p>
           </div>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] px-3 py-2.5 text-sm text-[var(--text-soft)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors">
+            <Upload size={14} />
+            Upload a .csv file
+            <input
+              type="file"
+              accept=".csv,text/csv,text/plain"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = () => {
+                  update('csvText', typeof reader.result === 'string' ? reader.result : '')
+                }
+                reader.readAsText(file)
+                e.target.value = ''
+              }}
+            />
+          </label>
           <textarea
             value={form.csvText}
             onChange={(e) => update('csvText', e.target.value)}
@@ -624,6 +706,115 @@ export function CreateCampaignFlow({
             </div>
           )}
 
+          {/* Delivery settings — schedule, pace, and follow-up sequence. All
+              deferred work is executed by the outreach cron. */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 space-y-4">
+            <p className="text-sm font-semibold text-[var(--text)]">Delivery</p>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[var(--muted)]">When</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setScheduleEnabled(false)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${!scheduleEnabled ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-soft)] hover:border-[var(--accent)]'}`}
+                >
+                  Send now
+                </button>
+                <button
+                  onClick={() => setScheduleEnabled(true)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${scheduleEnabled ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-soft)] hover:border-[var(--accent)]'}`}
+                >
+                  Schedule
+                </button>
+                {scheduleEnabled && (
+                  <input
+                    type="datetime-local"
+                    value={scheduledTime}
+                    min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[var(--muted)]">Pace</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setSendMode('all_now')}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${sendMode === 'all_now' ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-soft)] hover:border-[var(--accent)]'}`}
+                >
+                  All at once
+                </button>
+                <button
+                  onClick={() => setSendMode('staggered')}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${sendMode === 'staggered' ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-soft)] hover:border-[var(--accent)]'}`}
+                >
+                  Drip daily
+                </button>
+                {sendMode === 'staggered' && (
+                  <span className="flex items-center gap-1.5 text-xs text-[var(--text-soft)]">
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={dailyCap}
+                      onChange={(e) => setDailyCap(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                      className="w-16 rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    />
+                    emails / day
+                  </span>
+                )}
+              </div>
+              {sendMode === 'staggered' && (
+                <p className="text-[11px] text-[var(--muted)]">Dripping protects your Gmail reputation — recommended for lists over ~50.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-[var(--muted)]">Follow-ups when there&apos;s no reply</p>
+                <button
+                  onClick={() => setEnableFollowups(!enableFollowups)}
+                  role="switch"
+                  aria-checked={enableFollowups}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${enableFollowups ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+                >
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${enableFollowups ? 'translate-x-4.5 left-0.5' : 'left-0.5'}`} style={{ transform: enableFollowups ? 'translateX(16px)' : 'translateX(0)' }} />
+                </button>
+              </div>
+              {enableFollowups && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-soft)]">
+                  Wait
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={followupDelayDays}
+                    onChange={(e) => setFollowupDelayDays(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+                    className="w-14 rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  />
+                  day{followupDelayDays !== 1 ? 's' : ''}, send up to
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={maxFollowups}
+                    onChange={(e) => setMaxFollowups(Math.max(1, Math.min(5, Number(e.target.value) || 1)))}
+                    className="w-14 rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  />
+                  follow-up{maxFollowups !== 1 ? 's' : ''}
+                </div>
+              )}
+              {enableFollowups && (
+                <p className="text-[11px] text-[var(--muted)]">
+                  AI writes each touch in the same thread. A reply instantly stops that lead&apos;s sequence.
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 space-y-3">
             <div>
               <p className="text-xs font-medium text-[var(--muted)]">Campaign</p>
@@ -682,11 +873,15 @@ export function CreateCampaignFlow({
             </button>
             <button
               onClick={handleSend}
-              disabled={loading || !gmail?.connected || !gmail.canSend}
+              disabled={loading || !gmail?.connected || (!isDeferredSend && !gmail.canSend)}
               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              {loading ? 'Sending...' : `Send Campaign (${parsedLeads.length} emails)`}
+              {loading
+                ? (isDeferredSend ? 'Scheduling...' : 'Sending...')
+                : isDeferredSend
+                ? `Schedule Campaign (${parsedLeads.length} leads)`
+                : `Send Campaign (${parsedLeads.length} emails)`}
             </button>
           </div>
         </div>

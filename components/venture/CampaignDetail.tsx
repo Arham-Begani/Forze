@@ -65,6 +65,7 @@ export function CampaignDetail({ campaign, onBack, onPause, onResume, onPollRepl
   const [metrics, setMetrics] = useState<CampaignMetrics | null>(null)
   const [leadsByStatus, setLeadsByStatus] = useState<LeadsByStatus | null>(null)
   const [leadsBySendStatus, setLeadsBySendStatus] = useState<LeadsBySendStatusUI | null>(null)
+  const [timeline, setTimeline] = useState<Array<{ date: string; sent: number; opened: number; clicked: number; replied: number }>>([])
   const [activeTab, setActiveTab] = useState<'overview' | 'leads' | 'replies'>('overview')
   const [isPolling, setIsPolling] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -87,10 +88,12 @@ export function CampaignDetail({ campaign, onBack, onPause, onResume, onPollRepl
         const d = await analyticsRes.json() as CampaignMetrics & {
           leadsByStatus: LeadsByStatus
           leadsBySendStatus?: LeadsBySendStatusUI
+          engagementTimeline?: Array<{ date: string; sent: number; opened: number; clicked: number; replied: number }>
         }
         setMetrics(d)
         setLeadsByStatus(d.leadsByStatus)
         setLeadsBySendStatus(d.leadsBySendStatus ?? null)
+        setTimeline(d.engagementTimeline ?? [])
       }
       if (repliesRes.ok) {
         const d = await repliesRes.json() as { replies: CampaignReply[] }
@@ -150,6 +153,7 @@ export function CampaignDetail({ campaign, onBack, onPause, onResume, onPollRepl
           <h2 className="font-semibold text-[var(--text)]">{campaign.name}</h2>
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
             campaign.status === 'active' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
+            campaign.status === 'scheduled' ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400' :
             campaign.status === 'draft' ? 'bg-[var(--border)] text-[var(--text-soft)]' :
             campaign.status === 'paused' ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' :
             'bg-[var(--border)] text-[var(--muted)]'
@@ -290,34 +294,84 @@ export function CampaignDetail({ campaign, onBack, onPause, onResume, onPollRepl
       ) : (
         <>
           {activeTab === 'overview' && (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-[var(--text)]">Campaign Config</h3>
-              <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-[var(--muted)]">Data Source</dt>
-                  <dd className="font-medium capitalize text-[var(--text)]">{campaign.data_source}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--muted)]">Send Mode</dt>
-                  <dd className="font-medium capitalize text-[var(--text)]">{(campaign.send_mode ?? 'all_now').replace('_', ' ')}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--muted)]">Follow-ups</dt>
-                  <dd className="font-medium text-[var(--text)]">{campaign.enable_followups ? `Enabled (max ${campaign.max_followups})` : 'Disabled'}</dd>
-                </div>
-                {campaign.started_at && (
-                  <div>
-                    <dt className="text-[var(--muted)]">Started</dt>
-                    <dd className="font-medium text-[var(--text)]">{new Date(campaign.started_at).toLocaleDateString()}</dd>
+            <div className="flex flex-col gap-4">
+              {/* 30-day engagement timeline */}
+              {timeline.some((d) => d.sent + d.opened + d.replied > 0) && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-[var(--text)]">Last 30 days</h3>
+                    <div className="flex items-center gap-3 text-[11px] text-[var(--muted)]">
+                      <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-[var(--accent)]" /> Sent</span>
+                      <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-blue-500" /> Opened</span>
+                      <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-green-500" /> Replied</span>
+                    </div>
                   </div>
-                )}
-              </dl>
-              {campaign.subject_line && (
-                <div className="mt-4">
-                  <p className="mb-1 text-xs font-medium text-[var(--muted)]">Email Subject</p>
-                  <p className="rounded-lg bg-[var(--sidebar)] px-3 py-2 text-sm text-[var(--text)]">{campaign.subject_line}</p>
+                  <div className="flex h-28 items-end gap-1">
+                    {timeline.map((day) => {
+                      const max = Math.max(...timeline.map((d) => Math.max(d.sent, d.opened, d.replied)), 1)
+                      return (
+                        <div
+                          key={day.date}
+                          className="group relative flex flex-1 items-end justify-center gap-px"
+                          title={`${day.date}: ${day.sent} sent · ${day.opened} opened · ${day.replied} replied`}
+                        >
+                          <div className="w-1/3 rounded-t-sm bg-[var(--accent)] opacity-80" style={{ height: `${(day.sent / max) * 100}%`, minHeight: day.sent > 0 ? 3 : 0 }} />
+                          <div className="w-1/3 rounded-t-sm bg-blue-500 opacity-80" style={{ height: `${(day.opened / max) * 100}%`, minHeight: day.opened > 0 ? 3 : 0 }} />
+                          <div className="w-1/3 rounded-t-sm bg-green-500 opacity-80" style={{ height: `${(day.replied / max) * 100}%`, minHeight: day.replied > 0 ? 3 : 0 }} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-1.5 flex justify-between text-[10px] text-[var(--muted)]">
+                    <span>{timeline[0]?.date}</span>
+                    <span>{timeline[timeline.length - 1]?.date}</span>
+                  </div>
                 </div>
               )}
+
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+                <h3 className="mb-3 text-sm font-semibold text-[var(--text)]">Campaign Config</h3>
+                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-[var(--muted)]">Data Source</dt>
+                    <dd className="font-medium capitalize text-[var(--text)]">{campaign.data_source}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--muted)]">Send Mode</dt>
+                    <dd className="font-medium capitalize text-[var(--text)]">
+                      {campaign.send_mode === 'staggered'
+                        ? `Drip — ${campaign.daily_send_cap ?? 50}/day`
+                        : 'All at once'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--muted)]">Follow-ups</dt>
+                    <dd className="font-medium text-[var(--text)]">
+                      {campaign.enable_followups
+                        ? `Up to ${campaign.max_followups ?? 2}, every ${Math.round((campaign.followup_delay_hours ?? 72) / 24)}d without a reply`
+                        : 'Disabled'}
+                    </dd>
+                  </div>
+                  {campaign.status === 'scheduled' && campaign.scheduled_send_time && (
+                    <div>
+                      <dt className="text-[var(--muted)]">Starts</dt>
+                      <dd className="font-medium text-[var(--text)]">{new Date(campaign.scheduled_send_time).toLocaleString()}</dd>
+                    </div>
+                  )}
+                  {campaign.started_at && (
+                    <div>
+                      <dt className="text-[var(--muted)]">Started</dt>
+                      <dd className="font-medium text-[var(--text)]">{new Date(campaign.started_at).toLocaleDateString()}</dd>
+                    </div>
+                  )}
+                </dl>
+                {campaign.subject_line && (
+                  <div className="mt-4">
+                    <p className="mb-1 text-xs font-medium text-[var(--muted)]">Email Subject</p>
+                    <p className="rounded-lg bg-[var(--sidebar)] px-3 py-2 text-sm text-[var(--text)]">{campaign.subject_line}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -365,7 +419,7 @@ export function CampaignDetail({ campaign, onBack, onPause, onResume, onPollRepl
             <div className="flex flex-col gap-3">
               {replies.length === 0 && (
                 <div className="rounded-xl border border-dashed border-[var(--border)] py-12 text-center text-sm text-[var(--muted)]">
-                  No replies yet — click &quot;Sync Replies&quot; to check for new responses
+                  No replies yet — replies sync automatically every ~30 minutes, or click &quot;Sync Replies&quot; to check now
                 </div>
               )}
               {replies.map((reply) => (
