@@ -141,9 +141,78 @@ export function CreateCampaignFlow({
     company: string | null
     alreadyEnrolled: boolean
   }
-  const [leadSource, setLeadSource] = useState<'csv' | 'crm'>('csv')
+  const [leadSource, setLeadSource] = useState<'csv' | 'crm' | 'scout'>('csv')
   const [crmLeads, setCrmLeads] = useState<CrmLeadRow[] | null>(null)
   const [selectedCrmIds, setSelectedCrmIds] = useState<Set<string>>(new Set())
+
+  // AI Lead Scout state — ICP draft (editable) then web-search candidates.
+  type ScoutCandidate = {
+    kind: 'person' | 'company' | 'community'
+    name: string
+    company: string | null
+    role: string | null
+    sourceUrl: string
+    email: string | null
+    whyRelevant: string
+    confidence: 'high' | 'medium' | 'low'
+  }
+  const [icpText, setIcpText] = useState('')
+  const [icpLoading, setIcpLoading] = useState(false)
+  const [scouting, setScouting] = useState(false)
+  const [scoutCandidates, setScoutCandidates] = useState<ScoutCandidate[] | null>(null)
+  const [scoutSummary, setScoutSummary] = useState('')
+  const [selectedScoutIdx, setSelectedScoutIdx] = useState<Set<number>>(new Set())
+
+  const loadIcpDraft = async (cid: string) => {
+    setIcpLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/campaigns/${cid}/scout-leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'icp' }),
+      })
+      const d = await res.json().catch(() => ({})) as { icp?: string; error?: string }
+      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'Failed to draft your customer profile')
+      setIcpText(d.icp ?? '')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to draft your customer profile')
+    } finally {
+      setIcpLoading(false)
+    }
+  }
+
+  const runScout = async () => {
+    if (!campaignId || icpText.trim().length < 40) {
+      setError('Describe your ideal customer in at least a few sentences first.')
+      return
+    }
+    setScouting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/scout-leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'scout', icp: icpText.trim() }),
+      })
+      const d = await res.json().catch(() => ({})) as {
+        candidates?: ScoutCandidate[]
+        searchSummary?: string
+        error?: string
+      }
+      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'Lead scout failed')
+      const candidates = d.candidates ?? []
+      setScoutCandidates(candidates)
+      setScoutSummary(d.searchSummary ?? '')
+      // Preselect only email-reachable candidates — the others can't receive
+      // a campaign email and are shown as research targets.
+      setSelectedScoutIdx(new Set(candidates.map((c, i) => (c.email ? i : -1)).filter((i) => i >= 0)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lead scout failed')
+    } finally {
+      setScouting(false)
+    }
+  }
 
   const loadCrmLeads = async (cid: string) => {
     setCrmLeads(null)
@@ -517,9 +586,9 @@ export function CreateCampaignFlow({
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {[
+              { id: 'scout' as const, label: 'AI Lead Finder', desc: 'Forze searches the web for prospects matching your customer profile', available: true },
               { id: 'crm' as const, label: 'Your captured leads', desc: 'People who signed up on your landing page', available: true },
               { id: 'csv' as const, label: 'CSV Upload', desc: 'Paste or upload your own list', available: true },
-              { id: 'twitter' as const, label: 'Twitter Followers', desc: 'Coming soon', available: false },
               { id: 'linkedin' as const, label: 'LinkedIn', desc: 'Coming soon', available: false },
             ].map((source) => (
               <button
@@ -530,6 +599,9 @@ export function CreateCampaignFlow({
                   if (source.id === 'crm') {
                     setLeadSource('crm')
                     if (campaignId) void loadCrmLeads(campaignId)
+                  } else if (source.id === 'scout') {
+                    setLeadSource('scout')
+                    if (campaignId && !icpText && !icpLoading) void loadIcpDraft(campaignId)
                   } else {
                     setLeadSource('csv')
                   }
@@ -546,6 +618,149 @@ export function CreateCampaignFlow({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Step 3 (AI Lead Finder): ICP → web-search scout → candidate picker */}
+      {step === 3 && leadSource === 'scout' && (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="mb-1 text-base font-semibold text-[var(--text)]">AI Lead Finder</h3>
+            <p className="text-sm text-[var(--muted)]">
+              Confirm who you&apos;re looking for, then Forze searches the web for real prospects. Emails are only included when they&apos;re publicly listed — everything is marked unverified.
+            </p>
+          </div>
+
+          {scoutCandidates === null ? (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-[var(--text-soft)]">Your ideal customer</label>
+                {icpLoading ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-6 text-sm text-[var(--muted)]">
+                    <Loader2 size={14} className="animate-spin" />
+                    Drafting a customer profile from your venture…
+                  </div>
+                ) : (
+                  <textarea
+                    value={icpText}
+                    onChange={(e) => setIcpText(e.target.value)}
+                    rows={6}
+                    placeholder="Who buys this? Their role, company type, the pain that makes them buy, and where they hang out online."
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--accent)] focus:outline-none resize-y"
+                  />
+                )}
+                <p className="mt-1 text-xs text-[var(--muted)]">Edit freely — the sharper the profile, the better the prospects. Each search uses one of your weekly Lead Scout runs.</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-soft)] hover:bg-[var(--nav-active)] transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  Back
+                </button>
+                <button
+                  onClick={runScout}
+                  disabled={scouting || icpLoading || icpText.trim().length < 40}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {scouting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {scouting ? 'Searching the web… (can take a minute)' : 'Find prospects'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {scoutSummary && (
+                <p className="rounded-lg bg-[var(--sidebar)] px-3 py-2 text-xs text-[var(--text-soft)]">{scoutSummary}</p>
+              )}
+              {scoutCandidates.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+                  No solid matches this run. Sharpen the profile and try again.
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
+                  {scoutCandidates.map((c, i) => {
+                    const selectable = Boolean(c.email)
+                    const checked = selectedScoutIdx.has(i)
+                    return (
+                      <label
+                        key={`${c.sourceUrl}-${i}`}
+                        className={`flex items-start gap-3 px-3 py-2.5 text-sm ${selectable ? 'cursor-pointer hover:bg-[var(--nav-active)]' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={!selectable}
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedScoutIdx((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(i)) next.delete(i)
+                              else next.add(i)
+                              return next
+                            })
+                          }}
+                          className="mt-0.5 accent-[var(--accent)]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium text-[var(--text)]">{c.name}</span>
+                            {c.role && <span className="text-xs text-[var(--muted)]">· {c.role}</span>}
+                            {c.company && c.company !== c.name && <span className="text-xs text-[var(--muted)]">· {c.company}</span>}
+                            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                              c.confidence === 'high' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
+                              c.confidence === 'medium' ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' :
+                              'bg-[var(--border)] text-[var(--muted)]'
+                            }`}>{c.confidence}</span>
+                            {c.email ? (
+                              <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">unverified email</span>
+                            ) : (
+                              <span className="rounded-full bg-[var(--border)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--muted)]">no public email</span>
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-[var(--text-soft)]">{c.whyRelevant}</span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]">
+                            {c.email && <span className="font-mono text-[var(--muted)]">{c.email}</span>}
+                            <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline truncate max-w-[260px]">
+                              {c.sourceUrl.replace(/^https?:\/\//, '').slice(0, 60)}
+                            </a>
+                          </span>
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setScoutCandidates(null); setSelectedScoutIdx(new Set()) }}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-soft)] hover:bg-[var(--nav-active)] transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  Edit profile
+                </button>
+                <button
+                  onClick={() => {
+                    const selected = (scoutCandidates ?? []).filter((_, i) => selectedScoutIdx.has(i) && scoutCandidates![i].email)
+                    if (selected.length === 0) { setError('Select at least one candidate with an email'); return }
+                    setParsedLeads(selected.map((c) => ({
+                      first_name: c.kind === 'person' ? c.name.split(/\s+/)[0] : c.name.slice(0, 60),
+                      email: c.email as string,
+                      company: c.company ?? (c.kind !== 'person' ? c.name : undefined),
+                      job_title: c.role ?? undefined,
+                    })))
+                    setError(null)
+                    setStep(4)
+                  }}
+                  disabled={[...selectedScoutIdx].filter((i) => scoutCandidates?.[i]?.email).length === 0}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  <ArrowRight size={14} />
+                  Continue ({[...selectedScoutIdx].filter((i) => scoutCandidates?.[i]?.email).length} leads)
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

@@ -17,8 +17,8 @@ export type FeatureId = 'crm' | 'inspiration' | 'outreach'
 
 // Action-counter keys. Each maps to a feature_usage_counters row keyed by
 // (user_id, feature_id, period_start). The string values match the DB CHECK
-// constraint in migration 030.
-export type ActionId = 'inspiration_analyze' | 'crm_email_send' | 'campaign_send'
+// constraint in migration 030 (widened by 042 for lead_scout).
+export type ActionId = 'inspiration_analyze' | 'crm_email_send' | 'campaign_send' | 'lead_scout'
 
 export const ALL_BILLING_MODULES: BillingModuleId[] = [
   'landing',
@@ -55,6 +55,9 @@ export interface WeeklyActionLimits {
   inspirationAnalyses: number
   crmEmailsSent: number
   campaignsSent: number
+  // AI Lead Scout runs — each run is a web-search Gemini pass that returns a
+  // batch of prospect candidates, so it's metered tightly.
+  leadScoutRuns: number
 }
 
 export interface BillingPlan {
@@ -112,6 +115,7 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       inspirationAnalyses: 0,
       crmEmailsSent: 0,
       campaignsSent: 0,
+      leadScoutRuns: 0,
     },
     cta: 'Start free',
   },
@@ -129,6 +133,7 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       inspirationAnalyses: 0,
       crmEmailsSent: 0,
       campaignsSent: 0,
+      leadScoutRuns: 0,
     },
     cta: 'Get Started',
   },
@@ -146,6 +151,7 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       inspirationAnalyses: 20,
       crmEmailsSent: 50,
       campaignsSent: 3,
+      leadScoutRuns: 2,
     },
     cta: 'Upgrade to Builder',
   },
@@ -163,6 +169,7 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       inspirationAnalyses: 75,
       crmEmailsSent: 250,
       campaignsSent: 15,
+      leadScoutRuns: 10,
     },
     cta: 'Go Pro',
     highlight: true,
@@ -181,6 +188,7 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       inspirationAnalyses: 300,
       crmEmailsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
       campaignsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
+      leadScoutRuns: 30,
     },
     cta: 'Scale with Studio',
   },
@@ -196,6 +204,7 @@ export const ACTION_TO_FEATURE: Record<ActionId, FeatureId> = {
   inspiration_analyze: 'inspiration',
   crm_email_send: 'crm',
   campaign_send: 'outreach',
+  lead_scout: 'outreach',
 }
 
 export const TOPUP_PRODUCTS: Record<TopupSlug, TopupProduct> = {
@@ -242,6 +251,8 @@ export function getWeeklyActionLimit(planSlug: PlanSlug, actionId: ActionId): nu
       return limits.crmEmailsSent
     case 'campaign_send':
       return limits.campaignsSent
+    case 'lead_scout':
+      return limits.leadScoutRuns
   }
 }
 
