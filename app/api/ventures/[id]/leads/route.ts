@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createLead } from '@/lib/queries'
+import { captureLandingLead } from '@/lib/lead-capture'
+import { PublicLeadCaptureSchema } from '@/lib/schemas/crm'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,24 +25,21 @@ export async function POST(
     }
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>))
-    const emailRaw = typeof body.email === 'string' ? body.email.trim() : ''
-    const nameRaw = typeof body.name === 'string' ? body.name.trim() : ''
-    const sourceRaw = typeof body.source === 'string' ? body.source.trim() : ''
-
-    if (!emailRaw) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400, headers: corsHeaders })
-    }
-    if (emailRaw.length > 254 || !EMAIL_RE.test(emailRaw)) {
-      return NextResponse.json({ error: 'Invalid email' }, { status: 400, headers: corsHeaders })
-    }
-    if (nameRaw.length > 200) {
-      return NextResponse.json({ error: 'Name is too long' }, { status: 400, headers: corsHeaders })
+    const input = PublicLeadCaptureSchema.safeParse(body)
+    if (!input.success) {
+      const message = input.error.issues[0]?.message ?? 'Invalid input'
+      return NextResponse.json({ error: message }, { status: 400, headers: corsHeaders })
     }
 
-    const safeName = nameRaw ? nameRaw.slice(0, 200) : undefined
-    const safeSource = sourceRaw ? sourceRaw.slice(0, 120) : undefined
-
-    const lead = await createLead(ventureId, emailRaw, safeName, safeSource)
+    // Admin-client capture: this endpoint is hit by anonymous landing-page
+    // visitors, so the session client would be blocked by the leads RLS
+    // policies from migration 034. Also auto-enrolls the lead into any of
+    // the venture's campaigns that opted in (migration 041).
+    const lead = await captureLandingLead(ventureId, {
+      email: input.data.email,
+      name: input.data.name,
+      source: input.data.source,
+    })
 
     return NextResponse.json({ success: true, lead }, { headers: corsHeaders })
   } catch (error) {
