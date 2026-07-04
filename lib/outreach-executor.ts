@@ -36,6 +36,7 @@ import {
   wrapInHtml,
 } from '@/lib/email-utils'
 import { signTrackingToken } from '@/lib/tracking-hmac'
+import { advanceCrmLeadStatus } from '@/lib/lead-capture'
 import type { Campaign, CampaignLead } from '@/lib/schemas/campaign'
 
 type DbClient = SupabaseClient<any, any, any>
@@ -268,6 +269,10 @@ async function sendPendingBatch(
           })
           .eq('id', lead.id)
         sent += 1
+        // CRM-linked recipient: first outreach moves the CRM lead forward.
+        if (lead.lead_id) {
+          await advanceCrmLeadStatus(lead.lead_id, ['new'], 'contacted')
+        }
         await adminRecordEvent(db, {
           campaignId: campaign.id,
           leadId: lead.id,
@@ -524,10 +529,10 @@ async function syncRepliesForCampaign(
 
   const { data: leadRows } = await db
     .from('campaign_leads')
-    .select('id, email, gmail_thread_id')
+    .select('id, email, gmail_thread_id, lead_id')
     .eq('campaign_id', campaign.id)
     .eq('send_status', 'sent')
-  const leads = (leadRows ?? []) as Array<{ id: string; email: string; gmail_thread_id: string | null }>
+  const leads = (leadRows ?? []) as Array<{ id: string; email: string; gmail_thread_id: string | null; lead_id: string | null }>
   if (leads.length === 0) return
 
   const leadByEmail = new Map(leads.map((l) => [l.email.toLowerCase(), l]))
@@ -595,6 +600,10 @@ async function syncRepliesForCampaign(
         .eq('id', lead.id)
         .is('email_replied_at', null)
         .then(() => {}, () => {})
+      // A human reply is the strongest qualification signal the CRM gets.
+      if (lead.lead_id) {
+        await advanceCrmLeadStatus(lead.lead_id, ['new', 'contacted'], 'qualified')
+      }
     }
   }
 

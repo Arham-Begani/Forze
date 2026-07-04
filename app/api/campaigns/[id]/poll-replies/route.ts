@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { getCampaignForUser, getLeadEmailsForCampaign, findLeadByEmail, createCampaignReply, replyMessageIdExists, updateLeadEngagement, getCampaignReplies } from '@/lib/queries/campaign-queries'
 import { pollGmailForReplies } from '@/lib/gmail-sender'
 import { analyzeReply } from '@/lib/email-generator'
+import { advanceCrmLeadStatus } from '@/lib/lead-capture'
 import { updateCampaign } from '@/lib/queries/campaign-queries'
 import { enforceRateLimit, POLL_LIMIT, POLL_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
@@ -107,6 +108,10 @@ export async function POST(
           email_replied_at: msg.receivedAt,
           engagement_status: 'replied',
         }).catch(() => {})
+        // A human reply is the strongest qualification signal the CRM gets.
+        if (lead.lead_id) {
+          await advanceCrmLeadStatus(lead.lead_id, ['new', 'contacted'], 'qualified')
+        }
       }
 
       newReplies.push(reply)

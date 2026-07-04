@@ -21,6 +21,9 @@ export const CampaignSchema = z.object({
   scheduled_send_time: z.string().nullable().optional(),
   daily_send_cap: z.number().int().min(1).nullable().optional(),
   last_replies_polled_at: z.string().nullable().optional(),
+  // When true, new landing-page leads are auto-enrolled as pending
+  // recipients of this campaign (migration 041).
+  auto_enroll_landing_leads: z.boolean().optional().default(false),
   enable_followups: z.boolean().optional().default(false),
   followup_delay_hours: z.number().int().min(1).optional().default(72),
   followup_message: z.string().nullable().optional(),
@@ -61,6 +64,9 @@ export const CampaignLeadSchema = z.object({
   send_status: z.enum(['pending', 'sending', 'sent', 'failed', 'suppressed']).optional().default('pending'),
   gmail_message_id: z.string().nullable().optional(),
   gmail_thread_id: z.string().nullable().optional(),
+  // Back-link to the venture-level CRM lead this recipient was enrolled from
+  // (migration 041). Null for CSV-pasted leads with no CRM counterpart.
+  lead_id: z.string().uuid().nullable().optional(),
   unsubscribed_at: z.string().nullable().optional(),
   bounced_at: z.string().nullable().optional(),
   last_send_error: z.string().nullable().optional(),
@@ -159,6 +165,8 @@ export const SendCampaignSchema = z.object({
   enableFollowups: z.boolean().optional(),
   followupDelayHours: z.number().int().min(1).max(720).optional(),
   maxFollowups: z.number().int().min(1).max(5).optional(),
+  // Keep enrolling future landing-page leads into this campaign.
+  autoEnroll: z.boolean().optional(),
 })
 
 export const UploadLeadsSchema = z.object({

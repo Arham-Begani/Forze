@@ -15,6 +15,7 @@ import {
 import { sendEmailViaGmail } from '@/lib/gmail-sender'
 import { personalizeEmail, personalizeSubject } from '@/lib/email-generator'
 import { addTrackingPixel, rewriteLinksForTracking, injectUnsubscribeFooter, wrapInHtml } from '@/lib/email-utils'
+import { advanceCrmLeadStatus } from '@/lib/lead-capture'
 import { signTrackingToken } from '@/lib/tracking-hmac'
 import { enforceRateLimit, SEND_LIMIT, SEND_WINDOW_SEC } from '@/lib/rate-limit'
 import { getGmailStatus } from '@/lib/gmail-oauth'
@@ -84,6 +85,7 @@ export async function POST(
       ...(sendInput.enableFollowups !== undefined ? { enable_followups: sendInput.enableFollowups } : {}),
       ...(sendInput.followupDelayHours !== undefined ? { followup_delay_hours: sendInput.followupDelayHours } : {}),
       ...(sendInput.maxFollowups !== undefined ? { max_followups: sendInput.maxFollowups } : {}),
+      ...(sendInput.autoEnroll !== undefined ? { auto_enroll_landing_leads: sendInput.autoEnroll } : {}),
     }
 
     // Deferred sends: an explicit future start time or drip mode hands the
@@ -207,6 +209,10 @@ export async function POST(
             gmailMessageId: result.messageId,
             gmailThreadId: result.threadId,
           })
+          // CRM-linked recipient: first outreach moves the CRM lead forward.
+          if (lead.lead_id) {
+            await advanceCrmLeadStatus(lead.lead_id, ['new'], 'contacted')
+          }
           sentCount++
           await recordCampaignEvent({
             campaignId: id,

@@ -129,6 +129,37 @@ export function CreateCampaignFlow({
   const [enableFollowups, setEnableFollowups] = useState(true)
   const [followupDelayDays, setFollowupDelayDays] = useState(3)
   const [maxFollowups, setMaxFollowups] = useState(2)
+  const [autoEnroll, setAutoEnroll] = useState(false)
+  // Lead source: pasted/uploaded CSV, or the venture's own CRM pool
+  // (landing-page captures) enrolled via /leads/from-crm.
+  type CrmLeadRow = {
+    id: string
+    email: string
+    name: string | null
+    status: string
+    source: string
+    company: string | null
+    alreadyEnrolled: boolean
+  }
+  const [leadSource, setLeadSource] = useState<'csv' | 'crm'>('csv')
+  const [crmLeads, setCrmLeads] = useState<CrmLeadRow[] | null>(null)
+  const [selectedCrmIds, setSelectedCrmIds] = useState<Set<string>>(new Set())
+
+  const loadCrmLeads = async (cid: string) => {
+    setCrmLeads(null)
+    try {
+      const res = await fetch(`/api/campaigns/${cid}/leads/from-crm`)
+      if (!res.ok) throw new Error('Failed to load your leads')
+      const d = await res.json() as { leads: CrmLeadRow[] }
+      const rows = d.leads ?? []
+      setCrmLeads(rows)
+      // Preselect everything not already in the campaign.
+      setSelectedCrmIds(new Set(rows.filter((l) => !l.alreadyEnrolled).map((l) => l.id)))
+    } catch (e) {
+      setCrmLeads([])
+      setError(e instanceof Error ? e.message : 'Failed to load your leads')
+    }
+  }
   const [form, setForm] = useState<FormData>({
     name: '',
     description: '',
@@ -316,28 +347,49 @@ export function CreateCampaignFlow({
     setError(null)
     setSendErrors([])
     try {
-      // Upload leads first (idempotent server-side — duplicate-email leads
-      // are de-duped in the leads route + enforced by the UNIQUE index in
+      // Upload/enroll leads first (both paths are idempotent server-side —
+      // duplicate-email leads are de-duped by the UNIQUE index from
       // migration 016). Safe to retry.
-      const leadsRes = await fetch(`/api/campaigns/${campaignId}/leads`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leads: parsedLeads }),
-      })
-      if (!leadsRes.ok) {
-        const d = await leadsRes.json().catch(() => ({}))
-        throw new Error(typeof d.error === 'string' ? d.error : 'Failed to upload leads')
+      if (leadSource === 'crm') {
+        const enrollRes = await fetch(`/api/campaigns/${campaignId}/leads/from-crm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadIds: [...selectedCrmIds] }),
+        })
+        if (!enrollRes.ok) {
+          const d = await enrollRes.json().catch(() => ({}))
+          throw new Error(typeof d.error === 'string' ? d.error : 'Failed to enroll leads')
+        }
+        const enrollBody = await enrollRes.json().catch(() => ({})) as {
+          enrolled?: number
+          duplicatesSkipped?: number
+        }
+        setUploadSummary({
+          created: enrollBody.enrolled ?? 0,
+          duplicates: enrollBody.duplicatesSkipped ?? 0,
+          invalid: 0,
+        })
+      } else {
+        const leadsRes = await fetch(`/api/campaigns/${campaignId}/leads`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leads: parsedLeads }),
+        })
+        if (!leadsRes.ok) {
+          const d = await leadsRes.json().catch(() => ({}))
+          throw new Error(typeof d.error === 'string' ? d.error : 'Failed to upload leads')
+        }
+        const leadsBody = await leadsRes.json().catch(() => ({})) as {
+          leadsCreated?: number
+          duplicatesSkipped?: number
+          invalidEmails?: string[]
+        }
+        setUploadSummary({
+          created: leadsBody.leadsCreated ?? 0,
+          duplicates: leadsBody.duplicatesSkipped ?? 0,
+          invalid: (leadsBody.invalidEmails ?? []).length,
+        })
       }
-      const leadsBody = await leadsRes.json().catch(() => ({})) as {
-        leadsCreated?: number
-        duplicatesSkipped?: number
-        invalidEmails?: string[]
-      }
-      setUploadSummary({
-        created: leadsBody.leadsCreated ?? 0,
-        duplicates: leadsBody.duplicatesSkipped ?? 0,
-        invalid: (leadsBody.invalidEmails ?? []).length,
-      })
 
       // Send campaign — deferred sends (schedule/drip) return 202 and are
       // executed by the outreach cron; immediate sends return counts.
@@ -355,6 +407,7 @@ export function CreateCampaignFlow({
           enableFollowups,
           followupDelayHours: Math.max(1, followupDelayDays * 24),
           maxFollowups,
+          autoEnroll,
         }),
       })
 
@@ -464,15 +517,24 @@ export function CreateCampaignFlow({
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {[
-              { id: 'manual', label: 'Manual CSV Upload', desc: 'Upload your own list', available: true },
-              { id: 'youtube', label: 'YouTube Comments', desc: 'Coming soon', available: false },
-              { id: 'twitter', label: 'Twitter Followers', desc: 'Coming soon', available: false },
-              { id: 'linkedin', label: 'LinkedIn', desc: 'Coming soon', available: false },
+              { id: 'crm' as const, label: 'Your captured leads', desc: 'People who signed up on your landing page', available: true },
+              { id: 'csv' as const, label: 'CSV Upload', desc: 'Paste or upload your own list', available: true },
+              { id: 'twitter' as const, label: 'Twitter Followers', desc: 'Coming soon', available: false },
+              { id: 'linkedin' as const, label: 'LinkedIn', desc: 'Coming soon', available: false },
             ].map((source) => (
               <button
                 key={source.id}
                 disabled={!source.available}
-                onClick={() => source.available && setStep(3)}
+                onClick={() => {
+                  if (!source.available) return
+                  if (source.id === 'crm') {
+                    setLeadSource('crm')
+                    if (campaignId) void loadCrmLeads(campaignId)
+                  } else {
+                    setLeadSource('csv')
+                  }
+                  setStep(3)
+                }}
                 className={`flex flex-col gap-1 rounded-xl border p-4 text-left transition-all ${
                   source.available
                     ? 'border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 cursor-pointer'
@@ -487,8 +549,109 @@ export function CreateCampaignFlow({
         </div>
       )}
 
-      {/* Step 3: Lead upload */}
-      {step === 3 && (
+      {/* Step 3 (CRM source): pick captured leads */}
+      {step === 3 && leadSource === 'crm' && (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="mb-1 text-base font-semibold text-[var(--text)]">Choose leads</h3>
+            <p className="text-sm text-[var(--muted)]">
+              Everyone your landing page captured. Selected leads get enrolled in this campaign — sends and replies update their CRM status automatically.
+            </p>
+          </div>
+
+          {crmLeads === null ? (
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] p-4 text-sm text-[var(--muted)]">
+              <Loader2 size={14} className="animate-spin" />
+              Loading your leads…
+            </div>
+          ) : crmLeads.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+              No email leads captured yet. Ship your landing page and they&apos;ll appear here — or use CSV upload instead.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+                <span>{selectedCrmIds.size} of {crmLeads.filter((l) => !l.alreadyEnrolled).length} selectable leads chosen</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedCrmIds(new Set(crmLeads.filter((l) => !l.alreadyEnrolled).map((l) => l.id)))}
+                    className="text-[var(--accent)] hover:underline"
+                  >
+                    Select all
+                  </button>
+                  <button onClick={() => setSelectedCrmIds(new Set())} className="hover:underline">
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
+                {crmLeads.map((lead) => {
+                  const checked = selectedCrmIds.has(lead.id)
+                  return (
+                    <label
+                      key={lead.id}
+                      className={`flex items-center gap-3 px-3 py-2.5 text-sm ${lead.alreadyEnrolled ? 'opacity-45' : 'cursor-pointer hover:bg-[var(--nav-active)]'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={lead.alreadyEnrolled}
+                        checked={checked && !lead.alreadyEnrolled}
+                        onChange={() => {
+                          setSelectedCrmIds((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(lead.id)) next.delete(lead.id)
+                            else next.add(lead.id)
+                            return next
+                          })
+                        }}
+                        className="accent-[var(--accent)]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-[var(--text)]">{lead.name || lead.email}</span>
+                        <span className="block truncate font-mono text-xs text-[var(--muted)]">{lead.email}</span>
+                      </span>
+                      <span className="rounded-full bg-[var(--border)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--text-soft)]">
+                        {lead.alreadyEnrolled ? 'enrolled' : lead.status}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep(2)}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-soft)] hover:bg-[var(--nav-active)] transition-colors"
+            >
+              <ArrowLeft size={14} />
+              Back
+            </button>
+            <button
+              onClick={() => {
+                if (selectedCrmIds.size === 0) { setError('Select at least one lead'); return }
+                const selected = (crmLeads ?? []).filter((l) => selectedCrmIds.has(l.id))
+                setParsedLeads(selected.map((l) => ({
+                  first_name: (l.name || l.email.split('@')[0] || 'Friend').split(/\s+/)[0],
+                  email: l.email,
+                  company: l.company ?? undefined,
+                })))
+                setError(null)
+                setStep(4)
+              }}
+              disabled={selectedCrmIds.size === 0}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              <ArrowRight size={14} />
+              Continue ({selectedCrmIds.size} leads)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3 (CSV source): Lead upload */}
+      {step === 3 && leadSource === 'csv' && (
         <div className="flex flex-col gap-4">
           <div>
             <h3 className="mb-1 text-base font-semibold text-[var(--text)]">Upload leads</h3>
@@ -810,6 +973,25 @@ export function CreateCampaignFlow({
               {enableFollowups && (
                 <p className="text-[11px] text-[var(--muted)]">
                   AI writes each touch in the same thread. A reply instantly stops that lead&apos;s sequence.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-[var(--muted)]">Auto-enroll new landing-page leads</p>
+                <button
+                  onClick={() => setAutoEnroll(!autoEnroll)}
+                  role="switch"
+                  aria-checked={autoEnroll}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${autoEnroll ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+                >
+                  <span className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform" style={{ transform: autoEnroll ? 'translateX(16px)' : 'translateX(0)' }} />
+                </button>
+              </div>
+              {autoEnroll && (
+                <p className="text-[11px] text-[var(--muted)]">
+                  Everyone who signs up on your landing page from now on joins this campaign automatically and gets emailed on its schedule.
                 </p>
               )}
             </div>
