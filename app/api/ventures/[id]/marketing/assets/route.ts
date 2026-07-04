@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { buildInstagramDraftSeeds, buildLinkedInDraftSeeds, buildYouTubeDraftSeed } from '@/lib/marketing-drafts'
 import { generateFreshInstagramDrafts } from '@/lib/instagram-content-ai'
 import { generateFreshLinkedInDrafts } from '@/lib/linkedin-content-ai'
+import { buildOutreachBrief } from '@/lib/outreach-brief'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
 import {
   createMarketingAssets,
@@ -59,6 +60,13 @@ export async function POST(
     if (parsed.data.mode === 'generate_from_marketing') {
       const marketing = venture.context?.marketing as Record<string, unknown> | null | undefined
       const research = venture.context?.research as Record<string, unknown> | null | undefined
+      // Post-pivot brand context: built from landing copy + shadow board (the
+      // marketing/research agents no longer exist, so their context keys are
+      // null for every new venture).
+      const brief = buildOutreachBrief(
+        venture.name,
+        (venture.context ?? {}) as unknown as Record<string, unknown>
+      )
       let seeds: CreateMarketingAssetSeed[]
       if (parsed.data.provider === 'linkedin') {
         // Try the LinkedInRocket AI generator first (varied hook+tone per
@@ -71,7 +79,9 @@ export async function POST(
             venture.name,
             marketing,
             research,
-            LINKEDIN_DRAFT_COUNT
+            LINKEDIN_DRAFT_COUNT,
+            Date.now(),
+            brief
           )
           if (seeds.length === 0) {
             seeds = buildLinkedInDraftSeeds(venture.name, marketing, LINKEDIN_DRAFT_COUNT)
@@ -99,7 +109,7 @@ export async function POST(
         }
 
         try {
-          seeds = await generateFreshInstagramDrafts(venture.name, marketing, slots)
+          seeds = await generateFreshInstagramDrafts(venture.name, marketing, slots, Date.now(), brief)
         } catch {
           // Gemini failure — fall back to deterministic seeds so the user still gets drafts.
           seeds = buildInstagramDraftSeeds(venture.name, marketing, slots).slice(0, slots)
@@ -109,7 +119,13 @@ export async function POST(
       }
 
       if (seeds.length === 0) {
-        return NextResponse.json({ error: 'Run the marketing module first to generate channel drafts' }, { status: 400 })
+        // Post-pivot there is no marketing module to run — this now only
+        // happens when Gemini failed AND the deterministic fallback had no
+        // legacy marketing context to read.
+        return NextResponse.json(
+          { error: 'Draft generation failed — try again in a moment. Publishing a landing page first gives drafts much better context.' },
+          { status: 502 }
+        )
       }
 
       assets = await createMarketingAssets(

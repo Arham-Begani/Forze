@@ -77,11 +77,19 @@ export async function generateFreshInstagramDrafts(
   ventureName: string,
   marketing: Record<string, unknown> | null | undefined,
   count: number,
-  seed: number = Date.now()
+  seed: number = Date.now(),
+  // Post-pivot venture brief (lib/outreach-brief.ts) — built from landing
+  // copy + shadow board instead of the retired marketing agent's context.
+  // When present it becomes the primary brand context; legacy marketing
+  // context (older ventures) still enriches it.
+  brief?: string | null
 ): Promise<CreateMarketingAssetSeed[]> {
   if (count <= 0) return []
 
-  const contextSummary = buildContextSummary(marketing)
+  const marketingSummary = buildContextSummary(marketing)
+  const contextSummary = brief && brief.includes('\n')
+    ? (marketing ? `${brief}\n${marketingSummary}` : brief)
+    : marketingSummary
   const angles = [
     'a contrarian observation that grabs attention',
     'a behind-the-scenes founder moment',

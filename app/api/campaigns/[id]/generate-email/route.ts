@@ -4,6 +4,8 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { GenerateEmailSchema } from '@/lib/schemas/campaign'
 import { getCampaignForUser, updateCampaign } from '@/lib/queries/campaign-queries'
 import { generateCampaignEmail } from '@/lib/email-generator'
+import { getVenture } from '@/lib/queries'
+import { buildOutreachBrief } from '@/lib/outreach-brief'
 import { enforceRateLimit, AI_RUN_LIMIT, AI_RUN_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 
@@ -33,8 +35,28 @@ export async function POST(
       return NextResponse.json({ error: input.error.flatten() }, { status: 400 })
     }
 
+    // Enrich the (often thin, post-pivot) client-sent description with the
+    // venture's real positioning: landing copy + shadow board + legacy
+    // context, server-side. Best-effort — a missing venture just means the
+    // generator works from the client description alone.
+    let ventureDescription = input.data.ventureDescription
+    try {
+      const venture = await getVenture(campaign.venture_id, session.userId)
+      if (venture) {
+        const brief = buildOutreachBrief(
+          venture.name,
+          venture.context as unknown as Record<string, unknown>
+        )
+        if (brief.includes('\n')) {
+          ventureDescription = `${input.data.ventureDescription}\n\n${brief}`.slice(0, 2000)
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+
     const generated = await generateCampaignEmail(
-      input.data.ventureDescription,
+      ventureDescription,
       input.data.targetAudience,
       input.data.exampleLeads
     )

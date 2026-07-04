@@ -24,6 +24,7 @@ import {
 } from '@/lib/queries/campaign-queries'
 import { generateFreshInstagramDrafts } from '@/lib/instagram-content-ai'
 import { generateFreshLinkedInDrafts } from '@/lib/linkedin-content-ai'
+import { buildOutreachBrief } from '@/lib/outreach-brief'
 import {
   createMarketingAssets,
   createOrReplaceQueuedPublishJob,
@@ -68,33 +69,17 @@ function asString(value: unknown): string {
 // Compact venture-context summary the LLM uses to write a fresh email or post.
 // We deliberately don't pass the full context blob — that's both a token waste
 // and a prompt-injection vector since the user's ideas/text live there.
+// Delegates to buildOutreachBrief (lib/outreach-brief.ts), which sources
+// positioning from the post-pivot context (landing copy + shadow board) and
+// still consumes legacy research/branding/marketing on older ventures.
 function buildVentureBrief(
   ventureName: string,
   context: Record<string, unknown>,
   angleHint: string | null,
   runCount: number
 ): string {
-  const branding = asObject(context.branding)
-  const research = asObject(context.research)
-  const marketing = asObject(context.marketing)
-  const gtm = asObject(marketing.gtmStrategy)
-  const tone = asObject(branding.toneOfVoice)
-
-  const painPoints = Array.isArray(research.painPoints)
-    ? research.painPoints
-        .slice(0, 3)
-        .map((p) => asString(asObject(p).description))
-        .filter(Boolean)
-    : []
-
   const lines = [
-    `Venture: ${clip(ventureName, 120)}`,
-    asString(branding.brandName) && `Brand: ${clip(asString(branding.brandName), 80)}`,
-    asString(branding.tagline) && `Tagline: ${clip(asString(branding.tagline), 200)}`,
-    asString(tone.description) && `Voice: ${clip(asString(tone.description), 240)}`,
-    asString(research.marketSummary) && `Market: ${clip(asString(research.marketSummary), 320)}`,
-    painPoints.length > 0 && `Top pain points: ${clip(painPoints.join(' • '), 480)}`,
-    asString(gtm.overview) && `GTM angle: ${clip(asString(gtm.overview), 240)}`,
+    buildOutreachBrief(ventureName, context),
     angleHint && `Creative direction (from user): ${clip(angleHint, 400)}`,
     `This is touch #${runCount} of an ongoing series — vary the angle from prior touches.`,
   ].filter(Boolean)
@@ -337,7 +322,8 @@ async function executeInstagramRoutine(
       ventureName,
       marketing,
       1,
-      Date.now() + routine.run_count
+      Date.now() + routine.run_count,
+      buildOutreachBrief(ventureName, context)
     )
     if (seeds.length === 0) {
       throw new Error('Instagram caption generator returned no drafts')
@@ -457,7 +443,8 @@ async function executeLinkedInRoutine(
       marketing,
       research,
       1,
-      Date.now() + routine.run_count
+      Date.now() + routine.run_count,
+      buildOutreachBrief(ventureName, context)
     )
     if (seeds.length === 0) {
       throw new Error('LinkedIn post generator returned no drafts')

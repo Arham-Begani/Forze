@@ -205,11 +205,17 @@ export async function generateFreshLinkedInDrafts(
   marketing: Record<string, unknown> | null | undefined,
   research: Record<string, unknown> | null | undefined,
   count: number,
-  seed: number = Date.now()
+  seed: number = Date.now(),
+  // Post-pivot venture brief (lib/outreach-brief.ts) — built from landing
+  // copy + shadow board instead of the retired marketing agent's context.
+  brief?: string | null
 ): Promise<CreateMarketingAssetSeed[]> {
   if (count <= 0) return []
 
-  const contextSummary = buildContextSummary(ventureName, marketing, research)
+  const legacySummary = buildContextSummary(ventureName, marketing, research)
+  const contextSummary = brief && brief.includes('\n')
+    ? (marketing || research ? `${brief}\n${legacySummary}` : brief)
+    : legacySummary
 
   // Deterministic rotation so consecutive clicks feel different. Pair the
   // i-th hook with the i-th tone offset so no draft accidentally reuses a
