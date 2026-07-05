@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getVenture } from '@/lib/queries'
-import { fetchCrmGmailReplies } from '@/lib/gmail-replies'
+import { getVenture, getOutreachRepliesForVenture } from '@/lib/queries'
+import { syncCrmReplies } from '@/lib/gmail-replies'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 
+// Manual "Check for replies" trigger: syncs new Gmail replies into
+// outreach_replies (deduped, AI-classified via analyzeReply()) for this
+// venture, then returns the full persisted+classified list. The background
+// poll-crm-replies cron covers ventures the user hasn't manually checked;
+// this route gives an immediate result for the one you're looking at.
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,7 +24,13 @@ export async function GET(
     const venture = await getVenture(id, session.userId)
     if (!venture) return NextResponse.json({ error: 'Venture not found' }, { status: 404 })
 
-    const replies = await fetchCrmGmailReplies(session.userId, id)
+    await syncCrmReplies(session.userId, id).catch((err) => {
+      // Gmail disconnected/expired shouldn't 500 the whole request — fall
+      // back to whatever was already persisted (e.g. from the cron sweep).
+      console.warn('[crm/replies] syncCrmReplies failed, serving persisted replies only:', err)
+    })
+
+    const replies = await getOutreachRepliesForVenture(id)
     return NextResponse.json({ success: true, replies })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
