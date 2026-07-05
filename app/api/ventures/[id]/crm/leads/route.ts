@@ -1,60 +1,35 @@
 // GET /api/ventures/[id]/crm/leads
-// Deduplicates inbox items by username/source into per-person rows.
+// Syncs newly-seen Instagram commenters into the real `leads` table (see
+// 035_crm_leads_unify_social.sql), then returns the venture's full, unified
+// lead list — social and email leads are one model now, so there's no
+// separate "social leads" response shape to maintain.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
 import { listMarketingAssetsByVenture } from '@/lib/marketing-queries'
 import { aggregateCrmInbox, type CrmInboxItem } from '../inbox/route'
+import { getLeadsForVenture, upsertSocialLead } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 
-export type CrmLead = {
-  id: string
-  identity: string
-  source: CrmInboxItem['source']
-  count: number
-  lastTimestamp: string | null
-  lastText: string
-  lastPermalink: string | null
+function externalIdentityFor(item: CrmInboxItem): string | null {
+  if (!item.username) return null
+  return `${item.source}:${item.username.toLowerCase()}`
 }
 
-function leadKey(item: CrmInboxItem): string {
-  const handle = (item.username ?? 'unknown').toLowerCase()
-  return `${item.source}:${handle}`
-}
-
-export function aggregateLeads(items: CrmInboxItem[]): CrmLead[] {
-  const byKey = new Map<string, CrmLead>()
+// One upsert per distinct commenter (not per comment) — aggregateCrmInbox
+// already dedupes visually in the Inbox tab, but the sync here needs the
+// canonical set of identities to upsert against.
+async function syncSocialLeads(ventureId: string, items: CrmInboxItem[]): Promise<void> {
+  const seen = new Set<string>()
   for (const item of items) {
-    const key = leadKey(item)
-    const ts = item.timestamp ? Date.parse(item.timestamp) : 0
-    const existing = byKey.get(key)
-    if (!existing) {
-      byKey.set(key, {
-        id: key,
-        identity: item.username ?? 'unknown',
-        source: item.source,
-        count: 1,
-        lastTimestamp: item.timestamp,
-        lastText: item.text,
-        lastPermalink: item.permalink,
-      })
-      continue
-    }
-    existing.count += 1
-    const existingTs = existing.lastTimestamp ? Date.parse(existing.lastTimestamp) : 0
-    if (ts > existingTs) {
-      existing.lastTimestamp = item.timestamp
-      existing.lastText = item.text
-      existing.lastPermalink = item.permalink
-    }
+    const externalIdentity = externalIdentityFor(item)
+    if (!externalIdentity || seen.has(externalIdentity)) continue
+    seen.add(externalIdentity)
+    await upsertSocialLead(ventureId, externalIdentity, {
+      name: item.username,
+      source: item.source,
+    })
   }
-  const leads = Array.from(byKey.values())
-  leads.sort((a, b) => {
-    const at = a.lastTimestamp ? Date.parse(a.lastTimestamp) : 0
-    const bt = b.lastTimestamp ? Date.parse(b.lastTimestamp) : 0
-    return bt - at
-  })
-  return leads
 }
 
 export async function GET(
@@ -66,8 +41,12 @@ export async function GET(
     const { session } = await requireMarketingVenture(id)
     const gate = await gateFeatureForResponse(session.userId, 'crm')
     if (!gate.ok) return gate.response
+
     const assets = await listMarketingAssetsByVenture(id, session.userId)
-    const leads = aggregateLeads(aggregateCrmInbox(assets))
+    const inboxItems = aggregateCrmInbox(assets)
+    await syncSocialLeads(id, inboxItems)
+
+    const leads = await getLeadsForVenture(id)
     return NextResponse.json({ leads })
   } catch (error) {
     return marketingErrorResponse(error)
