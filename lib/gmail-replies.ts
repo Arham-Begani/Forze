@@ -1,7 +1,8 @@
 import 'server-only'
 
 import { getGmailAccessToken } from '@/lib/gmail-oauth'
-import { getOutreachMessagesForVenture } from '@/lib/queries'
+import { createOutreachReply, getOutreachMessagesForVenture } from '@/lib/queries'
+import { analyzeReply } from '@/lib/email-generator'
 
 interface GmailPart {
   mimeType?: string
@@ -23,15 +24,6 @@ interface GmailThreadMessage {
 interface GmailThreadResponse {
   id: string
   messages?: GmailThreadMessage[]
-}
-
-export interface CrmGmailReply {
-  leadName: string | null
-  leadEmail: string
-  snippet: string
-  timestamp: string
-  gmailMessageId: string
-  gmailThreadId: string
 }
 
 function decodeBase64Url(value: string): string {
@@ -95,9 +87,15 @@ function messageTimestamp(message: GmailThreadMessage): string {
     : new Date().toISOString()
 }
 
-export async function fetchCrmGmailReplies(userId: string, ventureId: string): Promise<CrmGmailReply[]> {
+// Persisted, AI-classified reply sync — mirrors the Campaigns
+// system's poll-replies pattern (app/api/campaigns/[id]/poll-replies/route.ts):
+// fetch each tracked thread from Gmail, skip messages already stored
+// (dedup on gmail_message_id via the outreach_replies unique index), classify
+// new ones with analyzeReply(), and persist. Called from the poll-crm-replies
+// cron (see app/api/cron/poll-crm-replies/route.ts) rather than per page load.
+export async function syncCrmReplies(userId: string, ventureId: string): Promise<number> {
   const outreachMessages = await getOutreachMessagesForVenture(ventureId)
-  if (outreachMessages.length === 0) return []
+  if (outreachMessages.length === 0) return 0
 
   const { accessToken } = await getGmailAccessToken(userId)
   const byThread = new Map<string, typeof outreachMessages[number]>()
@@ -107,14 +105,13 @@ export async function fetchCrmGmailReplies(userId: string, ventureId: string): P
     }
   }
 
-  const replies: CrmGmailReply[] = []
+  let persisted = 0
 
   for (const [threadId, tracked] of byThread) {
     const response = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     )
-
     if (!response.ok) continue
 
     const thread = (await response.json()) as GmailThreadResponse
@@ -125,17 +122,36 @@ export async function fetchCrmGmailReplies(userId: string, ventureId: string): P
       const body = stripQuotedReply(extractBody(message))
       if (!body) continue
 
-      replies.push({
-        leadName: tracked.lead?.name ?? null,
-        leadEmail: tracked.lead?.email ?? '',
-        snippet: body.slice(0, 1000),
-        timestamp: messageTimestamp(message),
+      const headers = message.payload?.headers ?? []
+      const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from')?.value ?? null
+      const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject')?.value ?? null
+      const fromEmailMatch = fromHeader?.match(/<([^>]+)>/)
+      const fromEmail = fromEmailMatch ? fromEmailMatch[1] : (fromHeader ?? tracked.lead?.email ?? null)
+
+      const analysis = await analyzeReply(
+        tracked.subject ?? '',
+        tracked.body ?? '',
+        fromEmail ?? '',
+        subjectHeader ?? '',
+        body
+      ).catch(() => ({ type: 'unknown' as const, sentiment_score: 0, summary: '' }))
+
+      await createOutreachReply({
+        outreachMessageId: tracked.id,
+        leadId: tracked.lead_id,
         gmailMessageId: message.id,
         gmailThreadId: message.threadId,
+        fromEmail,
+        subject: subjectHeader,
+        body: body.slice(0, 4000),
+        receivedAt: messageTimestamp(message),
+        replyType: analysis.type,
+        sentimentScore: analysis.sentiment_score,
+        summary: analysis.summary,
       })
+      persisted += 1
     }
   }
 
-  replies.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-  return replies
+  return persisted
 }
