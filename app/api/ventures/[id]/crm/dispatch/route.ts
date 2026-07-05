@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { getSession } from '@/lib/auth'
 import {
+  createLeadActivity,
   createOutreachCampaign,
   createOutreachMessage,
   getLeadsForVenture,
@@ -11,12 +11,7 @@ import {
 import { getGmailStatus } from '@/lib/gmail-oauth'
 import { sendEmailViaGmail } from '@/lib/gmail-sender'
 import { gateActionForResponse, gateFeatureForResponse } from '@/lib/billing-http'
-
-const DispatchSchema = z.object({
-  campaignType: z.enum(['initial_outreach', 'follow_up', 'newsletter']),
-  emailSubject: z.string().trim().min(1),
-  emailBody: z.string().trim().min(1),
-})
+import { DispatchSchema } from '@/lib/schemas/crm'
 
 function escapeHtml(value: string): string {
   return value
@@ -115,6 +110,16 @@ export async function POST(
             leadId: lead.id,
             googleMessageId: result.messageId,
             googleThreadId: result.threadId,
+            subject: emailSubject,
+            body: emailBody,
+          })
+          await createLeadActivity({
+            leadId: lead.id,
+            ventureId,
+            actorId: session.userId,
+            type: 'email_sent',
+            body: `Sent "${emailSubject}"`,
+            metadata: { campaignType, googleThreadId: result.threadId },
           })
           threadIds.add(result.threadId)
           sentCount++
