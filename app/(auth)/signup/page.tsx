@@ -71,7 +71,10 @@ export default function SignUpPage() {
         setInfo("Account created! Check your inbox and click the verification link to get started.");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not create your account. Please try again.";
+      const rawMessage = err instanceof Error ? err.message : "Could not create your account. Please try again.";
+      const message = /error sending confirmation/i.test(rawMessage)
+        ? "We're having trouble sending confirmation emails right now. This is on our end — please try again in a few minutes, or contact support if it keeps happening."
+        : rawMessage;
       setError(message);
     } finally {
       setLoading(false);
