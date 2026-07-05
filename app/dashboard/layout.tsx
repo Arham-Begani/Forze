@@ -96,6 +96,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   const venturePickerRef = useRef<HTMLDivElement>(null)
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const userCollapsedRef = useRef(false) // tracks manual toggle, so the auto-blink below never fights it
   const [mobileOpen, setMobileOpen] = useState(false)
   // Project icon hover tooltip + context menu (portal-based so they escape overflow:hidden)
   const [projTooltip, setProjTooltip] = useState<{ id: string; name: string; top: number } | null>(null)
@@ -283,6 +284,20 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   // ─── Close mobile sidebar on route change ─────────────────────────────────
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
+  // ─── Blink the sidebar closed/open when the active venture changes ────────
+  const prevVentureIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = prevVentureIdRef.current
+    prevVentureIdRef.current = activeVentureId
+    console.log('[DEBUG blink effect]', { prev, activeVentureId, userCollapsed: userCollapsedRef.current })
+    if (prev === null || prev === activeVentureId || !activeVentureId) return
+    if (userCollapsedRef.current) return // don't fight a manually collapsed sidebar
+    console.log('[DEBUG blink effect] TRIGGERING BLINK')
+    setSidebarCollapsed(true)
+    const timer = setTimeout(() => setSidebarCollapsed(false), 260)
+    return () => clearTimeout(timer)
+  }, [activeVentureId])
+
   // ─── CRUD handlers ────────────────────────────────────────────────────────
 
   function moduleHref(ventureId: string, moduleId: string): string {
@@ -436,7 +451,11 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 
             {/* Sidebar open/close toggle — always visible */}
             <motion.button
-              onClick={() => setSidebarCollapsed(v => !v)}
+              onClick={() => setSidebarCollapsed(v => {
+                const next = !v
+                userCollapsedRef.current = next
+                return next
+              })}
               style={{
                 width: 36, height: 28,
                 borderRadius: 7, border: 'none',
@@ -522,9 +541,16 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                         const pVentures = ventures.filter(v => v.project_id === proj.id)
                         if (pVentures.length) {
                           const currentBelongs = pVentures.find(v => v.id === activeVentureId)
-                          if (!currentBelongs) setActiveVentureId(pVentures[0].id)
+                          if (!currentBelongs) {
+                            // Switching to a venture in a different project — navigate away
+                            // from whatever module tab was open so it doesn't stay rendered
+                            // for the wrong venture.
+                            setActiveVentureId(pVentures[0].id)
+                            router.push(`/dashboard/venture/${pVentures[0].id}`)
+                          }
                         } else {
                           setActiveVentureId(null)
+                          router.push(`/dashboard/project/${proj.id}`)
                         }
                       }
                     }}
