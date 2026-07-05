@@ -1,7 +1,10 @@
 // GET /api/ventures/[id]/crm/inbox
 // Aggregates inbound social signal for a venture's CRM inbox.
-// Today: Instagram comments from published marketing_assets.
-// Stubs (return empty arrays): LinkedIn replies, Gmail threads, Reddit, Telegram.
+// Today: Instagram comments from published marketing_assets. LinkedIn/Reddit/
+// Telegram integrations don't exist yet, so the aggregator only ever produces
+// 'instagram' items — the UI filter options for the others were removed
+// rather than left as permanent dead ends. Gmail replies are a separate
+// concept surfaced via GET /api/ventures/[id]/crm/replies, not this endpoint.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
@@ -11,7 +14,7 @@ import { gateFeatureForResponse } from '@/lib/billing-http'
 
 export type CrmInboxItem = {
   id: string
-  source: 'instagram' | 'linkedin' | 'gmail' | 'reddit' | 'telegram'
+  source: 'instagram'
   username: string | null
   text: string
   timestamp: string | null
