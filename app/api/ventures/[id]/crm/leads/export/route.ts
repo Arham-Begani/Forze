@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { getSession } from '@/lib/auth'
 import { getLeadsForVenture, getVenture } from '@/lib/queries'
-import { listMarketingAssetsByVenture } from '@/lib/marketing-queries'
-import { aggregateCrmInbox } from '../../inbox/route'
-import { aggregateLeads } from '../route'
 import { gateFeatureForResponse } from '@/lib/billing-http'
-
-const ExportQuerySchema = z.object({
-  type: z.enum(['email', 'social']).default('email'),
-})
+import { ExportQuerySchema } from '@/lib/schemas/crm'
 
 function csvCell(value: unknown): string {
   const text = value == null ? '' : String(value)
@@ -42,34 +35,27 @@ export async function GET(
       return NextResponse.json({ error: input.error.flatten() }, { status: 400 })
     }
 
-    let csv: string
-    if (input.data.type === 'social') {
-      const assets = await listMarketingAssetsByVenture(id, session.userId)
-      const leads = aggregateLeads(aggregateCrmInbox(assets))
-      csv = [
-        csvRow(['handle', 'source', 'interactions', 'last_touch', 'last_text', 'last_permalink']),
-        ...leads.map((lead) => csvRow([
-          lead.identity,
-          lead.source,
-          lead.count,
-          lead.lastTimestamp,
-          lead.lastText,
-          lead.lastPermalink,
-        ])),
-      ].join('\n')
-    } else {
-      const leads = await getLeadsForVenture(id)
-      csv = [
-        csvRow(['name', 'email', 'source', 'status', 'captured_at']),
-        ...leads.map((lead) => csvRow([
-          lead.name,
-          lead.email,
-          lead.source,
-          lead.status,
-          lead.created_at,
-        ])),
-      ].join('\n')
-    }
+    // Social and email leads share one table now (035_crm_leads_unify_social.sql)
+    // — `type` filters the export rather than selecting a different source.
+    const allLeads = await getLeadsForVenture(id)
+    const leads = input.data.type === 'social'
+      ? allLeads.filter((lead) => lead.external_identity)
+      : allLeads.filter((lead) => lead.email)
+
+    const csv = [
+      csvRow(['name', 'email', 'handle', 'company', 'phone', 'source', 'status', 'tags', 'captured_at']),
+      ...leads.map((lead) => csvRow([
+        lead.name,
+        lead.email,
+        lead.external_identity,
+        lead.company,
+        lead.phone,
+        lead.source,
+        lead.status,
+        (lead.tags ?? []).join('; '),
+        lead.created_at,
+      ])),
+    ].join('\n')
 
     return new NextResponse(csv, {
       headers: {
