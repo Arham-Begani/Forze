@@ -840,10 +840,70 @@ export async function updateInvestorKit(
 export interface Lead {
   id: string
   venture_id: string
-  email: string
+  // Nullable since 035_crm_leads_unify_social.sql: a lead is reachable by
+  // email OR external_identity (e.g. an Instagram commenter with no email).
+  email: string | null
   name: string | null
   status: 'new' | 'contacted' | 'qualified' | 'lost' | 'won'
   source: string
+  external_identity: string | null
+  company: string | null
+  phone: string | null
+  tags: string[]
+  owner_id: string | null
+  created_at: string
+}
+
+export interface LeadActivity {
+  id: string
+  lead_id: string
+  venture_id: string
+  actor_id: string | null
+  type: 'note' | 'status_change' | 'field_change' | 'email_sent' | 'deal_stage_change'
+  body: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface PipelineStage {
+  id: string
+  venture_id: string
+  name: string
+  position: number
+  is_won: boolean
+  is_lost: boolean
+  color: string | null
+  created_at: string
+}
+
+export interface Deal {
+  id: string
+  venture_id: string
+  lead_id: string
+  stage_id: string
+  title: string
+  value: number | null
+  probability: number | null
+  expected_close_date: string | null
+  lost_reason: string | null
+  owner_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface OutreachReply {
+  id: string
+  outreach_message_id: string
+  lead_id: string
+  gmail_message_id: string
+  gmail_thread_id: string
+  from_email: string | null
+  subject: string | null
+  body: string | null
+  reply_type: string | null
+  sentiment_score: number | null
+  summary: string | null
+  received_at: string | null
   created_at: string
 }
 
@@ -871,6 +931,8 @@ export interface OutreachMessage {
   lead_id: string
   google_message_id: string
   google_thread_id: string
+  subject: string | null
+  body: string | null
   sent_at: string
 }
 
@@ -934,6 +996,111 @@ export async function deleteLead(leadId: string): Promise<void> {
     .eq('id', leadId)
 
   if (error) throw new Error(`deleteLead failed: ${error.message}`)
+}
+
+export async function updateLead(
+  leadId: string,
+  fields: Partial<Pick<Lead, 'company' | 'phone' | 'tags' | 'owner_id' | 'name'>>
+): Promise<Lead> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('leads')
+    .update(fields)
+    .eq('id', leadId)
+    .select()
+    .single()
+
+  if (error) throw new Error(`updateLead failed: ${error.message}`)
+  return data
+}
+
+export async function bulkUpdateLeadStatus(leadIds: string[], status: Lead['status']): Promise<void> {
+  if (leadIds.length === 0) return
+  const db = await createDb()
+  const { error } = await db
+    .from('leads')
+    .update({ status })
+    .in('id', leadIds)
+
+  if (error) throw new Error(`bulkUpdateLeadStatus failed: ${error.message}`)
+}
+
+export async function bulkDeleteLeads(leadIds: string[]): Promise<void> {
+  if (leadIds.length === 0) return
+  const db = await createDb()
+  const { error } = await db
+    .from('leads')
+    .delete()
+    .in('id', leadIds)
+
+  if (error) throw new Error(`bulkDeleteLeads failed: ${error.message}`)
+}
+
+// Idempotent upsert for social commenters (e.g. Instagram) materialized into
+// `leads` (see 035_crm_leads_unify_social.sql) — one row per
+// (venture_id, external_identity), keyed by a "source:handle" identity string.
+export async function upsertSocialLead(
+  ventureId: string,
+  externalIdentity: string,
+  fields: { name?: string | null; source: string }
+): Promise<Lead> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('leads')
+      .upsert(
+        {
+          venture_id: ventureId,
+          external_identity: externalIdentity,
+          name: fields.name ?? null,
+          source: fields.source,
+        },
+        { onConflict: 'venture_id,external_identity', ignoreDuplicates: false }
+      )
+      .select()
+      .single()
+
+    if (error) throw new Error(`upsertSocialLead failed: ${error.message}`)
+    return data
+  })
+}
+
+export async function createLeadActivity(input: {
+  leadId: string
+  ventureId: string
+  actorId?: string | null
+  type: LeadActivity['type']
+  body?: string | null
+  metadata?: Record<string, unknown>
+}): Promise<LeadActivity> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('lead_activity')
+    .insert({
+      lead_id: input.leadId,
+      venture_id: input.ventureId,
+      actor_id: input.actorId ?? null,
+      type: input.type,
+      body: input.body ?? null,
+      metadata: input.metadata ?? {},
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(`createLeadActivity failed: ${error.message}`)
+  return data
+}
+
+export async function getLeadActivityForLead(leadId: string): Promise<LeadActivity[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('lead_activity')
+    .select('*')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getLeadActivityForLead failed: ${error.message}`)
+  return data ?? []
 }
 
 export async function createAnalyticsEvent(ventureId: string, eventType: string, metadata: Record<string, unknown> = {}): Promise<AnalyticsEvent> {
@@ -1008,6 +1175,11 @@ export async function createOutreachMessage(input: {
   leadId: string
   googleMessageId: string
   googleThreadId: string
+  // Persisted so analyzeReply() has the original message to compare a reply
+  // against (see 039_crm_outreach_replies.sql) — outreach_messages previously
+  // stored only IDs/timestamps.
+  subject?: string
+  body?: string
 }): Promise<OutreachMessage> {
   const db = await createDb()
   const { data, error } = await db
@@ -1017,6 +1189,8 @@ export async function createOutreachMessage(input: {
       lead_id: input.leadId,
       google_message_id: input.googleMessageId,
       google_thread_id: input.googleThreadId,
+      subject: input.subject ?? null,
+      body: input.body ?? null,
     })
     .select()
     .single()
@@ -1063,6 +1237,223 @@ export async function getOutreachMessagesForVenture(ventureId: string): Promise<
     ...message,
     lead: leadById.get(message.lead_id) ?? null,
   }))
+}
+
+// ─── Pipeline: stages & deals ──────────────────────────────────────────────────
+
+const DEFAULT_STAGE_TEMPLATE: Array<Pick<PipelineStage, 'name' | 'is_won' | 'is_lost'>> = [
+  { name: 'New', is_won: false, is_lost: false },
+  { name: 'Contacted', is_won: false, is_lost: false },
+  { name: 'Qualified', is_won: false, is_lost: false },
+  { name: 'Proposal', is_won: false, is_lost: false },
+  { name: 'Won', is_won: true, is_lost: false },
+  { name: 'Lost', is_won: false, is_lost: true },
+]
+
+export async function getPipelineStagesForVenture(ventureId: string): Promise<PipelineStage[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('pipeline_stages')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('position', { ascending: true })
+
+  if (error) throw new Error(`getPipelineStagesForVenture failed: ${error.message}`)
+  return data ?? []
+}
+
+// Lazily seeds a venture's default stage set on first Pipeline-tab visit
+// rather than at venture-creation time, so ventures that never open the tab
+// don't carry unused rows.
+export async function ensurePipelineStagesForVenture(ventureId: string): Promise<PipelineStage[]> {
+  const existing = await getPipelineStagesForVenture(ventureId)
+  if (existing.length > 0) return existing
+
+  const db = await createDb()
+  const { data, error } = await db
+    .from('pipeline_stages')
+    .insert(
+      DEFAULT_STAGE_TEMPLATE.map((stage, index) => ({
+        venture_id: ventureId,
+        name: stage.name,
+        position: index,
+        is_won: stage.is_won,
+        is_lost: stage.is_lost,
+      }))
+    )
+    .select()
+
+  if (error) throw new Error(`ensurePipelineStagesForVenture failed: ${error.message}`)
+  return (data ?? []).sort((a, b) => a.position - b.position)
+}
+
+export async function createPipelineStage(
+  ventureId: string,
+  input: { name: string; position: number; color?: string | null }
+): Promise<PipelineStage> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('pipeline_stages')
+    .insert({ venture_id: ventureId, name: input.name, position: input.position, color: input.color ?? null })
+    .select()
+    .single()
+
+  if (error) throw new Error(`createPipelineStage failed: ${error.message}`)
+  return data
+}
+
+export async function updatePipelineStage(
+  stageId: string,
+  fields: Partial<Pick<PipelineStage, 'name' | 'position' | 'color' | 'is_won' | 'is_lost'>>
+): Promise<PipelineStage> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('pipeline_stages')
+    .update(fields)
+    .eq('id', stageId)
+    .select()
+    .single()
+
+  if (error) throw new Error(`updatePipelineStage failed: ${error.message}`)
+  return data
+}
+
+export async function deletePipelineStage(stageId: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db.from('pipeline_stages').delete().eq('id', stageId)
+  if (error) throw new Error(`deletePipelineStage failed: ${error.message}`)
+}
+
+export async function getDealsForVenture(ventureId: string): Promise<Deal[]> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('deals')
+    .select('*')
+    .eq('venture_id', ventureId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`getDealsForVenture failed: ${error.message}`)
+  return data ?? []
+}
+
+export async function getDealById(dealId: string): Promise<Deal | null> {
+  const db = await createDb()
+  const { data, error } = await db.from('deals').select('*').eq('id', dealId).single()
+  if (error) return null
+  return data
+}
+
+// The only path a deal is created from — no auto-backfill from existing
+// leads on migration, so every deal traces back to an explicit user action.
+export async function createDeal(
+  ventureId: string,
+  input: { leadId: string; stageId: string; title: string; value?: number | null }
+): Promise<Deal> {
+  return withRetry(async () => {
+    const db = await createDb()
+    const { data, error } = await db
+      .from('deals')
+      .insert({
+        venture_id: ventureId,
+        lead_id: input.leadId,
+        stage_id: input.stageId,
+        title: input.title,
+        value: input.value ?? null,
+      })
+      .select()
+      .single()
+
+    if (error) throw new Error(`createDeal failed: ${error.message}`)
+    return data
+  })
+}
+
+export async function updateDeal(
+  dealId: string,
+  fields: Partial<Pick<Deal, 'stage_id' | 'title' | 'value' | 'probability' | 'expected_close_date' | 'lost_reason' | 'owner_id'>>
+): Promise<Deal> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('deals')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', dealId)
+    .select()
+    .single()
+
+  if (error) throw new Error(`updateDeal failed: ${error.message}`)
+  return data
+}
+
+export async function deleteDeal(dealId: string): Promise<void> {
+  const db = await createDb()
+  const { error } = await db.from('deals').delete().eq('id', dealId)
+  if (error) throw new Error(`deleteDeal failed: ${error.message}`)
+}
+
+// ─── Outreach replies (persisted, AI-classified) ───────────────────────────────
+
+export async function createOutreachReply(input: {
+  outreachMessageId: string
+  leadId: string
+  gmailMessageId: string
+  gmailThreadId: string
+  fromEmail?: string | null
+  subject?: string | null
+  body?: string | null
+  receivedAt?: string | null
+  replyType?: string | null
+  sentimentScore?: number | null
+  summary?: string | null
+}): Promise<OutreachReply> {
+  const db = await createDb()
+  const { data, error } = await db
+    .from('outreach_replies')
+    .upsert(
+      {
+        outreach_message_id: input.outreachMessageId,
+        lead_id: input.leadId,
+        gmail_message_id: input.gmailMessageId,
+        gmail_thread_id: input.gmailThreadId,
+        from_email: input.fromEmail ?? null,
+        subject: input.subject ?? null,
+        body: input.body ?? null,
+        received_at: input.receivedAt ?? null,
+        reply_type: input.replyType ?? null,
+        sentiment_score: input.sentimentScore ?? null,
+        summary: input.summary ?? null,
+      },
+      { onConflict: 'gmail_message_id', ignoreDuplicates: false }
+    )
+    .select()
+    .single()
+
+  if (error) throw new Error(`createOutreachReply failed: ${error.message}`)
+  return data
+}
+
+export async function getOutreachRepliesForVenture(ventureId: string): Promise<OutreachReply[]> {
+  const campaigns = await getOutreachCampaignsForVenture(ventureId)
+  const campaignIds = campaigns.map((campaign) => campaign.id)
+  if (campaignIds.length === 0) return []
+
+  const db = await createDb()
+  const { data: messages, error: messagesError } = await db
+    .from('outreach_messages')
+    .select('id')
+    .in('campaign_id', campaignIds)
+
+  if (messagesError) throw new Error(`getOutreachRepliesForVenture failed: ${messagesError.message}`)
+  const messageIds = (messages ?? []).map((m: { id: string }) => m.id)
+  if (messageIds.length === 0) return []
+
+  const { data, error } = await db
+    .from('outreach_replies')
+    .select('*')
+    .in('outreach_message_id', messageIds)
+    .order('received_at', { ascending: false })
+
+  if (error) throw new Error(`getOutreachRepliesForVenture failed: ${error.message}`)
+  return data ?? []
 }
 
 // ─── Testimonials & Platform Feedback ────────────────────────────────────────
