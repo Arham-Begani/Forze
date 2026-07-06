@@ -247,6 +247,31 @@ async function generateUniqueSubdomain(name: string): Promise<string | null> {
   return `${base.slice(0, 24)}-${Date.now().toString(36)}`
 }
 
+// Seed the owner's venture_members row for a freshly created venture. Uses the
+// admin (service-role) client because venture_members has RLS enabled with no
+// INSERT policy, so the cookie-scoped session client cannot write its own
+// membership row. Idempotent (UNIQUE(venture_id,user_id)) and non-fatal: if the
+// table is missing or the write fails, getVentureAccess() still falls back to
+// ventures.user_id ownership, so the owner is never locked out. This closes the
+// gap that previously left every post-migration-024 venture without an owner
+// membership row (which surfaced as "Not found" on every module run).
+async function ensureVentureOwnerMembership(ventureId: string, userId: string): Promise<void> {
+  try {
+    const admin = createAdminClient()
+    const { error } = await admin
+      .from('venture_members')
+      .upsert(
+        { venture_id: ventureId, user_id: userId, role: 'owner' },
+        { onConflict: 'venture_id,user_id', ignoreDuplicates: true },
+      )
+    if (error) {
+      console.warn('[ensureVentureOwnerMembership] could not seed owner row:', error.message)
+    }
+  } catch (err) {
+    console.warn('[ensureVentureOwnerMembership] admin client unavailable:', err instanceof Error ? err.message : err)
+  }
+}
+
 export async function createVenture(userId: string, name: string, projectId?: string): Promise<Venture> {
   return withRetry(async () => {
     const db = await createDb()
@@ -282,10 +307,12 @@ export async function createVenture(userId: string, name: string, projectId?: st
       delete insertData.subdomain
       const retry = await db.from('ventures').insert(insertData).select().single()
       if (retry.error) throw new Error(`createVenture failed: ${retry.error.message}`)
+      await ensureVentureOwnerMembership(retry.data.id, userId)
       return retry.data
     }
 
     if (error) throw new Error(`createVenture failed: ${error.message}`)
+    await ensureVentureOwnerMembership(data.id, userId)
     return data
   })
 }
@@ -374,20 +401,26 @@ export async function getVentureAccess(ventureId: string, userId: string): Promi
     .select('role')
     .eq('venture_id', ventureId)
     .eq('user_id', userId)
-    .single()
+    .maybeSingle()
 
   if (data && !error) return data.role as 'owner' | 'admin' | 'editor' | 'viewer'
 
-  // Legacy fallback: if venture_members table doesn't exist (migration 024
-  // not applied), treat the venture's user_id as the owner.
-  if (error && isMissingRelationError(error)) {
-    const { data: legacy } = await db
-      .from('ventures')
-      .select('user_id')
-      .eq('id', ventureId)
-      .single()
-    if (legacy && legacy.user_id === userId) return 'owner'
-  }
+  // Owner fallback via ventures.user_id. This runs whenever the membership
+  // lookup did NOT resolve a role — because the table is missing (migration
+  // 024 not applied), the query errored, OR (the common case) no
+  // venture_members row was ever written for this owner. The 024 backfill only
+  // seeded ventures that existed when it ran, and createVenture historically
+  // never inserted an owner row, so any venture created afterward had no
+  // membership row. Without this fallback getVenture() returns null for the
+  // true owner and EVERY module run dies with a bare "Not found". Access stays
+  // owner-scoped: 'owner' is granted only when the ventures row's user_id
+  // matches the caller (a security check, not just a convenience).
+  const { data: legacy } = await db
+    .from('ventures')
+    .select('user_id')
+    .eq('id', ventureId)
+    .maybeSingle()
+  if (legacy && legacy.user_id === userId) return 'owner'
 
   return null
 }
