@@ -35,6 +35,78 @@ async function extractTextFromFile(file: File): Promise<string> {
   return await file.text() // fallback
 }
 
+// Instant, no-network project name derived from the idea text. Venture creation
+// must feel immediate, so we never block on the AI namer on the critical path —
+// this is used right away and the AI refines it in the background (see
+// handleSubmit). Falls back to "New Venture" for sparse input.
+function deriveNameFromIdea(idea: string): string {
+  const stop = new Set([
+    'the', 'a', 'an', 'and', 'for', 'to', 'of', 'that', 'this', 'with', 'app', 'apps',
+    'application', 'platform', 'tool', 'my', 'our', 'is', 'it', 'on', 'in', 'build',
+    'building', 'create', 'creating', 'make', 'making', 'startup', 'idea', 'want',
+    'need', 'using', 'via', 'by', 'into', 'from', 'their', 'your',
+  ])
+  const words = idea
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stop.has(w.toLowerCase()))
+    .slice(0, 3)
+  if (words.length === 0) return 'New Venture'
+  return words
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+    .slice(0, 40)
+}
+
+// Background, best-effort: ask the AI for a nicer project name and persist it if
+// it differs. Aborted after 20s so it can never hang; on any failure the instant
+// name simply stays. This is fire-and-forget — the user is already in their
+// venture by the time this runs.
+async function refineProjectNameInBackground(projectId: string, idea: string, currentName: string): Promise<void> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 20000)
+    const nameRes = await fetch('/api/generate-name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+    if (!nameRes.ok) return
+    const nameData = await nameRes.json().catch(() => ({}))
+    const aiName = typeof nameData?.name === 'string' ? nameData.name.trim() : ''
+    if (!aiName || aiName === currentName) return
+    await fetch(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: aiName }),
+    })
+    // Sidebar re-reads projects and picks up the refined name.
+    window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
+  } catch {
+    // best-effort — the instant name stays
+  }
+}
+
+// Background, best-effort: record the user's first idea if they don't have one.
+async function saveFirstIdeaInBackground(idea: string): Promise<void> {
+  try {
+    const ideaRes = await fetch('/api/user/idea')
+    if (!ideaRes.ok) return
+    const ideaData = await ideaRes.json().catch(() => ({}))
+    if (!ideaData?.idea) {
+      await fetch('/api/user/idea', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea }),
+      })
+    }
+  } catch {
+    // non-critical
+  }
+}
+
 export default function NewProjectPage() {
   const router = useRouter()
 
@@ -115,29 +187,18 @@ export default function NewProjectPage() {
     setError('')
 
     try {
-      // Step 1: Generate project name from idea
-      setStatus('Naming your project...')
-      let projectName = 'New Project'
-      try {
-        const nameRes = await fetch('/api/generate-name', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idea }),
-        })
-        if (nameRes.ok) {
-          const nameData = await nameRes.json()
-          if (nameData.name) projectName = nameData.name
-        }
-      } catch {
-        // Fallback name if generation fails
-      }
+      // Instant local name — NO AI on the critical path. The old flow blocked
+      // venture creation on a Gemini call (which, when the model was slow/hung,
+      // took minutes). We name it locally now and let the AI refine it in the
+      // background afterward, so the venture appears in well under a second.
+      const instantName = deriveNameFromIdea(idea)
 
-      // Step 2: Create the project
+      // Step 1: Create the project
       setStatus('Creating project...')
       const projRes = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: projectName }),
+        body: JSON.stringify({ name: instantName }),
       })
       if (!projRes.ok) {
         const err = await projRes.json().catch(() => ({}))
@@ -145,8 +206,10 @@ export default function NewProjectPage() {
       }
       const project = await projRes.json()
 
-      // Step 3: Save the global idea + source documents
-      setStatus('Saving your vision...')
+      // Step 2: Save the idea (+docs) AND create the initial venture in parallel —
+      // both only need project.id and are independent of each other, so there's no
+      // reason to await them one after the other.
+      setStatus('Setting up your venture...')
       const patchBody: Record<string, unknown> = { global_idea: idea }
       if (docs.length > 0) {
         patchBody.source_documents = docs.map(d => ({
@@ -155,51 +218,33 @@ export default function NewProjectPage() {
           type: d.type,
         }))
       }
-      await fetch(`/api/projects/${project.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patchBody),
-      })
-
-      // Step 4: Create initial venture
-      setStatus('Initializing venture...')
-      try {
-        const ventureRes = await fetch('/api/ventures', {
+      const [, ventureRes] = await Promise.all([
+        fetch(`/api/projects/${project.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patchBody),
+        }),
+        fetch('/api/ventures', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: `${projectName} - v1`, projectId: project.id }),
-        })
-        if (ventureRes.ok) {
-          const newVenture = await ventureRes.json()
-          window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
-        }
-      } catch {
-        // Non-critical — venture can be created later
-      }
+          body: JSON.stringify({ name: `${instantName} - v1`, projectId: project.id }),
+        }).catch(() => null),
+      ])
 
-      // Notify sidebar to refresh project list
+      if (ventureRes && ventureRes.ok) {
+        const newVenture = await ventureRes.json().catch(() => null)
+        if (newVenture) window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
+      }
       window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
 
-      // Step 5: Also save as user idea if first time
-      try {
-        const ideaRes = await fetch('/api/user/idea')
-        if (ideaRes.ok) {
-          const ideaData = await ideaRes.json()
-          if (!ideaData?.idea) {
-            await fetch('/api/user/idea', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ idea }),
-            })
-          }
-        }
-      } catch {
-        // Non-critical
-      }
-
-      // Navigate to the new project
+      // Navigate immediately — the user is in their venture now.
       setStatus('Launching...')
       router.push(`/dashboard/project/${project.id}`)
+
+      // ── Background, non-blocking: AI naming + first-idea save. Their latency no
+      // longer affects how fast the venture is created. ──
+      void refineProjectNameInBackground(project.id, idea, instantName)
+      void saveFirstIdeaInBackground(idea)
 
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.')
