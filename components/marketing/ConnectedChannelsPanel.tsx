@@ -1350,6 +1350,22 @@ export function ConnectedChannelsPanel({
     }
   }, [])
 
+  // Gmail returns here after the full-page OAuth redirect (?gmail_connected=1 /
+  // ?gmail_error=...). Refresh the status and strip the params so a reload
+  // doesn't re-trigger anything.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('gmail_connected') || params.get('gmail_error')) {
+      void refreshGmail()
+      params.delete('gmail_connected')
+      params.delete('gmail_error')
+      params.delete('email')
+      const nextQuery = params.toString()
+      window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function handleConnect(provider: SocialProvider) {
     setBusyProvider(provider)
     setError(null)
@@ -1399,23 +1415,22 @@ export function ConnectedChannelsPanel({
     setGmailBusy(true)
     setError(null)
     try {
-      const response = await fetch('/api/integrations/gmail', { method: 'POST' })
+      const response = await fetch('/api/integrations/gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnTo: window.location.pathname }),
+      })
       const data = (await response.json().catch(() => ({}))) as { authUrl?: string; error?: string }
       if (!response.ok || !data.authUrl) {
         throw new Error(data.error || 'Failed to start Gmail connect')
       }
-      const popup = window.open(data.authUrl, 'gmail-oauth', 'width=500,height=700')
-      if (!popup) {
-        window.location.href = data.authUrl
-        return
-      }
-      const poll = window.setInterval(async () => {
-        if (popup.closed) {
-          window.clearInterval(poll)
-          await refreshGmail()
-          setGmailBusy(false)
-        }
-      }, 500)
+      // Full-page redirect, NOT a popup. Google's OAuth pages send
+      // Cross-Origin-Opener-Policy: same-origin, which severs the opener→popup
+      // handle so `popup.closed` can't be read ("COOP would block the
+      // window.closed call") and completion is never detected — the button hangs
+      // on "Connecting…" forever. The callback returns the user to this exact
+      // page (returnTo) with ?gmail_connected=1, which refreshGmail() picks up.
+      window.location.href = data.authUrl
     } catch (connectError) {
       setError(connectError instanceof Error ? connectError.message : 'Failed to connect Gmail')
       setGmailBusy(false)
