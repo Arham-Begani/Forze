@@ -28,6 +28,24 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
     serverExternalPackages: ["jspdf", "fflate"],
+    // Strip console.* from production builds (keep error/warn for real diagnostics).
+    // Removes leftover debug logging from both the client bundle and server runtime.
+    compiler: {
+        removeConsole:
+            process.env.NODE_ENV === "production"
+                ? { exclude: ["error", "warn"] }
+                : false,
+    },
+    // Tree-shake the heavy UI libraries so only the icons/components actually used
+    // ship to the client — meaningfully smaller dashboard bundles = faster loads.
+    experimental: {
+        optimizePackageImports: [
+            "framer-motion",
+            "lucide-react",
+            "recharts",
+            "react-markdown",
+        ],
+    },
     async headers() {
         return [
             {
