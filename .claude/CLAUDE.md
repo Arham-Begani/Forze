@@ -29,6 +29,32 @@ Read PRD.md for the full product vision before starting any task.
 
 ---
 
+## Robustness & No-Regression (Non-Negotiable)
+
+The #1 rule: **shipping a change to one feature must never break another.** Every edit is made as if the whole app is in production with live users. Follow these:
+
+### Isolate failures — one feature down must never take the app down
+- Every feature surface (module page, panel, tab, flow) must **fail independently**. A failed fetch, a null field, or a thrown agent error shows an error/empty state for *that* feature — it never blanks the page or unmounts siblings.
+- There is a route error boundary at `app/dashboard/error.tsx`. Do not delete it. Add finer-grained boundaries around risky new feature surfaces rather than letting errors bubble.
+- **Guard every external result:** wrap every `fetch().json()` in `.catch(() => fallback)`; treat every API/agent response as possibly `null`/malformed (`data?.field ?? default`); Zod-validate agent output before use. Never assume a response has the shape you expect.
+- Never let a component throw during render on missing data — render a fallback.
+
+### Additive over destructive — never break existing consumers
+- Do **not** rename or remove a shared type field, API response key, `venture.context` key, or DB column without updating **every** consumer in the *same* change. Prefer **adding** new fields over changing existing ones.
+- Migrations are **additive and idempotent** (`ADD COLUMN IF NOT EXISTS`, guarded `ALTER TYPE`, `INSERT ... WHERE NOT EXISTS`). Never assume a migration was applied to the live DB — keep a runtime fallback (see `getVentureAccess`'s owner fallback as the reference pattern).
+- Old ventures' legacy context keys must stay readable forever. Backward compatibility is mandatory.
+
+### High-blast-radius files — change only with explicit reason, then re-verify everything
+- `lib/auth.ts`, `lib/supabase/*`, `lib/queries.ts`, `lib/billing*.ts`, `proxy.ts`, `app/dashboard/layout.tsx` run on nearly every request/page. A subtle change here breaks *all* features at once. Touch them only when the task truly requires it, keep the change minimal, and re-verify a full build + an unrelated feature afterward.
+- Keep expensive/blocking work (DB writes, extra auth round-trips) off the hot path of these shared chokepoints.
+
+### Verify before "done" — every task
+- `npx tsc --noEmit` **and** `npm run build` must both exit 0. No exceptions.
+- Then exercise the exact flow you changed **and** smoke-test one unrelated feature to confirm no regression. State what you verified in PROGRESS.md.
+- If you can't runtime-test a risky change (auth/session/data-shape), say so and prefer the smallest, most reversible version.
+
+---
+
 ## Stack (Never Deviate)
 - Framework: Next.js 15 with App Router
 - Language: TypeScript (strict mode)
