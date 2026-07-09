@@ -274,32 +274,19 @@ export function CreateCampaignFlow({
     setConnectingGmail(true)
     setError(null)
     try {
-      const res = await fetch('/api/integrations/gmail', { method: 'POST' })
+      const res = await fetch('/api/integrations/gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnTo: window.location.pathname }),
+      })
       if (!res.ok) throw new Error('Failed to start Gmail connect')
       const { authUrl } = await res.json() as { authUrl: string }
-      // Popup flow — after consent the callback redirects and closes itself.
-      // When the window closes (or focus returns), re-fetch status.
-      const popup = window.open(authUrl, 'gmail-oauth', 'width=500,height=700')
-      if (!popup) { window.location.href = authUrl; return }
-      const poll = window.setInterval(async () => {
-        if (popup.closed) {
-          window.clearInterval(poll)
-          setConnectingGmail(false)
-          try {
-            const st = await fetch('/api/integrations/gmail')
-            if (st.ok) {
-              const d = await st.json() as GmailUI
-              setGmail({
-                connected: Boolean(d.connected),
-                email: d.email ?? null,
-                canSend: Boolean(d.canSend),
-                state: d.state ?? (d.connected ? 'active' : 'not_connected'),
-                errorMessage: d.errorMessage ?? null,
-              })
-            }
-          } catch { /* non-fatal */ }
-        }
-      }, 500)
+      // Full-page redirect, NOT a popup. Google's OAuth pages set
+      // Cross-Origin-Opener-Policy: same-origin, which severs the popup handle so
+      // `popup.closed` can't be read ("COOP would block the window.closed call")
+      // and the flow hangs. The callback returns the user here (returnTo) and the
+      // on-mount status fetch reflects the new connection.
+      window.location.href = authUrl
     } catch (e) {
       setConnectingGmail(false)
       setError(e instanceof Error ? e.message : 'Failed to connect Gmail')
