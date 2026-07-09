@@ -191,21 +191,41 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 
   // ─── Data loading ─────────────────────────────────────────────────────────
   useEffect(() => {
+    // Legacy path: the three original endpoints in parallel. Kept as a fallback
+    // so a failure of /api/bootstrap never leaves the dashboard blank.
+    async function loadIndividually() {
+      const [sessRes, projRes, ventRes] = await Promise.all([
+        fetch('/api/auth/session'),
+        fetch('/api/projects'),
+        fetch('/api/ventures'),
+      ])
+      if (sessRes.ok) setSession(await sessRes.json())
+      if (projRes.ok) setProjects(await projRes.json())
+      if (ventRes.ok) {
+        const data = await ventRes.json()
+        setVentures(data.map(normalizeVentureItem))
+      }
+    }
+
     async function load() {
       try {
-        const [sessRes, projRes, ventRes] = await Promise.all([
-          fetch('/api/auth/session'),
-          fetch('/api/projects'),
-          fetch('/api/ventures'),
-        ])
-        if (sessRes.ok) setSession(await sessRes.json())
-        if (projRes.ok) setProjects(await projRes.json())
-        if (ventRes.ok) {
-          const data = await ventRes.json()
-          setVentures(data.map(normalizeVentureItem))
+        // One consolidated request: one auth round-trip instead of three, and no
+        // concurrent refresh-token race. Falls back to the individual endpoints.
+        const res = await fetch('/api/bootstrap')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.session) setSession(data.session)
+          if (Array.isArray(data.projects)) setProjects(data.projects)
+          if (Array.isArray(data.ventures)) setVentures(data.ventures.map(normalizeVentureItem))
+          return
         }
+        await loadIndividually()
       } catch (err) {
-        console.error('Failed to load dashboard layout data:', err)
+        try {
+          await loadIndividually()
+        } catch {
+          console.error('Failed to load dashboard layout data:', err)
+        }
       } finally {
         setLoading(false)
       }
