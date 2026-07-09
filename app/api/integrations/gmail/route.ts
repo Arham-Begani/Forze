@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await requireAuth()
-    const body = await req.json().catch(() => ({})) as { action?: string }
+    const body = await req.json().catch(() => ({})) as { action?: string; returnTo?: string }
 
     if (body.action === 'disconnect') {
       await disconnectGmail(session.userId)
@@ -27,8 +27,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // Signed state ties the callback to this specific user/session and expires
     // in 10 minutes — prevents OAuth CSRF where an attacker's consent code gets
-    // exchanged for the victim's stored token.
-    const state = signOAuthState(session.userId)
+    // exchanged for the victim's stored token. returnTo (sanitized to a same-
+    // origin path) rides along so the callback can send the user back to the
+    // exact page they started the connect from.
+    const state = signOAuthState(session.userId, body.returnTo)
     const authUrl = getGmailAuthUrl(state)
     return NextResponse.json({ authUrl })
   } catch (e) {
