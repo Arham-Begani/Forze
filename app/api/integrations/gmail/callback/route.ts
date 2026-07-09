@@ -1,7 +1,7 @@
 // GET /api/integrations/gmail/callback — OAuth callback
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { handleGmailCallback, verifyOAuthState } from '@/lib/gmail-oauth'
+import { handleGmailCallback, verifyOAuthState, getReturnToFromState } from '@/lib/gmail-oauth'
 import { recordCampaignEvent } from '@/lib/queries/campaign-queries'
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -10,7 +10,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const state = searchParams.get('state')
   const error = searchParams.get('error')
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  // Trim stray whitespace/trailing slash so post-auth redirects are well-formed
+  // even if NEXT_PUBLIC_APP_URL was set with an accidental trailing space.
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').trim().replace(/\/+$/, '')
 
   if (error || !code) {
     // Google returned an error param or omitted the code — log it so the
@@ -50,8 +52,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       eventType: 'gmail_connected',
       metadata: { email: result.emailAddress },
     })
+    // Return the user to the page they started from (sanitized same-origin path),
+    // falling back to the dashboard home.
+    const returnTo = getReturnToFromState(state) ?? '/dashboard'
+    const sep = returnTo.includes('?') ? '&' : '?'
     return NextResponse.redirect(
-      `${appUrl}/dashboard?gmail_connected=1&email=${encodeURIComponent(result.emailAddress)}`
+      `${appUrl}${returnTo}${sep}gmail_connected=1&email=${encodeURIComponent(result.emailAddress)}`
     )
   } catch (err) {
     console.error('[gmail/callback] error:', err)
