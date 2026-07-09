@@ -17,17 +17,44 @@ interface OAuthStatePayload {
   userId: string
   nonce: string
   exp: number
+  returnTo?: string
 }
 
-export function signOAuthState(userId: string): string {
+// Only allow same-origin relative paths (a single leading "/", not "//" or "/\")
+// as returnTo. Because the value is echoed into the post-callback redirect, an
+// unsanitized returnTo would be an open-redirect vector. The state is encrypted
+// so this also can't be tampered with, but we validate on both ends anyway.
+function sanitizeReturnTo(returnTo: string | null | undefined): string | null {
+  if (!returnTo || typeof returnTo !== 'string') return null
+  if (!returnTo.startsWith('/')) return null
+  if (returnTo.startsWith('//') || returnTo.startsWith('/\\')) return null
+  return returnTo
+}
+
+export function signOAuthState(userId: string, returnTo?: string): string {
+  const safeReturnTo = sanitizeReturnTo(returnTo)
   const payload: OAuthStatePayload = {
     userId,
     nonce: randomBytes(12).toString('base64url'),
     exp: Math.floor(Date.now() / 1000) + STATE_TTL_SEC,
+    ...(safeReturnTo ? { returnTo: safeReturnTo } : {}),
   }
   const encoded = encryptSecret(JSON.stringify(payload))
   if (!encoded) throw new Error('Failed to sign OAuth state')
   return encoded
+}
+
+// Reads the sanitized same-origin returnTo path from an OAuth state string, or
+// null. Callers must still gate on verifyOAuthState() first — this only decodes.
+export function getReturnToFromState(state: string): string | null {
+  try {
+    const raw = decryptSecret(state)
+    if (!raw) return null
+    const payload = JSON.parse(raw) as OAuthStatePayload
+    return sanitizeReturnTo(payload.returnTo)
+  } catch {
+    return null
+  }
 }
 
 export function verifyOAuthState(state: string, expectedUserId: string): boolean {
@@ -64,7 +91,12 @@ function getGoogleClientSecret(): string {
 }
 
 function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  // Trim stray whitespace and any trailing slash so the redirect URI is always
+  // well-formed. A trailing space in NEXT_PUBLIC_APP_URL (e.g. "https://forze.in ")
+  // would otherwise produce "https://forze.in /api/..." — a malformed redirect_uri
+  // that Google rejects with "Error 400: invalid_request".
+  const raw = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  return raw.trim().replace(/\/+$/, '')
 }
 
 function getRedirectUri(): string {
