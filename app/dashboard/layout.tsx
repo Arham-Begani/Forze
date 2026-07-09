@@ -289,10 +289,8 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   useEffect(() => {
     const prev = prevVentureIdRef.current
     prevVentureIdRef.current = activeVentureId
-    console.log('[DEBUG blink effect]', { prev, activeVentureId, userCollapsed: userCollapsedRef.current })
     if (prev === null || prev === activeVentureId || !activeVentureId) return
     if (userCollapsedRef.current) return // don't fight a manually collapsed sidebar
-    console.log('[DEBUG blink effect] TRIGGERING BLINK')
     setSidebarCollapsed(true)
     const timer = setTimeout(() => setSidebarCollapsed(false), 260)
     return () => clearTimeout(timer)
@@ -364,7 +362,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
       <NavigationProgress />
 
       {/* Loading Screen */}
-      {!appReady && <LoadingScreen onComplete={handleLoadingComplete} minimumDuration={800} />}
+      {!appReady && <LoadingScreen onComplete={handleLoadingComplete} minimumDuration={200} />}
 
       <div className="flex h-[100dvh] overflow-hidden" style={{ opacity: appReady ? 1 : 0, transition: 'opacity 0.3s ease' }}>
 
