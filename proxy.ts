@@ -93,19 +93,34 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Refresh session — required for Server Components to stay in sync
+  // Refresh session — required for Server Components to stay in sync.
+  // getUser() returns an error (rather than throwing) when the stored refresh
+  // token is invalid/expired/rotated ("refresh_token_not_found"). In that case
+  // @supabase/ssr clears the stale auth cookies via the setAll callback above,
+  // writing the removal Set-Cookie headers onto supabaseResponse.
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
 
+  // Any redirect we return MUST carry supabaseResponse's cookies. Otherwise the
+  // session-clearing (or freshly-refreshed) cookies are dropped, the browser
+  // keeps a dead refresh token, and EVERY following request re-fails the refresh
+  // in an endless "refresh_token_not_found" loop. Copying the cookies lets an
+  // invalid session get cleanly cleared on the redirect to /signin.
+  function redirectTo(path: string): NextResponse {
+    const redirect = NextResponse.redirect(new URL(path, request.url))
+    supabaseResponse.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie))
+    return redirect
+  }
+
   // Protect all /dashboard routes
   if (pathname.startsWith('/dashboard') && !user) {
-    return NextResponse.redirect(new URL('/signin', request.url))
+    return redirectTo('/signin')
   }
 
   // Redirect logged-in users away from auth pages (but not auth callback/confirm routes)
   if ((pathname === '/signin' || pathname === '/signup') && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return redirectTo('/dashboard')
   }
 
   // Allow auth confirmation and callback routes to pass through without auth
