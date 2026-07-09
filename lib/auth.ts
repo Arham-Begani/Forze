@@ -1,4 +1,5 @@
 // lib/auth.ts
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
@@ -31,8 +32,20 @@ export function isAuthError(e: unknown): e is AuthError {
   return e instanceof AuthError || (e instanceof Error && e.name === 'AuthError')
 }
 
-// Get the current session — returns null if not authenticated
-export async function getSession(): Promise<Session | null> {
+// Users whose public.users row has already been ensured on this warm instance.
+// The row only needs to be written once ever (it exists so foreign keys resolve
+// when the handle_new_user signup trigger didn't fire). Tracking it in module
+// scope means the upsert runs at most once per user per warm serverless instance
+// instead of on EVERY request — cutting a blocking DB write off the critical path
+// of nearly every page load and API call. Worst case (a cold instance) it upserts
+// again, which is an idempotent no-op, so correctness is unchanged.
+const ensuredUserIds = new Set<string>()
+
+// Get the current session — returns null if not authenticated.
+// Wrapped in React cache() so repeated requireAuth()/getSession() calls within a
+// single server render (e.g. a layout + page + nested server components) share one
+// auth round-trip instead of each hitting Supabase Auth again.
+export const getSession = cache(async function getSession(): Promise<Session | null> {
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
 
@@ -44,20 +57,24 @@ export async function getSession(): Promise<Session | null> {
     name: user.user_metadata?.name ?? user.email ?? '',
   }
 
-  // Lazy sync: Ensure user exists in public.users to satisfy foreign key constraints.
-  // This helps when the database trigger (handle_new_user) didn't run for some reason.
-  try {
-    await supabase.from('users').upsert({
-      id: session.userId,
-      email: session.email,
-      name: session.name,
-    }, { onConflict: 'id' })
-  } catch (err) {
-    console.warn('[auth] Lazy user sync skipped/failed:', err)
+  // Lazy sync: ensure the user exists in public.users to satisfy foreign key
+  // constraints (safety net for a missed handle_new_user trigger). Skipped once
+  // known-present on this instance so it doesn't block every request.
+  if (!ensuredUserIds.has(session.userId)) {
+    try {
+      await supabase.from('users').upsert({
+        id: session.userId,
+        email: session.email,
+        name: session.name,
+      }, { onConflict: 'id' })
+      ensuredUserIds.add(session.userId)
+    } catch (err) {
+      console.warn('[auth] Lazy user sync skipped/failed:', err)
+    }
   }
 
   return session
-}
+})
 
 // Use in API routes — returns session or throws AuthError
 export async function requireAuth(): Promise<Session> {
