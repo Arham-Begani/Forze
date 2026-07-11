@@ -52,7 +52,10 @@ function isAuthorized(request: NextRequest): boolean {
     if (vercelCronSecret && timingSafeStringCompare(token, vercelCronSecret)) return true
   }
 
-  if (request.headers.get('x-vercel-cron')) return true
+  // Only trust x-vercel-cron when actually running on Vercel — its edge strips
+  // the header from inbound external requests, but a self-hosted/local deploy
+  // has no such stripping, so there the header is attacker-suppliable.
+  if (process.env.VERCEL && request.headers.get('x-vercel-cron')) return true
 
   return false
 }

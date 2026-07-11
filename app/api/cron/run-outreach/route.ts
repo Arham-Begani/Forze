@@ -35,7 +35,9 @@ function isAuthorized(request: NextRequest): boolean {
     if (vercelCronSecret && timingSafeStringCompare(token, vercelCronSecret)) return true
   }
 
-  if (request.headers.get('x-vercel-cron')) return true
+  // Only trust x-vercel-cron when actually running on Vercel — its edge strips
+  // the header from inbound external requests; elsewhere it is spoofable.
+  if (process.env.VERCEL && request.headers.get('x-vercel-cron')) return true
 
   return false
 }
