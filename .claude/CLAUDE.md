@@ -52,6 +52,7 @@ The #1 rule: **shipping a change to one feature must never break another.** Ever
 - `npx tsc --noEmit` **and** `npm run build` must both exit 0. No exceptions.
 - Then exercise the exact flow you changed **and** smoke-test one unrelated feature to confirm no regression. State what you verified in PROGRESS.md.
 - If you can't runtime-test a risky change (auth/session/data-shape), say so and prefer the smallest, most reversible version.
+- When a change touches any auth, billing, cron, webhook, or public endpoint, also confirm the Security invariants section below still holds for every path you edited (guards intact, rate limits intact, no secret newly reachable from the client).
 
 ---
 
@@ -141,6 +142,21 @@ Feasibility:      #7A5A8C
 - Rate limit: 10 agent runs per user per hour
 - Agent timeout: 60 seconds max per run
 - No prompt injection via user-controlled venture names
+
+### Security invariants — every new route/feature MUST follow these (and never weaken them in existing code)
+- **Auth on every non-public route:** every new API route calls `requireAuth()` (or `requireAdmin()` for admin surfaces) before any DB read/write. Venture-scoped routes must ALSO verify access via `getVenture(id, session.userId)` / `getVentureAccess()` — being logged in is not the same as owning the venture.
+- **Deliberately public routes** (landing-page feedback/track/leads, tracking pixels, blog reads) must have: strict input caps + Zod/manual validation, generic error messages (never echo raw DB/driver errors), and **IP-keyed rate limiting** via `enforceAnonRateLimit(clientIpKey(req), ...)` from `lib/rate-limit.ts`. A new public endpoint without a rate limit is a bug.
+- **Authed expensive endpoints** (AI runs, bulk sends, polling) use `enforceRateLimit()` or `assertHourlyRateLimit()` — never ship an unmetered AI/Gmail/expensive endpoint.
+- **`import 'server-only'` on every secret-holding module.** `lib/auth.ts`, `lib/db.ts`, `lib/queries.ts`, `lib/billing-queries.ts`, `lib/gemini.ts`, `lib/razorpay.ts`, `lib/rate-limit.ts`, `lib/marketing-crypto.ts`, `lib/gmail-oauth.ts`, `lib/supabase/admin.ts` all carry it — never remove it, and add it to any new module that touches `process.env` secrets or the service-role client.
+- **Cron/webhook endpoints:** shared-secret comparison must use the existing timing-safe compare pattern; `x-vercel-cron` is only trusted when `process.env.VERCEL` is set; Razorpay webhooks must keep signature verification + amount validation + idempotency (`hasProcessedWebhookEvent`).
+- **Service-role client (`createAdminClient`) is a scalpel:** only for webhooks, cron, and explicitly-public lookups that RLS would block. Never use it in a request path where the user's cookie-scoped client (`createDb()`) works — RLS is a safety net, don't route around it.
+- **Secrets:** server env vars only (`process.env.X`, no `NEXT_PUBLIC_` prefix for anything sensitive). Never hardcode keys, never log secrets or tokens, OAuth tokens are encrypted at rest via `lib/marketing-crypto.ts`.
+- **Security headers/CSP** live in `next.config.ts` — additions OK, never remove or loosen an existing directive without explicit instruction.
+
+### Security no-regression
+- Never delete or bypass an existing `requireAuth`/`requireAdmin`/`getVentureAccess`/rate-limit/signature-verification call to "fix" a bug or make a feature work. If a guard is in the way, the feature design is wrong — stop and say so.
+- New rate limiting on existing endpoints must **fail open** on infra errors (see `enforceRateLimit`) so a limiter outage never takes a feature down.
+- Migrations that back security features stay additive + idempotent, and the code path must work (fail open / fall back) even if the migration hasn't been applied to the live DB yet.
 
 ---
 
