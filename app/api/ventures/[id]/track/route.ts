@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAnalyticsEvent } from '@/lib/queries'
+import { clientIpKey, enforceAnonRateLimit, PUBLIC_TRACK_LIMIT, PUBLIC_WINDOW_SEC } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -32,6 +33,19 @@ export async function POST(
 
     if (!UUID_RE.test(ventureId)) {
       // Tracking is fire-and-forget — never fail the page over an invalid id
+      return NextResponse.json({ success: false, ignored: true }, { status: 200, headers: corsHeaders })
+    }
+
+    // Anonymous endpoint — cap per IP so bots can't bloat analytics rows.
+    // Tracking is fire-and-forget, so over-limit still returns 200 (ignored)
+    // rather than erroring the visitor's page.
+    const rl = await enforceAnonRateLimit(
+      clientIpKey(req),
+      `public-track:${ventureId}`,
+      PUBLIC_WINDOW_SEC,
+      PUBLIC_TRACK_LIMIT
+    )
+    if (!rl.allowed) {
       return NextResponse.json({ success: false, ignored: true }, { status: 200, headers: corsHeaders })
     }
 
