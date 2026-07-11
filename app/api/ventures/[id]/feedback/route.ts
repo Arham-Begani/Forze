@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createTestimonial } from '@/lib/queries'
+import { clientIpKey, enforceAnonRateLimit, PUBLIC_FEEDBACK_LIMIT, PUBLIC_WINDOW_SEC } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -22,6 +23,17 @@ export async function POST(
 
     if (!UUID_RE.test(ventureId)) {
       return bad('Invalid ventureId. Feedback form must POST to /api/ventures/{uuid}/feedback.')
+    }
+
+    // Anonymous endpoint — cap per IP so one visitor can't flood testimonials
+    const rl = await enforceAnonRateLimit(
+      clientIpKey(req),
+      `public-feedback:${ventureId}`,
+      PUBLIC_WINDOW_SEC,
+      PUBLIC_FEEDBACK_LIMIT
+    )
+    if (!rl.allowed) {
+      return bad('Too many submissions — please try again later.', 429)
     }
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>))
