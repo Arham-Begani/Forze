@@ -1,4 +1,6 @@
 // lib/queries.ts
+import 'server-only'
+
 import { createDb } from '@/lib/db'
 import { createAdminClient } from '@/lib/supabase/admin'
 

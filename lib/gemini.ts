@@ -1,3 +1,5 @@
+import 'server-only'
+
 import { GoogleGenerativeAI, GenerativeModel, Content } from '@google/generative-ai'
 
 export type { Content }

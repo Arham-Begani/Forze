@@ -1,4 +1,6 @@
 // lib/auth.ts
+import 'server-only'
+
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
