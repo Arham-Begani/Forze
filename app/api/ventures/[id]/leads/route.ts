@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { captureLandingLead } from '@/lib/lead-capture'
 import { PublicLeadCaptureSchema } from '@/lib/schemas/crm'
+import { clientIpKey, enforceAnonRateLimit, PUBLIC_LEAD_LIMIT, PUBLIC_WINDOW_SEC } from '@/lib/rate-limit'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -21,6 +22,20 @@ export async function POST(
       return NextResponse.json(
         { error: 'Invalid ventureId. Landing page form must POST to /api/ventures/{uuid}/leads.' },
         { status: 400, headers: corsHeaders }
+      )
+    }
+
+    // Anonymous endpoint — cap per IP so one visitor can't flood the CRM
+    const rl = await enforceAnonRateLimit(
+      clientIpKey(req),
+      `public-lead:${ventureId}`,
+      PUBLIC_WINDOW_SEC,
+      PUBLIC_LEAD_LIMIT
+    )
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many submissions — please try again later.' },
+        { status: 429, headers: corsHeaders }
       )
     }
 
