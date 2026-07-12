@@ -18,7 +18,7 @@ import {
 import { sanitize, sanitizeLabel } from '@/lib/sanitize'
 import { getVenturePublic } from '@/lib/queries'
 import { DesignTokensSchema } from '@/lib/schemas/inspiration'
-import { tokensToPromptDigest, tokensToCssVarBlock, tokensToDesignBriefing } from '@/lib/inspiration/tokens'
+import { tokensToPromptDigest, tokensToCssVarBlock, tokensToDesignBriefing, inspirationProfileToPromptBlock } from '@/lib/inspiration/tokens'
 import type { LandingAsset } from '@/lib/schemas/landing-assets'
 
 // ── User-supplied landing assets ─────────────────────────────────────────────
@@ -319,8 +319,70 @@ async function runComponentValidator(
 }
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
+//
+// The design language is NOT hardcoded. Two modes:
+//   • No inspiration applied → the agent must pick ONE named design direction
+//     that fits the venture (the same seven directions as the inspiration
+//     mood system in lib/inspiration/tokens.ts) and commit to it. Explicit
+//     bans on the "AI default look" stop every venture from converging on
+//     the same dark-gradient-glassmorphism page.
+//   • Inspiration applied → the Inspiration Design Directive in the user
+//     message is the single source of design truth; no house style leaks in.
 
-const SYSTEM_PROMPT = `
+const DESIGN_DIRECTION_SECTION = `**Design Direction (CRITICAL — this decides whether the page looks designed or generated):**
+
+Step 1 — Choose ONE direction and commit. Read the venture's industry, target audience, brand archetype, and tone of voice, then pick exactly ONE of these directions — the one that fits who this page must convince, not a personal default:
+- **modern-minimal** — Linear / Notion clarity. Flat light background, hairline borders, semibold (never bold) headings, whitespace as a feature. Fits: dev tools, productivity, technical B2B.
+- **corporate-formal** — IBM / McKinsey authority. Structured grid, restrained palette, serif or strong-sans headlines, evidence-first sections. Fits: fintech, legal, healthcare, enterprise services.
+- **playful-energetic** — Duolingo joy. Saturated brand color, pill buttons, rounded-3xl cards, springy micro-interactions, soft blob shapes. Fits: consumer apps, education, community products.
+- **luxury-premium** — Aesop / Hermès restraint. Large light-weight serif display type, huge whitespace (py-32+), muted warm neutrals, zero hover gimmicks. Fits: premium goods, boutique services.
+- **startup-bold** — Stripe / Vercel confidence. Gradient accents, layered depth, dense information, dark hero allowed. Fits: venture-scale SaaS, infra, AI products. Choose this ONLY when it genuinely fits — it is NOT the default.
+- **editorial-serif** — NYT / Medium. Type IS the hero: huge serif headline, narrow measure, flat background, underlined links. Fits: content, media, research, newsletters.
+- **tech-dark** — Cursor / Linear dark mode. Near-black background, ONE neon accent, monospace labels, crisp 150ms transitions. Fits: dev infra, AI/ML tools, security.
+
+Name your choice at the start of recommendedPageDirection and derive EVERY styling decision from it — hero geometry, surfaces, motion, spacing, corner treatment, color temperature.
+
+Step 2 — Typography is your loudest anti-generic lever. Load a distinctive Google Fonts pairing that matches the direction. Put an @import as the FIRST rule inside your inline <style> tag:
+  <style>{\`@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&display=swap'); /* ...rest of your CSS... */\`}</style>
+then apply the display family to headings via a .font-display class (with a sensible serif/sans fallback stack). Strong pairings by direction: modern-minimal → "Inter" tightened or "Geist"-like grotesque; corporate-formal → "Source Serif 4" + "Inter"; playful-energetic → "Nunito" or "Baloo 2" + "Inter"; luxury-premium → "Cormorant Garamond" or "Fraunces" + "Inter"; startup-bold → "Space Grotesk" or "Sora" + "Inter"; editorial-serif → "Newsreader" or "Lora" + "Source Sans 3"; tech-dark → "Space Grotesk" + "JetBrains Mono" for labels. Never ship the browser default face for headlines.
+
+Step 3 — Vary the layout. Pick the hero geometry that fits the direction and the venture's story — do NOT reuse one habitual layout:
+- Centered statement: oversized headline, minimal chrome (minimal / editorial / luxury)
+- Split: copy left, product visual or illustration right (corporate / startup-bold)
+- Product-first: compact headline, large UI mock or inline SVG product sketch dominating (SaaS with a real interface)
+- Typographic poster: headline fills 60-70% of the viewport, tiny supporting copy (editorial / luxury)
+- Off-grid: asymmetric columns, overlapping layers, rotated accents (playful / bold)
+Vary the section rhythm too: include at least one full-bleed band, one asymmetric two-column section, and one section that is NOT a uniform 3-card grid.
+
+Step 4 — Banned defaults. These are the "AI-generated page" tells — never use them unless the chosen direction explicitly calls for them:
+- Dark hero + indigo/purple gradient + glassmorphism cards as an automatic combo
+- bg-clip-text animated gradient headline text
+- hover:scale-105 applied indiscriminately to every card
+- The same 3-identical-cards grid repeated for features AND testimonials AND pricing
+- The same py-24 + max-w-7xl rhythm on every single section
+- Indigo-500/violet-600 accents when the brand palette says otherwise`
+
+const INSPIRATION_DESIGN_SECTION = `**Design Direction — INSPIRATION MODE:**
+
+The founder applied an Inspiration Design Directive. It appears in the user message with extracted design tokens, a mood briefing, CSS custom properties, measured component states, and possibly a reference screenshot. That directive is the SINGLE SOURCE OF DESIGN TRUTH for this page:
+- Do NOT choose a house style and do NOT apply any default recipe (no automatic dark hero, glassmorphism, gradient text, scale-on-hover). Every visual decision — hero geometry, surface treatment, motion, corner radii, spacing, color temperature — comes from the directive.
+- If anything else in this system prompt suggests a specific visual style that conflicts with the directive, THE DIRECTIVE WINS.
+- Load the directive's heading and body font families with an @import as the FIRST rule of your inline <style> tag (Google Fonts css2 URL, spaces as +, weights 400-700). If a named family is not on Google Fonts, use the closest fallback already listed in the directive's font stack.
+- Reference the provided var(--insp-*) custom properties for ALL colors, radii, and spacing — no hardcoded hex outside the <style> block.
+- Success test: someone who knows the inspiration site should look at this page and immediately feel the resemblance — same energy, same surfaces, same type rhythm — while every word of content stays 100% this venture's.`
+
+const DESIGN_QUALITY_FLOOR = `**Design quality floor (applies in every direction):**
+- Define the palette as CSS custom properties (--color-primary, --color-secondary, --color-accent) in the <style> tag and reference them everywhere; use the EXACT hex values provided in context.
+- Sticky navigation with backdrop blur, brand name, section links, and one CTA button.
+- Real hierarchy: an all-caps kicker label above major headings (text-xs uppercase tracking-widest opacity-60), display-size headlines, muted supporting text.
+- Mobile-first responsive (sm:/md:/lg:) — the hero must look intentional at 375px wide.
+- Scroll-triggered reveals via IntersectionObserver, tuned to the direction's motion language (a luxury page fades over 700ms; a playful page can spring; a minimal page barely moves). Content must remain visible if JS never runs.
+- WCAG-AA contrast on all text, focus-visible states on interactive elements, semantic heading order.
+- Depth comes from the direction: hairline borders (minimal), layered tinted shadows (bold), pure whitespace (luxury) — never the same shadow-lg pasted on everything.
+- FAQ accordion with smooth max-height transitions; pricing highlights ONE recommended tier in a direction-appropriate way.`
+
+function buildPipelineSystemPrompt(hasInspiration: boolean): string {
+    return `
 # Production Pipeline — Deployment Specialist
 
 You are Forze's elite build-and-ship agent. You transform venture context into a stunning, fully-functional landing page that is ready to capture leads from day one.
@@ -420,21 +482,9 @@ FORBIDDEN — these are NOT available and WILL crash the page if referenced:
 
 If you write \`<LucideIcons.Shield />\`, \`<Shield />\`, or \`import { Shield } from 'lucide-react'\`, the generated page will throw \`ReferenceError\` or \`Cannot read properties of undefined\` at render time. The founder will see a broken page. Use inline SVG.
 
-**Design Requirements (aim for Stripe / Linear / Vercel quality):**
-- Use the EXACT brand colors from the Identity output as CSS custom properties in a style tag (--color-primary, --color-secondary, --color-accent)
-- Dark hero section with gradient using brand colors — avoid plain white heroes; use deep backgrounds with vibrant gradient overlays
-- Glassmorphism feature cards: bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl — creates premium feel
-- Sticky navigation bar: semi-transparent background (bg-white/80 dark backdrop-blur-xl), logo, nav links, and a CTA button
-- Hero: full-viewport-height gradient section, large bold headline (text-5xl md:text-7xl), animated gradient text on the key benefit phrase, floating accent shapes as decorative elements using absolute positioning
-- Feature cards: icon in a colored rounded square, title in semibold, description in muted text, hover:scale-105 hover:shadow-xl transition-all duration-300
-- Testimonial cards: quote marks as decorative elements, avatar initials in branded colored circles, star ratings
-- Pricing: dark recommended tier card with ring-2 ring-[brand-accent] scale-105 relative, "Most Popular" badge using absolute top-0 translate-y-[-50%]
-- FAQ accordion: smooth max-height transition (not display:none/block), chevron rotation on open
-- Section transitions: alternating light/dark backgrounds for visual rhythm
-- Typography: tight tracking on headings (tracking-tight), generous line-height on body, all-caps small label above major headings (text-xs uppercase tracking-widest opacity-60)
-- Professional spacing: py-24 between sections, max-w-7xl container, px-4 sm:px-6 lg:px-8
-- Subtle animations: fade-in + slide-up on scroll using IntersectionObserver, staggered delays on feature cards using inline style animationDelay of 0.1s per index
-- Shadow hierarchy: shadow-sm on inputs, shadow-lg on cards, shadow-2xl on modals/CTAs
+${hasInspiration ? INSPIRATION_DESIGN_SECTION : DESIGN_DIRECTION_SECTION}
+
+${DESIGN_QUALITY_FLOOR}
 
 **Lead Capture Form:**
 - Email input with field validation (basic regex)
@@ -468,7 +518,7 @@ Before writing copy, analyze the venture's positioning critically:
 - **headlineWeaknesses**: 1-2 weaknesses of the headline you chose — what objection does it fail to address? What audience might it alienate?
 - **ctaWeaknesses**: 1-2 weaknesses of the CTAs — are they too aggressive? Too passive? Missing urgency or specificity?
 - **sectionToPainPointMap**: Map each page section to the specific pain point from research it addresses. If a section doesn't map to a real pain point, flag it.
-- **recommendedPageDirection**: One-paragraph synthesis of why this page layout and messaging approach is the right direction.
+- **recommendedPageDirection**: Start with the design direction you committed to (e.g. "Direction: editorial-serif — ..." or "Direction: inspiration directive — ...") followed by a one-paragraph synthesis of why this layout and messaging approach is right for this venture.
 - **alignmentWarnings**: If the hero headline, value proposition, or pricing contradicts research or branding data, list each discrepancy. Empty array if aligned.
 
 ### 6. Cross-Module Alignment Check
@@ -541,6 +591,7 @@ Output ONLY the JSON — no markdown fences, no explanation after.
 
 IMPORTANT: Any step-by-step reasoning MUST be wrapped inside <think> and </think> tags. Only the final valid JSON should be outside the tags.
 `
+}
 
 // ── Edit Mode System Prompt ──────────────────────────────────────────────────
 
@@ -743,6 +794,18 @@ export async function runPipelineAgent(
                 }
             }
             const hasImages = inspirationImages.length > 0
+            // Measured evidence from the enrichment passes (component hover
+            // states, do-not-copy list, section layout evidence) — persisted
+            // by the apply route. Older applies have no profile; block is null
+            // and the directive reads exactly as before.
+            const profileBlock = inspirationProfileToPromptBlock(
+                (venture.context as { inspirationProfile?: unknown }).inspirationProfile,
+            )
+            // Icon-only captures (favicon/touch-icon fallback) produce tokens
+            // that LOOK authoritative but are mostly guesses. Soften the
+            // directive instead of confidently enforcing wrong values.
+            const overallConfidence = tokens.confidenceByCategory?.overall ?? 65
+            const lowConfidence = overallConfidence < 50
             inspirationBlock =
                 `## Inspiration Design Directive (HIGHEST PRIORITY — overrides branding palette)\n\n` +
                 (hasImages
@@ -762,6 +825,10 @@ export async function runPipelineAgent(
                 `- Brand mood is "${tokens.brand.mood}" — every section's visual treatment must read as that mood. A "luxury-premium" mood should NOT have bouncy hover states. A "tech-dark" mood should NOT have light cream backgrounds. Be consistent.` +
                 (hasImages
                     ? `\n- **The attached screenshot is the visual target.** When the briefing and the screenshot conflict, the screenshot wins. Treat the briefing as your written instructions and the screenshot as your reference photo — you're building the landing page TO MATCH the screenshot.`
+                    : '') +
+                (profileBlock ? `\n\n${profileBlock}` : '') +
+                (lowConfidence
+                    ? `\n\n### Extraction confidence caveat\nThe automated extraction ran at LOW confidence (overall ${overallConfidence}/100 — the source page could not be fully captured, e.g. only an icon or og:image was available). Follow the mood, density, typography direction, and overall feel of the briefing faithfully, but where a specific token value looks implausible (near-identical primary/secondary hexes, default-looking sizes), prefer the Brand Identity palette for that slot instead of forcing a bad token.`
                     : '')
             contextParts.push(inspirationBlock)
         } catch {
@@ -794,8 +861,8 @@ ${!hasResearch && !hasBranding ? '## Note\nNo prior research or branding data is
 2. **Landing Page Copy** — Hero (headline referencing #1 pain point), 6+ features with 2-3 sentence descriptions, 3 detailed testimonials with names/titles/companies, 3 pricing tiers with 5-7 features each, 6-8 FAQ entries with full answers
 3. **Full React Component** — A COMPLETE, beautiful, working React component (200+ lines) with:
    - Sticky navbar with smooth scroll links
-   - Gradient hero section using brand colors
-   - Feature cards with hover effects
+   - Hero section built to your committed design direction (or the Inspiration Design Directive when one is present) — geometry, surfaces, and motion all flow from it
+   - Feature sections styled per the direction — not a default uniform card grid
    - Testimonial carousel or grid
    - Pricing comparison table with highlighted recommended tier
    - FAQ accordion with useState toggle
@@ -971,7 +1038,7 @@ Output the complete PipelineOutput JSON.`
 
         await streamPrompt(
             model,
-            SYSTEM_PROMPT,
+            buildPipelineSystemPrompt(!!inspirationBlock),
             userMessage,
             async (chunk) => {
                 fullText += chunk
