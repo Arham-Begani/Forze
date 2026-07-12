@@ -278,6 +278,12 @@ export async function setVentureInspirationTokens(
         // When provided, also writes / clears inspirationReferenceImages on
         // the venture context. Explicit null means "remove existing images".
         referenceImages?: InspirationReferenceImage[] | null
+        // Compact evidence digest from the analysis row (component interaction
+        // states, do-not-copy list, section layout evidence, context relevance).
+        // Persisted to context.inspirationProfile so the pipeline agent can
+        // inject measured evidence — not just tokens — into generation.
+        // Explicit null means "remove existing profile" (unapply).
+        profile?: Record<string, unknown> | null
     } = {},
 ): Promise<void> {
     const admin = createAdminClient()
@@ -303,6 +309,14 @@ export async function setVentureInspirationTokens(
         } else {
             nextContext.inspirationReferenceImages = options.referenceImages
         }
+    }
+
+    // Evidence profile follows the same pattern: separate key, only the
+    // pipeline agent reads it, explicit null clears it. Ventures applied
+    // before this field existed simply have no key — the pipeline treats
+    // that as "tokens-only" and behaves exactly as before.
+    if (options.profile !== undefined) {
+        nextContext.inspirationProfile = options.profile
     }
 
     // When the founder explicitly applies (or re-applies) tokens, they want a
