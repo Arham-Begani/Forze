@@ -133,6 +133,9 @@ Rules:
 - Confidences honest: if you can clearly read a primary color from the image, set 90+. If you are inferring (e.g. only a logo is visible), set 40–60.
 - Choose ONE brand mood that best fits.
 - "personality" must be plain prose, not JSON, not bullet points.
+- For "designSignals", name what makes THIS site unlike a generic template — specific gradient geometry, specific type contrast, specific interaction language. "Modern and clean" is a failed answer; "near-black canvas, single violet glow accent, oversized grotesque headline, terminal-style code card in the hero" is a good one.
+- "heroTreatment" must state the hero GEOMETRY (centered statement / split copy+visual / product-first / typographic poster / off-grid), where the visual weight sits, and the nav treatment (transparent over hero, solid bar, floating pill).
+- "notableInteractions": only behaviors this design would plausibly have, each specific enough that a developer could implement it directly from your words. Never pad the list with generic entries.
 - Do NOT add commentary, markdown fences, or trailing text — output the JSON object only.
 - Reasoning may go inside <think>...</think> tags before the JSON; everything outside the tags must be the JSON.
 `
