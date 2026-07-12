@@ -500,6 +500,107 @@ function applySignalOverrides(briefing: Briefing, signals: DesignTokens['designS
     return overrides
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Inspiration evidence profile → prompt block
+//
+// The analyze route runs three enrichment passes (detected sections, component
+// interaction states, anti-patterns/context relevance) whose output used to
+// stop at the studio UI. The apply route now persists a compact digest of that
+// evidence to venture.context.inspirationProfile, and this serializer turns it
+// into prompt text for the pipeline agent — measured hover states and layout
+// evidence are exactly what makes a clone feel like the inspiration.
+//
+// The input comes off a JSONB round-trip, so every field is treated as
+// untrusted: wrong shapes render as nothing rather than throwing. Returns
+// null when there is no usable evidence so callers can skip the section.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export function inspirationProfileToPromptBlock(profile: unknown): string | null {
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return null
+    const p = profile as Record<string, unknown>
+    const lines: string[] = []
+
+    const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+    const strArr = (v: unknown, cap = 6): string[] =>
+        Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, cap) : []
+
+    const stateLine = (label: string, s: unknown): string | null => {
+        if (!s || typeof s !== 'object') return null
+        const st = s as Record<string, unknown>
+        const bits = [
+            str(st.bg) && `bg: ${str(st.bg)}`,
+            str(st.text) && `text: ${str(st.text)}`,
+            str(st.border) && `border: ${str(st.border)}`,
+            str(st.shadow) && `shadow: ${str(st.shadow)}`,
+            str(st.transform) && `transform: ${str(st.transform)}`,
+            str(st.notes),
+        ].filter(Boolean)
+        if (bits.length === 0) return null
+        return `  • ${label} — ${bits.join('; ')}`
+    }
+
+    const comp = p.componentPatterns as Record<string, Record<string, unknown>> | undefined
+    if (comp && typeof comp === 'object') {
+        const compLines = [
+            stateLine('Button (default)', comp.button?.default),
+            stateLine('Button (hover)', comp.button?.hover),
+            stateLine('Card (default)', comp.card?.default),
+            stateLine('Card (hover)', comp.card?.hover),
+            stateLine('Input (focus)', comp.input?.focus),
+            stateLine('Link (hover)', comp.link?.hover),
+        ].filter((l): l is string => !!l)
+        if (compLines.length > 0) {
+            lines.push(
+                '**Component interaction states measured on the inspiration (implement these exact treatments):**',
+                ...compLines,
+            )
+        }
+    }
+
+    const sections = Array.isArray(p.sections) ? p.sections.slice(0, 8) : []
+    const sectionLines = sections
+        .map((s) => {
+            if (!s || typeof s !== 'object') return null
+            const sec = s as Record<string, unknown>
+            const name = str(sec.name)
+            if (!name) return null
+            const extra = [
+                str(sec.layoutPattern) && str(sec.layoutPattern) !== 'unknown' ? `layout: ${str(sec.layoutPattern)}` : '',
+                str(sec.notes),
+            ].filter(Boolean).join(' — ')
+            return `  • ${name}${extra ? `: ${extra}` : ''}`
+        })
+        .filter((l): l is string => !!l)
+    if (sectionLines.length > 0) {
+        lines.push('', '**Section layout evidence from the inspiration page (mirror these layout patterns):**', ...sectionLines)
+    }
+
+    const intent = strArr(p.intentSignals)
+    if (intent.length > 0) {
+        lines.push('', '**What makes the inspiration feel intentional, not generic (reproduce this level of craft):**', ...intent.map((d) => `  • ${d}`))
+    }
+
+    const doNot = strArr(p.doNotCopy)
+    if (doNot.length > 0) {
+        lines.push('', '**Observed on the inspiration but DO NOT copy (verified problems):**', ...doNot.map((d) => `  • ${d}`))
+    }
+
+    const rel = p.contextRelevance as Record<string, unknown> | undefined
+    if (rel && typeof rel === 'object') {
+        const relLines: string[] = []
+        const trust = strArr(rel.trustSignals)
+        if (trust.length > 0) relLines.push(`  • Trust signals to include: ${trust.join('; ')}`)
+        if (str(rel.ctaStrategy)) relLines.push(`  • CTA strategy: ${str(rel.ctaStrategy)}`)
+        if (str(rel.differentiator)) relLines.push(`  • Differentiator showcase: ${str(rel.differentiator)}`)
+        if (relLines.length > 0) {
+            lines.push('', '**How the inspiration builds credibility (adapt these patterns to this venture):**', ...relLines)
+        }
+    }
+
+    if (lines.length === 0) return null
+    return ['### Inspiration evidence (measured from the live page — not guesses)', '', ...lines].join('\n')
+}
+
 export function tokensToDesignBriefing(tokens: DesignTokens): string {
     const mood = tokens.brand.mood
     const briefing = MOOD_BRIEFINGS[mood] ?? MOOD_BRIEFINGS['modern-minimal']
