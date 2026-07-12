@@ -97,12 +97,38 @@ export async function POST(
             .filter((u): u is string => typeof u === 'string' && u.length > 0)
         const referenceImages = await downloadReferenceImages(sourceUrls)
 
+        // Compact evidence digest from the enrichment passes (sections,
+        // component states, anti-patterns, context relevance). These were
+        // previously analyze-only — persisting them alongside the tokens lets
+        // the pipeline agent generate from measured evidence, not just hexes.
+        // Every field is best-effort: missing pass output just omits the key.
+        const antiPatterns = (row.pass3_antipatterns ?? null) as {
+            doNotCopy?: unknown
+            intentSignals?: unknown
+        } | null
+        const detected = (row.detected_sections ?? null) as { sections?: unknown } | null
+        const detectedSections = Array.isArray(detected?.sections)
+            ? (detected.sections as Array<Record<string, unknown> | null>).slice(0, 8).map((s) => ({
+                name: s?.name ?? null,
+                layoutPattern: s?.layoutPattern ?? null,
+                notes: s?.notes ?? null,
+            }))
+            : []
+        const profile: Record<string, unknown> = {
+            componentPatterns: row.pass2_components ?? null,
+            doNotCopy: Array.isArray(antiPatterns?.doNotCopy) ? antiPatterns.doNotCopy : [],
+            intentSignals: Array.isArray(antiPatterns?.intentSignals) ? antiPatterns.intentSignals : [],
+            sections: detectedSections,
+            contextRelevance: row.context_relevance ?? null,
+        }
+
         // clearLanding=true forces the next /run landing call into a fresh
         // generation that actually consumes the inspiration briefing instead
         // of running surgical edit mode against the previous component.
         await setVentureInspirationTokens(ventureId, session.userId, row.tokens, {
             clearLanding: true,
             referenceImages,
+            profile,
         })
         await updateInspirationAnalysis(analysisId, session.userId, {
             applied_at: new Date().toISOString(),
@@ -143,9 +169,9 @@ export async function DELETE(
 
         // Clearing inspirationTokens is what "unapply" means — the pipeline
         // agent's tokens-aware branch checks for presence on the venture
-        // context object. Also drop the reference images so the next landing
-        // run doesn't attach a stale screenshot to its Gemini call.
-        await setVentureInspirationTokens(ventureId, session.userId, null, { referenceImages: null })
+        // context object. Also drop the reference images and evidence profile
+        // so the next landing run doesn't consume stale inspiration data.
+        await setVentureInspirationTokens(ventureId, session.userId, null, { referenceImages: null, profile: null })
         await updateInspirationAnalysis(analysisId, session.userId, { applied_at: null })
 
         return NextResponse.json({ ok: true })
