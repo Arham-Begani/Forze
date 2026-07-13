@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/poll-crm-replies",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/sweep-stuck-runs",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
