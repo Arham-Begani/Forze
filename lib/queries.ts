@@ -445,7 +445,19 @@ export async function updateVentureContext(
   return withRetry(async () => {
     const db = await createDb()
 
-    // Fetch existing context first, then merge atomically
+    // Atomic single-statement merge via RPC (migration 008, hardened in 045).
+    // Two modules finishing at the same time (e.g. landing + shadow board)
+    // each set their own context key without clobbering the other's — the
+    // old SELECT → spread → UPDATE below loses whichever write lands first.
+    const { error: rpcError } = await db.rpc('merge_venture_context', {
+      venture_id_val: id,
+      context_key: contextKey,
+      context_value: value,
+    })
+    if (!rpcError) return
+
+    // Fallback: read-modify-write (non-atomic) — only when the RPC isn't
+    // deployed on this DB. Identical to the pre-atomic behavior.
     const { data: venture, error: fetchError } = await db
       .from('ventures')
       .select('context')
@@ -498,7 +510,12 @@ export async function updateConversationStatus(
   status: 'running' | 'complete' | 'failed'
 ): Promise<void> {
   const db = await createDb()
-  const { error } = await db.from('conversations').update({ status }).eq('id', id)
+  let query = db.from('conversations').update({ status }).eq('id', id)
+  // A run may only COMPLETE from 'running' — a late-finishing agent must not
+  // resurrect a conversation the user already cancelled (status='failed').
+  // Failure writes stay unguarded so error paths and the sweeper always win.
+  if (status === 'complete') query = query.eq('status', 'running')
+  const { error } = await query
   if (error) throw new Error(`updateConversationStatus failed: ${error.message}`)
 }
 
@@ -536,10 +553,16 @@ export async function setConversationResult(
   result: Record<string, unknown>
 ): Promise<void> {
   const db = await createDb()
+  // Guarded transition: only a still-'running' conversation may complete.
+  // If the user cancelled (status flipped to 'failed') while the agent was
+  // finishing, this matches zero rows and the cancel is honored — a silent
+  // no-op, deliberately not an error. Every live caller writes while the
+  // row is 'running' (run route completion + scope-refusal paths).
   const { error } = await db
     .from('conversations')
     .update({ result, status: 'complete' })
     .eq('id', id)
+    .eq('status', 'running')
 
   if (error) throw new Error(`setConversationResult failed: ${error.message}`)
 }
