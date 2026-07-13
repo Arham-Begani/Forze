@@ -1,3 +1,5 @@
+import 'server-only'
+
 export type ForzeAuthMailEvent = 'login' | 'email_confirmed' | 'password_changed'
 
 type ForzeMailContext = {
@@ -19,6 +21,71 @@ export async function sendForzeAuthMail(context: ForzeMailContext): Promise<Forz
   }
 
   const payload = buildForzeMail(context)
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    return { sent: false, reason: 'request_failed' }
+  }
+
+  return { sent: true }
+}
+
+// ─── Lead-captured alert ───────────────────────────────────────────────────────
+//
+// Sent (best-effort, rate-capped by the caller) to the venture owner when a
+// visitor submits the lead form on their published landing page. This is the
+// product's core promise made visible — the page the AI built actually works.
+
+type ForzeLeadAlertContext = {
+  to: string
+  ownerName: string
+  ventureId: string
+  ventureName: string
+  leadEmail: string
+  leadName?: string | null
+  source?: string | null
+}
+
+export async function sendLeadCapturedMail(context: ForzeLeadAlertContext): Promise<ForzeMailResult> {
+  if (!RESEND_API_KEY) {
+    return { sent: false, reason: 'not_configured' }
+  }
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://tryforze.ai').trim().replace(/\/+$/, '')
+  const crmUrl = `${appUrl}/dashboard/venture/${context.ventureId}/crm`
+  const ventureName = context.ventureName.trim() || 'your venture'
+  const leadName = context.leadName?.trim() ?? ''
+  const source = context.source?.trim() ?? ''
+  // Lead fields arrive from a public endpoint — renderHtml escapes the
+  // message, so visitor-controlled text can never inject markup.
+  const leadDescriptor = leadName ? `${leadName} (${context.leadEmail})` : context.leadEmail
+  const message = `${leadDescriptor} just left their details on the ${ventureName} landing page${source ? ` (via ${source})` : ''}. They're waiting in your CRM — reach out while the interest is fresh.`
+  const subject = `New lead for ${ventureName}`
+  const greetingName = context.ownerName.trim() || 'there'
+
+  const payload = {
+    from: FORZE_FROM_EMAIL,
+    to: [context.to],
+    subject,
+    text: `Hi ${greetingName},\n\n${message}\n\nOpen your CRM: ${crmUrl}\nThe Forze team`,
+    html: renderHtml({
+      title: subject,
+      headline: 'You captured a new lead',
+      message,
+      ctaLabel: 'Open your CRM',
+      ctaHref: crmUrl,
+      footer: 'The Forze team',
+      greetingName: escapeHtml(greetingName),
+    }),
+  }
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
