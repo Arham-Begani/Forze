@@ -14,6 +14,8 @@ import 'server-only'
 // then emails them on the campaign's schedule — no manual CSV round-trip.
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendLeadCapturedMail } from '@/lib/forze-mail'
+import { enforceAnonRateLimit } from '@/lib/rate-limit'
 import type { Lead } from '@/lib/queries'
 
 function deriveFirstName(email: string, name?: string | null): string {
@@ -50,7 +52,52 @@ export async function captureLandingLead(
     console.error('[lead-capture] auto-enroll failed:', err)
   }
 
+  // Best-effort founder alert — the landing page visibly working is the
+  // product's core promise. A failed email must never lose the lead.
+  try {
+    await notifyOwnerOfLead(ventureId, lead as Lead)
+  } catch (err) {
+    console.error('[lead-capture] lead alert failed:', err)
+  }
+
   return lead as Lead
+}
+
+// Emails the venture OWNER (v1: owner only, not all members) that a lead just
+// arrived. Capped at 5 alerts/hour/venture via the anon rate limiter — keyed
+// on ventureId, not IP, so a busy launch day floods the CRM, not the inbox.
+// Fails open if migration 044 isn't applied (the per-IP capture limit already
+// bounds raw volume), and silently no-ops when Resend isn't configured.
+async function notifyOwnerOfLead(ventureId: string, lead: Lead): Promise<void> {
+  if (!lead.email) return
+
+  const rl = await enforceAnonRateLimit(ventureId, 'lead-alert', 3600, 5)
+  if (!rl.allowed) return
+
+  const db = createAdminClient()
+  const { data: venture } = await db
+    .from('ventures')
+    .select('name, user_id')
+    .eq('id', ventureId)
+    .maybeSingle()
+  if (!venture?.user_id) return
+
+  const { data: owner } = await db
+    .from('users')
+    .select('email, name')
+    .eq('id', venture.user_id)
+    .maybeSingle()
+  if (!owner?.email) return
+
+  await sendLeadCapturedMail({
+    to: owner.email,
+    ownerName: owner.name ?? '',
+    ventureId,
+    ventureName: venture.name ?? 'your venture',
+    leadEmail: lead.email as string,
+    leadName: (lead as { name?: string | null }).name ?? null,
+    source: (lead as { source?: string | null }).source ?? null,
+  })
 }
 
 // Appends a CRM lead to every campaign of the venture that opted into
