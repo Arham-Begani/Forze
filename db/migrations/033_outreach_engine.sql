@@ -13,17 +13,13 @@
 --    Gmail's real-world limit is ~500/day; assuming 2000 risked account
 --    flagging. Existing rows still on the old default are migrated.
 
--- ── 1. Add 'scheduled' to campaign_status (guarded, same pattern as 018/031) ──
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e
-    JOIN pg_type t ON t.oid = e.enumtypid
-    WHERE t.typname = 'campaign_status' AND e.enumlabel = 'scheduled'
-  ) THEN
-    ALTER TYPE campaign_status ADD VALUE 'scheduled';
-  END IF;
-END $$;
+-- ── 1. Add 'scheduled' to campaign_status ────────────────────────────────────
+-- Must be a TOP-LEVEL statement: Postgres forbids `ALTER TYPE ... ADD VALUE`
+-- inside a DO block / function ("cannot be executed from a function or
+-- multi-command string"). `ADD VALUE IF NOT EXISTS` (PG12+) is idempotent, so
+-- it is safe to re-run and needs no guard. The new value is only referenced by
+-- application code, never later in this file, so running it here is safe.
+ALTER TYPE campaign_status ADD VALUE IF NOT EXISTS 'scheduled';
 
 -- ── 2. Thread linkage on leads ────────────────────────────────────────────────
 ALTER TABLE public.campaign_leads
