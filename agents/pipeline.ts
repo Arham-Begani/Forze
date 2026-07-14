@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import {
     streamPrompt,
     extractJSON,
-    withTimeout,
+    withAbortableTimeout,
     withRetry,
     getFlashModel,
     Content,
@@ -279,6 +279,36 @@ async function deployLandingPage(ventureId: string, result: PipelineOutput): Pro
     }
     return `/v/${ventureId}`
 }
+
+// ── Honest deployment flags ──────────────────────────────────────────────────
+//
+// leadCaptureActive / analyticsActive used to be hardcoded true (the banner
+// claimed "Analytics: Active" even when nothing was wired). Derive them from
+// the actual sanitized component so the founder-facing status is truthful:
+// lead capture is live only if the page really POSTs to the leads endpoint,
+// tracking is live only if the pageview call is present.
+function detectPageCapabilities(component: string): { leadCaptureActive: boolean; analyticsActive: boolean } {
+    const c = component || ''
+    const leadCaptureActive = /\/leads\b/.test(c) && /\bfetch\s*\(/.test(c)
+    const analyticsActive = /\/track\b/.test(c) || /event_type\s*:\s*['"]pageview['"]/.test(c)
+    return { leadCaptureActive, analyticsActive }
+}
+
+// Truncation detector for server-side auto-continuation. Mirrors extractJSON's
+// cleaning (strip <think> + code fences), then checks whether the top-level
+// JSON object actually closed. A stream cut off mid-component ends on some
+// other character, so a non-'}' tail means "the model got cut off, continue".
+function looksTruncated(text: string): boolean {
+    let t = text.replace(/<(think|thought|thinking)>[\s\S]*?<\/(think|thought|thinking)>/gi, '')
+    t = t.replace(/<(think|thought|thinking)>[\s\S]*$/gi, '')
+    t = t.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+    if (!t) return true
+    return t[t.length - 1] !== '}'
+}
+
+const CONTINUE_MESSAGE =
+    'Continue the JSON output EXACTLY where you left off. Do NOT repeat anything already produced and do NOT restart the object — output only the remaining characters that complete the JSON.'
+const MAX_AUTO_CONTINUES = 2
 
 // ── Validator integration ────────────────────────────────────────────────────
 //
@@ -881,7 +911,7 @@ Output the complete PipelineOutput JSON.`
     const existingLanding = venture.context.landing as PipelineOutput | null | undefined
     const isEditMode = !isContinuation && !!existingLanding?.fullComponent && existingLanding.fullComponent.length > 100
 
-    const run = async () => {
+    const run = async (signal?: AbortSignal) => {
         const model = getFlashModel()
         const branding = venture.context.branding as Record<string, any> | undefined
 
@@ -935,6 +965,7 @@ Output the complete PipelineOutput JSON.`
                 // tokens after the landing was already generated and wants
                 // the next edit to actually adopt the inspiration's feel.
                 inspirationImages,
+                signal,
             )
 
             const rawPatch = extractJSON(fullText) as PipelineEditPatch
@@ -1026,8 +1057,9 @@ Output the complete PipelineOutput JSON.`
             validated.fullComponent = editValidation.sanitized
 
             validated.deploymentUrl = await deployLandingPage(venture.ventureId, validated)
-            validated.leadCaptureActive = true
-            validated.analyticsActive = false
+            const editCaps = detectPageCapabilities(validated.fullComponent)
+            validated.leadCaptureActive = editCaps.leadCaptureActive
+            validated.analyticsActive = editCaps.analyticsActive
 
             await onComplete(validated)
             return
@@ -1035,20 +1067,51 @@ Output the complete PipelineOutput JSON.`
 
         // ── INITIAL GENERATION: full PipelineOutput (existing behavior) ──────
         let fullText = (history.find(h => h.role === 'model')?.parts[0] as any)?.text || ''
+        const systemPrompt = buildPipelineSystemPrompt(!!inspirationBlock)
+        const appendAndStream = async (chunk: string) => {
+            fullText += chunk
+            await onStream(chunk)
+        }
 
         await streamPrompt(
             model,
-            buildPipelineSystemPrompt(!!inspirationBlock),
+            systemPrompt,
             userMessage,
-            async (chunk) => {
-                fullText += chunk
-                await onStream(chunk)
-            },
+            appendAndStream,
             history,
             // Attach the inspiration screenshot(s) for multimodal grounding.
             // The React generator targets the visual directly, not just text.
             inspirationImages,
+            signal,
         )
+
+        // Server-side auto-continuation: if the model got cut off (long
+        // components frequently exceed a single response), resume without
+        // relying on the client to notice and re-POST — that client path dies
+        // the moment the tab closes. Only for fresh generations (empty history);
+        // a client-driven continuation already carries its own resume state, so
+        // we don't nest. Bounded by MAX_AUTO_CONTINUES so a pathological run
+        // can't loop. extractJSON tolerates a restart, so this is safe even if
+        // the model ignores the "don't restart" instruction.
+        if (history.length === 0) {
+            let attempts = 0
+            while (looksTruncated(fullText) && attempts < MAX_AUTO_CONTINUES) {
+                attempts += 1
+                await onStream(`\n[Auto-continue] Output was cut off — resuming (${attempts}/${MAX_AUTO_CONTINUES})...\n`)
+                await streamPrompt(
+                    model,
+                    systemPrompt,
+                    CONTINUE_MESSAGE,
+                    appendAndStream,
+                    [
+                        { role: 'user', parts: [{ text: userMessage }] },
+                        { role: 'model', parts: [{ text: fullText }] },
+                    ],
+                    [],
+                    signal,
+                )
+            }
+        }
 
         const raw = extractJSON(fullText) as PipelineOutput
         const validated = PipelineOutputSchema.parse(raw)
@@ -1071,13 +1134,18 @@ Output the complete PipelineOutput JSON.`
         )
         validated.fullComponent = initialValidation.sanitized
 
-        // Post-process: wire deployment and flags
+        // Post-process: wire deployment + honest capability flags derived from
+        // what the generated component actually contains (see detectPageCapabilities).
         validated.deploymentUrl = await deployLandingPage(venture.ventureId, validated)
-        validated.leadCaptureActive = true
-        validated.analyticsActive = true // wire later
+        const caps = detectPageCapabilities(validated.fullComponent)
+        validated.leadCaptureActive = caps.leadCaptureActive
+        validated.analyticsActive = caps.analyticsActive
 
         await onComplete(validated)
     }
 
-    await withRetry(() => withTimeout(run(), Number(process.env.PIPELINE_TIMEOUT_MS ?? process.env.AGENT_TIMEOUT_MS ?? 180000)))
+    await withRetry(() => withAbortableTimeout(
+        (signal) => run(signal),
+        Number(process.env.PIPELINE_TIMEOUT_MS ?? process.env.AGENT_TIMEOUT_MS ?? 180000),
+    ))
 }
