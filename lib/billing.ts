@@ -3,8 +3,6 @@ export type BillingModuleId =
   | 'general'
   | 'shadow-board'
   | 'investor-kit'
-  | 'launch-autopilot'
-  | 'mvp-scalpel'
 
 export type PlanSlug = 'free' | 'starter' | 'builder' | 'pro' | 'studio'
 export type BillingPeriod = 'monthly' | 'yearly'
@@ -25,20 +23,16 @@ export const ALL_BILLING_MODULES: BillingModuleId[] = [
   'general',
   'shadow-board',
   'investor-kit',
-  'launch-autopilot',
-  'mvp-scalpel',
 ]
 
 export const ALL_FEATURES: FeatureId[] = ['crm', 'inspiration', 'outreach']
 
-// Modules every plan gets (Free + Starter included). Excludes launch-autopilot
-// because that's part of the Outreach feature gate (Builder+).
+// Core build modules every plan gets (Free + Starter included).
 export const CORE_BILLING_MODULES: BillingModuleId[] = [
   'landing',
   'general',
   'shadow-board',
   'investor-kit',
-  'mvp-scalpel',
 ]
 
 export const UNLIMITED_BILLING_CREDIT_BALANCE = 1_000_000_000
@@ -87,14 +81,10 @@ export const BILLING_MODULE_LABELS: Record<BillingModuleId, string> = {
   general: 'Co-pilot',
   'shadow-board': 'Shadow Board',
   'investor-kit': 'Investor Kit',
-  'launch-autopilot': 'Launch Autopilot',
-  'mvp-scalpel': 'MVP Scalpel',
 }
 
 export const MODULE_CREDIT_COSTS: Record<BillingModuleId, number> = {
   general: 1,
-  'mvp-scalpel': 6,
-  'launch-autopilot': 8,
   landing: 10,
   'shadow-board': 10,
   'investor-kit': 10,
@@ -109,7 +99,7 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     ventureLimit: 1,
     monthlyCredits: 40,         // 10/wk * 4 weeks — kept for legacy display + razorpay
     weeklyCredits: 10,
-    allowedModules: CORE_BILLING_MODULES, // no launch-autopilot
+    allowedModules: CORE_BILLING_MODULES,
     allowedFeatures: [],                  // no CRM, inspiration, outreach
     weeklyActionLimits: {
       inspirationAnalyses: 0,
@@ -127,10 +117,10 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
     ventureLimit: 2,
     monthlyCredits: 80,         // 20/wk * 4
     weeklyCredits: 20,
-    allowedModules: CORE_BILLING_MODULES, // no launch-autopilot
-    allowedFeatures: [],                  // no CRM, inspiration, outreach
+    allowedModules: CORE_BILLING_MODULES,
+    allowedFeatures: ['inspiration'],     // Inspiration is Starter's paid unlock
     weeklyActionLimits: {
-      inspirationAnalyses: 0,
+      inspirationAnalyses: 5,
       crmEmailsSent: 0,
       campaignsSent: 0,
       leadScoutRuns: 0,
