@@ -13,7 +13,6 @@ import {
   UNLIMITED_BILLING_VENTURE_LIMIT,
   UNLIMITED_WEEKLY_ACTION_LIMIT,
   isFeatureIncluded,
-  isModuleIncluded,
 } from '@/lib/billing'
 
 function formatPrice(amount: number) {
@@ -195,17 +194,6 @@ export default function PricingPage() {
                     })}
                   </tr>
                 ))}
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={tableCellLabelStyle}>Launch Autopilot module</td>
-                  {PLAN_SEQUENCE.map((slug) => {
-                    const included = isModuleIncluded(slug, 'launch-autopilot')
-                    return (
-                      <td key={slug} style={{ ...tableCellStyle, color: included ? 'var(--accent)' : 'var(--muted)' }}>
-                        {included ? '✓' : '—'}
-                      </td>
-                    )
-                  })}
-                </tr>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={tableCellLabelStyle}>Inspiration analyses / week</td>
                   {PLAN_SEQUENCE.map((slug) => {

@@ -25,8 +25,6 @@ import { listLandingAssets } from '@/lib/queries/landing-asset-queries'
 import { runGeneralAgent } from '@/agents/general'
 import { runShadowBoard } from '@/agents/shadow'
 import { runInvestorKitAgent } from '@/agents/investor-kit'
-import { runLaunchAutopilotAgent } from '@/agents/launch-autopilot'
-import { runMVPScalpelAgent } from '@/agents/mvp-scalpel'
 import { evaluateModuleScope } from '@/lib/module-scope'
 import type { ScopeRefusalResult } from '@/lib/module-scope.shared'
 
@@ -40,7 +38,7 @@ const DecisionSchema = z.object({
 })
 
 const bodySchema = z.object({
-    moduleId: z.enum(['landing', 'general', 'shadow-board', 'investor-kit', 'launch-autopilot', 'mvp-scalpel']),
+    moduleId: z.enum(['landing', 'general', 'shadow-board', 'investor-kit']),
     prompt: z.string().min(1).max(2000),
     depth: z.enum(['brief', 'medium', 'detailed']).optional(),
     decisions: z.array(DecisionSchema).optional(),
@@ -198,20 +196,6 @@ async function runAgent(
             case 'investor-kit':
                 await runInvestorKitAgent(ventureInput, onStream, async (result) => {
                     await updateVentureContext(ventureId, 'investorKit', result)
-                    await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
-                }, history)
-                break
-
-            case 'launch-autopilot':
-                await runLaunchAutopilotAgent(ventureInput, onStream, async (result) => {
-                    await updateVentureContext(ventureId, 'launchAutopilot', result)
-                    await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
-                }, history)
-                break
-
-            case 'mvp-scalpel':
-                await runMVPScalpelAgent(ventureInput, onStream, async (result) => {
-                    await updateVentureContext(ventureId, 'mvpScalpel', result)
                     await setConversationResult(conversationId, result as unknown as Record<string, unknown>)
                 }, history)
                 break
