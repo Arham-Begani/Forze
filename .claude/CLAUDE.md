@@ -5,6 +5,12 @@ An Autonomous Venture Orchestrator. A coordinated swarm of AI agents that transf
 
 Read PRD.md for the full product vision before starting any task.
 
+## Current Module Set (post-pivot — source of truth; PRD.md is aspirational/stale)
+The live venture modules (runnable via `app/api/ventures/[id]/run`) are exactly:
+**Landing Page** (`agents/pipeline.ts`), **Co-pilot / general chat** (`agents/general.ts`), **Shadow Board** (`agents/shadow.ts`), **Investor Kit** (`agents/investor-kit.ts`). Plus the **Lead Scout** agent (`agents/lead-scout.ts`) used by Campaigns.
+Gated non-module features: **CRM**, **Inspiration**, **Outreach/Campaigns** (Builder+; Starter also unlocks Inspiration).
+Deleted and gone — do NOT reintroduce without instruction: the pre-pivot Research/Genesis, Branding/Identity, Marketing/Content-Factory, Feasibility, Full-Launch modules, and (July 2026) Launch Autopilot + MVP Scalpel. Any "Model Routing" / "Full Launch order" / "Marketing in Full Launch" text below is legacy — treat this section as authoritative when they conflict.
+
 ---
 
 ## Non-Negotiable Rules
