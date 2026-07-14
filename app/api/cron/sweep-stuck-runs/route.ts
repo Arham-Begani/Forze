@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 60
 export const runtime = 'nodejs'
@@ -85,7 +86,7 @@ async function runOnce(): Promise<NextResponse> {
     return NextResponse.json({ ok: true, sweptCount: ids.length, ids })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'sweep failed'
-    console.error('[cron/sweep-stuck-runs] error:', err)
+    logError('cron/sweep-stuck-runs', err)
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

@@ -27,6 +27,7 @@ import { runShadowBoard } from '@/agents/shadow'
 import { runInvestorKitAgent } from '@/agents/investor-kit'
 import { evaluateModuleScope } from '@/lib/module-scope'
 import type { ScopeRefusalResult } from '@/lib/module-scope.shared'
+import { logError } from '@/lib/log'
 
 const DecisionSchema = z.object({
     questionId: z.string(),
@@ -213,8 +214,7 @@ async function runAgent(
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
-        const stack = error instanceof Error ? error.stack : ''
-        console.error(`Agent run failed [${moduleId}]:`, message, stack)
+        logError('agent-run', error, { moduleId, ventureId, conversationId, isContinuation })
         try {
             await appendStreamLine(conversationId, `\n[Error: ${message}]`)
         } catch (dbError) {

@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { runWeeklyDigest, weekAgoIso } from '@/lib/weekly-digest'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -43,7 +44,7 @@ async function runOnce(): Promise<NextResponse> {
     return NextResponse.json({ ok: true, ...summary })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'digest failed'
-    console.error('[cron/weekly-digest] error:', err)
+    logError('cron/weekly-digest', err)
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

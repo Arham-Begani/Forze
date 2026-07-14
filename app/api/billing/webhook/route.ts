@@ -10,6 +10,7 @@ import {
   recordWebhookEvent,
 } from '@/lib/billing-queries'
 import { hashWebhookPayload, verifyRazorpayWebhookSignature } from '@/lib/razorpay'
+import { logError } from '@/lib/log'
 
 function toIsoFromUnix(value: unknown): string | null {
   if (typeof value !== 'number') return null
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (e) {
-    console.error('[POST /api/billing/webhook] error:', e)
+    logError('billing-webhook', e)
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 }
