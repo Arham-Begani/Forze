@@ -9,6 +9,8 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getGmailAccessToken } from '@/lib/gmail-oauth'
 import { analyzeReply } from '@/lib/email-generator'
+import { sendReplyReceivedMail } from '@/lib/forze-mail'
+import { enforceAnonRateLimit } from '@/lib/rate-limit'
 
 interface GmailPart {
   mimeType?: string
@@ -149,11 +151,33 @@ async function discoverVenturesNeedingSync(): Promise<VentureOutreachGroup[]> {
 
 // Entry point for the poll-crm-replies cron (app/api/cron/poll-crm-replies/route.ts).
 // Returns the number of newly-persisted replies across all ventures.
+// Resolves + caches the venture owner's email/name and venture name so the
+// reply alert doesn't re-query per reply. Returns null when the owner has no
+// email (nothing to notify).
+async function resolveOwnerInfo(
+  db: ReturnType<typeof createAdminClient>,
+  cache: Map<string, { email: string; name: string; ventureName: string } | null>,
+  ventureId: string,
+  userId: string,
+): Promise<{ email: string; name: string; ventureName: string } | null> {
+  if (cache.has(ventureId)) return cache.get(ventureId) ?? null
+  const [{ data: venture }, { data: owner }] = await Promise.all([
+    db.from('ventures').select('name').eq('id', ventureId).maybeSingle(),
+    db.from('users').select('email, name').eq('id', userId).maybeSingle(),
+  ])
+  const info = owner?.email
+    ? { email: owner.email as string, name: (owner.name as string) ?? '', ventureName: (venture?.name as string) ?? 'your venture' }
+    : null
+  cache.set(ventureId, info)
+  return info
+}
+
 export async function runCrmRepliesSync(): Promise<{ ventures: number; repliesPersisted: number }> {
   const db = createAdminClient()
   const groups = await discoverVenturesNeedingSync()
 
   let repliesPersisted = 0
+  const ownerInfoCache = new Map<string, { email: string; name: string; ventureName: string } | null>()
 
   for (const group of groups) {
     let accessToken: string
@@ -214,7 +238,34 @@ export async function runCrmRepliesSync(): Promise<{ ventures: number; repliesPe
           sentiment_score: analysis.sentiment_score,
           summary: analysis.summary,
         })
-        if (!insertError) repliesPersisted += 1
+        if (!insertError) {
+          repliesPersisted += 1
+
+          // Best-effort founder alert. Capped at 10/hour/venture via the anon
+          // limiter (keyed on ventureId) so a busy thread floods the CRM, not
+          // the inbox. Fails open pre-migration-044 and no-ops when Resend
+          // isn't configured. A failed alert never fails the sync.
+          try {
+            const rl = await enforceAnonRateLimit(group.ventureId, 'reply-alert', 3600, 10)
+            if (rl.allowed) {
+              const owner = await resolveOwnerInfo(db, ownerInfoCache, group.ventureId, group.userId)
+              if (owner) {
+                await sendReplyReceivedMail({
+                  to: owner.email,
+                  ownerName: owner.name,
+                  ventureId: group.ventureId,
+                  ventureName: owner.ventureName,
+                  fromEmail: fromEmail ?? 'A prospect',
+                  subject: subjectHeader,
+                  summary: analysis.summary,
+                  replyType: analysis.type,
+                })
+              }
+            }
+          } catch (err) {
+            console.error('[crm-replies] reply alert failed:', err)
+          }
+        }
       }
     }
   }
