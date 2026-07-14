@@ -102,6 +102,134 @@ export async function sendLeadCapturedMail(context: ForzeLeadAlertContext): Prom
   return { sent: true }
 }
 
+// ─── Outreach reply alert ──────────────────────────────────────────────────────
+//
+// Sent (best-effort, rate-capped by the caller) to the venture owner when the
+// CRM reply-sync cron persists a new inbound reply to their outreach. A reply
+// is the highest-value event in the outreach product — getting the founder
+// back in fast is the whole point.
+
+type ForzeReplyAlertContext = {
+  to: string
+  ownerName: string
+  ventureId: string
+  ventureName: string
+  fromEmail: string
+  subject?: string | null
+  summary?: string | null
+  replyType?: string | null
+}
+
+export async function sendReplyReceivedMail(context: ForzeReplyAlertContext): Promise<ForzeMailResult> {
+  if (!RESEND_API_KEY) {
+    return { sent: false, reason: 'not_configured' }
+  }
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://tryforze.ai').trim().replace(/\/+$/, '')
+  const crmUrl = `${appUrl}/dashboard/venture/${context.ventureId}/crm`
+  const ventureName = context.ventureName.trim() || 'your venture'
+  const subject = context.subject?.trim() ?? ''
+  const summary = context.summary?.trim() ?? ''
+  // All fields below reach renderHtml, which escapes them — inbound email
+  // content (attacker-influenced) can never inject markup into the alert.
+  const parts = [`${context.fromEmail} replied to your ${ventureName} outreach`]
+  if (subject) parts.push(`Subject: "${subject}".`)
+  if (summary) parts.push(summary)
+  parts.push('Open your CRM to read the full thread and respond while it’s warm.')
+  const message = parts.join(' ')
+  const mailSubject = `New reply for ${ventureName}`
+  const greetingName = context.ownerName.trim() || 'there'
+
+  const payload = {
+    from: FORZE_FROM_EMAIL,
+    to: [context.to],
+    subject: mailSubject,
+    text: `Hi ${greetingName},\n\n${message}\n\nOpen your CRM: ${crmUrl}\nThe Forze team`,
+    html: renderHtml({
+      title: mailSubject,
+      headline: 'You got a reply',
+      message,
+      ctaLabel: 'Read the reply',
+      ctaHref: crmUrl,
+      footer: 'The Forze team',
+      greetingName: escapeHtml(greetingName),
+    }),
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    return { sent: false, reason: 'request_failed' }
+  }
+
+  return { sent: true }
+}
+
+// ─── Weekly founder digest ─────────────────────────────────────────────────────
+//
+// Sent (best-effort, once-per-week-capped by the caller) to founders who had
+// any landing-page activity in the past week. The recurring "here's what
+// happened" touch is the retention loop the platform was missing.
+
+type ForzeDigestContext = {
+  to: string
+  ownerName: string
+  leads: number
+  pageviews: number
+  topVentureName?: string | null
+  ctaUrl: string
+}
+
+export async function sendWeeklyDigestMail(context: ForzeDigestContext): Promise<ForzeMailResult> {
+  if (!RESEND_API_KEY) {
+    return { sent: false, reason: 'not_configured' }
+  }
+
+  const greetingName = context.ownerName.trim() || 'there'
+  const leadWord = context.leads === 1 ? 'new lead' : 'new leads'
+  const viewWord = context.pageviews === 1 ? 'page view' : 'page views'
+  const venturePhrase = context.topVentureName?.trim() ? ` Most of the action was on ${context.topVentureName.trim()}.` : ''
+  const message = `Here's your week on Forze: ${context.leads} ${leadWord} and ${context.pageviews} ${viewWord} across your landing pages.${venturePhrase} Keep the momentum going.`
+
+  const payload = {
+    from: FORZE_FROM_EMAIL,
+    to: [context.to],
+    subject: `Your Forze week: ${context.leads} ${leadWord}, ${context.pageviews} ${viewWord}`,
+    text: `Hi ${greetingName},\n\n${message}\n\nOpen Forze: ${context.ctaUrl}\nThe Forze team`,
+    html: renderHtml({
+      title: 'Your weekly Forze digest',
+      headline: 'Your week on Forze',
+      message,
+      ctaLabel: 'Open your dashboard',
+      ctaHref: context.ctaUrl,
+      footer: 'The Forze team',
+      greetingName: escapeHtml(greetingName),
+    }),
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    return { sent: false, reason: 'request_failed' }
+  }
+
+  return { sent: true }
+}
+
 function buildForzeMail(context: ForzeMailContext) {
   const greetingName = context.name.trim() || 'there'
   const subject = getSubject(context.event)
