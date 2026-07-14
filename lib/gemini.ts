@@ -129,7 +129,8 @@ async function streamGeminiPrompt(
     userMessage: string,
     onChunk: (text: string) => Promise<void>,
     history: Content[] = [],
-    inlineImages: InlineImagePart[] = []
+    inlineImages: InlineImagePart[] = [],
+    signal?: AbortSignal
 ): Promise<string> {
     const chat = model.startChat({
         history,
@@ -151,7 +152,10 @@ async function streamGeminiPrompt(
 
     let result
     try {
-        result = await chat.sendMessageStream(messageInput)
+        // Pass the abort signal so a timed-out / cancelled run actually stops
+        // the underlying HTTP request instead of leaving it to stream (and bill)
+        // to completion in the background. Omitted → byte-identical old behavior.
+        result = await chat.sendMessageStream(messageInput, signal ? { signal } : undefined)
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         throw new Error(`Gemini API call failed: ${msg}`)
@@ -340,7 +344,8 @@ export async function streamPrompt(
     userMessage: string,
     onChunk: (text: string) => Promise<void>,
     history: Content[] = [],
-    inlineImages: InlineImagePart[] = []
+    inlineImages: InlineImagePart[] = [],
+    signal?: AbortSignal
 ): Promise<string> {
     if (isGrokResponsesModel(model)) {
         try {
@@ -355,11 +360,11 @@ export async function streamPrompt(
                 error instanceof Error ? error.message : String(error)
             )
 
-            return await streamGeminiPrompt(model.fallbackModel, systemPrompt, userMessage, onChunk, history, inlineImages)
+            return await streamGeminiPrompt(model.fallbackModel, systemPrompt, userMessage, onChunk, history, inlineImages, signal)
         }
     }
 
-    return await streamGeminiPrompt(model, systemPrompt, userMessage, onChunk, history, inlineImages)
+    return await streamGeminiPrompt(model, systemPrompt, userMessage, onChunk, history, inlineImages, signal)
 }
 
 // JSON extraction
@@ -493,6 +498,34 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
             setTimeout(() => reject(new Error(`Agent timed out after ${ms}ms`)), ms)
         ),
     ])
+}
+
+// Like withTimeout, but hands the wrapped work an AbortSignal that fires when
+// the deadline is hit. Threaded into streamPrompt so a timed-out Gemini stream
+// is actually cancelled (stops billing) instead of racing on in the background.
+// The timer is always cleared so a fast success never leaves a dangling handle.
+export async function withAbortableTimeout<T>(
+    fn: (signal: AbortSignal) => Promise<T>,
+    ms: number
+): Promise<T> {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const work = fn(controller.signal)
+    // Once the timeout wins the race, the aborted work still rejects later
+    // (AbortError). Attach a no-op handler so that rejection is observed and
+    // never surfaces as an unhandledRejection.
+    work.catch(() => {})
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+            controller.abort()
+            reject(new Error(`Agent timed out after ${ms}ms`))
+        }, ms)
+    })
+    try {
+        return await Promise.race([work, timeout])
+    } finally {
+        if (timer) clearTimeout(timer)
+    }
 }
 
 // Retries once on failure with a 3-second delay.
