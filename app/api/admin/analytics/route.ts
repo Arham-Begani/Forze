@@ -313,7 +313,14 @@ export async function GET() {
     const recentActiveUsers30d = new Set<string>()
     const dailyRunsByDate = new Map<string, number>()
     const dailyUsersByDate = new Map<string, Set<string>>()
-    const moduleUsage: Record<string, { total: number; complete: number; failed: number; credits: number }> = {}
+    const moduleUsage: Record<string, { total: number; complete: number; failed: number; running: number; credits: number }> = {}
+    // Runs stuck in 'running' past the sweeper's 15-min threshold — these are
+    // dead invocations that never wrote a terminal status. Surfacing the count
+    // + a sample lets the operator see the failure class the aggregate
+    // success-rate hides.
+    const STUCK_AFTER_MS = 15 * 60 * 1000
+    let runningConversationsCount = 0
+    let stuckConversationsCount = 0
 
     for (const conversation of conversations) {
       const venture = conversation.venture_id ? ventureById.get(conversation.venture_id) : undefined
@@ -322,10 +329,15 @@ export async function GET() {
       const dateKey = toDateKey(conversation.created_at)
       const moduleId = conversation.module_id ?? 'unknown'
 
-      moduleUsage[moduleId] ??= { total: 0, complete: 0, failed: 0, credits: 0 }
+      moduleUsage[moduleId] ??= { total: 0, complete: 0, failed: 0, running: 0, credits: 0 }
       moduleUsage[moduleId].total += 1
       if (conversation.status === 'complete') moduleUsage[moduleId].complete += 1
       if (conversation.status === 'failed') moduleUsage[moduleId].failed += 1
+      if (conversation.status === 'running') {
+        moduleUsage[moduleId].running += 1
+        runningConversationsCount += 1
+        if (createdAt && now.getTime() - createdAt.getTime() > STUCK_AFTER_MS) stuckConversationsCount += 1
+      }
 
       if (userId) {
         userRuns.set(userId, (userRuns.get(userId) ?? 0) + 1)
@@ -458,6 +470,26 @@ export async function GET() {
         createdAt: payment.created_at ?? '',
       }))
 
+    // Most recent failed + stuck runs so the operator can see WHICH runs broke
+    // (module, venture, user, when) instead of only an aggregate success rate.
+    const recentRunIssues = conversations
+      .filter((c) => c.status === 'failed' || (c.status === 'running' && c.created_at && now.getTime() - new Date(c.created_at).getTime() > STUCK_AFTER_MS))
+      .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+      .slice(0, 25)
+      .map((c) => {
+        const venture = c.venture_id ? ventureById.get(c.venture_id) : undefined
+        const userEmail = venture?.user_id ? (usersById.get(venture.user_id)?.email ?? 'unknown') : 'unknown'
+        return {
+          id: c.id,
+          moduleId: c.module_id ?? 'unknown',
+          status: c.status === 'running' ? 'stuck' : 'failed',
+          ventureId: c.venture_id ?? null,
+          ventureName: venture?.name ?? 'unknown',
+          userEmail,
+          createdAt: c.created_at ?? '',
+        }
+      })
+
     return NextResponse.json(
       {
         platform: {
@@ -471,6 +503,8 @@ export async function GET() {
           totalConversations: conversations.length,
           completedConversations: conversations.filter((conversation) => conversation.status === 'complete').length,
           failedConversations: conversations.filter((conversation) => conversation.status === 'failed').length,
+          runningConversations: runningConversationsCount,
+          stuckConversations: stuckConversationsCount,
           successRate: conversations.length > 0
             ? Math.round((conversations.filter((conversation) => conversation.status === 'complete').length / conversations.length) * 100)
             : 0,
@@ -506,6 +540,7 @@ export async function GET() {
           signupsDelta: thisWeekSignups - lastWeekSignups,
         },
         recentPayments,
+        recentRunIssues,
         warnings,
       },
       {
