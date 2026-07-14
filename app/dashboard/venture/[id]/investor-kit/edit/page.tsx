@@ -292,7 +292,7 @@ export default function InvestorKitEditorPage() {
     return (
       <div style={pageStyle}>
         <div style={{ color: 'var(--text-muted)', fontSize: 14, textAlign: 'center', padding: 60 }}>
-          No investor kit found. Generate one first from the Investor Kit module.
+          No investor kit found. Generate one first with the &ldquo;Investor Kit&rdquo; button in your venture&rsquo;s Landing workspace.
           <br />
           <button onClick={() => router.back()} style={{ ...btnStyle, marginTop: 16 }}>
             <ArrowLeft size={14} /> Go Back
