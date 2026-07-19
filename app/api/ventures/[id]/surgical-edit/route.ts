@@ -2,6 +2,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { getVenture, getConversation, patchConversationResult } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const SurgicalEditSchema = z.object({
   conversationId: z.string().min(1).max(100),
@@ -41,7 +42,7 @@ export async function PATCH(
     return NextResponse.json({ result: updatedResult })
   } catch (e) {
     if (isAuthError(e)) return (e as { toResponse: () => NextResponse }).toResponse()
-    console.error('[PATCH surgical-edit] error:', e)
+    logError('ventures/id/surgical-edit', e, { msg: '[PATCH surgical-edit] error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

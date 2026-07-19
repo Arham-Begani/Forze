@@ -2,6 +2,7 @@ import 'server-only'
 
 import crypto from 'crypto'
 import { createDb } from '@/lib/db'
+import { logError } from '@/lib/log'
 
 // Sliding-window rate limiter backed by `rate_limit_events` (see migration 014).
 // Returns { allowed, count }. The RPC inserts the event when allowed and skips
@@ -22,7 +23,7 @@ export async function enforceRateLimit(
 
   if (error) {
     // Fail-open on infra errors — never block product on rate-limit plumbing
-    console.error('[rate-limit] record_rate_limit_event error:', error)
+    logError('rate-limit', error, { msg: '[rate-limit] record_rate_limit_event error' })
     return { allowed: true, count: 0 }
   }
 
@@ -52,14 +53,14 @@ export async function enforceAnonRateLimit(
     })
 
     if (error) {
-      console.error('[rate-limit] record_anon_rate_limit_event error:', error)
+      logError('rate-limit', error, { msg: '[rate-limit] record_anon_rate_limit_event error' })
       return { allowed: true, count: 0 }
     }
 
     const count = typeof data === 'number' ? data : 0
     return { allowed: count <= limit, count }
   } catch (err) {
-    console.error('[rate-limit] anon rate limit failed:', err)
+    logError('rate-limit', err, { msg: '[rate-limit] anon rate limit failed' })
     return { allowed: true, count: 0 }
   }
 }

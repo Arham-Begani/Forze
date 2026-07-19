@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { claimDueRoutines } from '@/lib/queries/routine-queries'
 import { executeRoutine } from '@/lib/routine-executor'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 // Cron must run on a Node.js runtime — the executor pulls in the Gmail
@@ -91,7 +92,7 @@ async function runOnce(): Promise<NextResponse> {
       // records a routine_runs row. This catch is here so one wild throw
       // doesn't stop the rest of the batch.
       failed += 1
-      console.error('[cron/run-routines] unhandled executor error:', err)
+      logError('cron/run-routines', err, { msg: '[cron/run-routines] unhandled executor error' })
     }
   }
 

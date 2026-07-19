@@ -9,6 +9,7 @@ import {
   getBlogPostForAuthor,
   updateBlogPostForAuthor,
 } from '@/lib/queries/blog-queries'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -24,7 +25,7 @@ export async function GET(
     return NextResponse.json({ post })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[admin/blog/[id]] GET error:', e)
+    logError('admin/blog/id', e, { msg: '[admin/blog/[id]] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -87,7 +88,7 @@ export async function PATCH(
     if (/duplicate key|unique/i.test(msg)) {
       return NextResponse.json({ error: 'Slug already in use' }, { status: 409 })
     }
-    console.error('[admin/blog/[id]] PATCH error:', e)
+    logError('admin/blog/id', e, { msg: '[admin/blog/[id]] PATCH error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -104,7 +105,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[admin/blog/[id]] DELETE error:', e)
+    logError('admin/blog/id', e, { msg: '[admin/blog/[id]] DELETE error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

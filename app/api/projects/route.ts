@@ -3,6 +3,7 @@ import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import { getProjectsByUser, createProject } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(project, { status: 201 })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[POST /api/projects]', e)
+    logError('projects', e, { msg: '[POST /api/projects]' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

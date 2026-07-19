@@ -7,6 +7,7 @@ import { getVenture } from '@/lib/queries'
 import { generateCampaignEmail } from '@/lib/email-generator'
 import { enforceRateLimit, AI_RUN_LIMIT, AI_RUN_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -45,7 +46,7 @@ export async function POST(
     return NextResponse.json({ generated })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[ventures/direct-mail/generate-email] POST error:', e)
+    logError('ventures/id/direct-mail/generate-email', e, { msg: '[ventures/direct-mail/generate-email] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

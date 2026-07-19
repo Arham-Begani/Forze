@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, isAuthError } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { BILLING_PLANS, type BillingPeriod, type PlanSlug, PLAN_SEQUENCE } from '@/lib/billing'
+import { logError } from '@/lib/log'
 
 const VALID_PERIODS: BillingPeriod[] = ['monthly', 'yearly']
 
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ user, grants: subs ?? [] })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[admin/grant-plan] error:', e)
+    logError('admin/users/grant-plan', e, { msg: '[admin/grant-plan] error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[admin/grant-plan] error:', e)
+    logError('admin/users/grant-plan', e, { msg: '[admin/grant-plan] error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -214,7 +215,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[admin/grant-plan] error:', e)
+    logError('admin/users/grant-plan', e, { msg: '[admin/grant-plan] error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

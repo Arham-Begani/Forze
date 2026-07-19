@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { bulkDeleteLeads, bulkUpdateLeadStatus, getLeadsForVenture, getVenture } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { BulkLeadDeleteSchema, BulkLeadStatusSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 // Scopes a caller-supplied set of lead IDs down to ones that actually belong
 // to this venture, so a bulk action can't be used to mutate another
@@ -43,7 +44,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, updated: scopedIds.length })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/bulk] PATCH error:', error)
+    logError('ventures/id/crm/leads/bulk', error, { msg: '[crm/leads/bulk] PATCH error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -77,7 +78,7 @@ export async function DELETE(
     return NextResponse.json({ success: true, deleted: scopedIds.length })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/bulk] DELETE error:', error)
+    logError('ventures/id/crm/leads/bulk', error, { msg: '[crm/leads/bulk] DELETE error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

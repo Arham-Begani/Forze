@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { getLeadsForVenture, getVenture } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { ExportQuerySchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 function csvCell(value: unknown): string {
   const text = value == null ? '' : String(value)
@@ -65,7 +66,7 @@ export async function GET(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/export] GET error:', error)
+    logError('ventures/id/crm/leads/export', error, { msg: '[crm/leads/export] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { createPipelineStage, ensurePipelineStagesForVenture, getVenture } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { CreatePipelineStageSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 export async function GET(
   _request: NextRequest,
@@ -25,7 +26,7 @@ export async function GET(
     return NextResponse.json({ stages })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/pipeline-stages] GET error:', error)
+    logError('ventures/id/crm/pipeline-stages', error, { msg: '[crm/pipeline-stages] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -54,7 +55,7 @@ export async function POST(
     return NextResponse.json({ success: true, stage })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/pipeline-stages] POST error:', error)
+    logError('ventures/id/crm/pipeline-stages', error, { msg: '[crm/pipeline-stages] POST error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

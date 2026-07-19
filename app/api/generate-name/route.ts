@@ -3,6 +3,7 @@ import { getFlashModel } from '@/lib/gemini'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const NameSchema = z.object({
   idea: z.string().min(5).max(2000),
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ name })
   } catch (e) {
     if (isAuthError(e)) return (e as any).toResponse()
-    console.error('Generate name error:', e)
+    logError('generate-name', e, { msg: 'Generate name error' })
     return NextResponse.json({ error: 'Failed to generate name' }, { status: 500 })
   }
 }

@@ -7,6 +7,7 @@ import {
   setTestimonialArchived,
   setTestimonialFeatured,
 } from '@/lib/queries'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -56,7 +57,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const message = error instanceof Error ? error.message : 'Failed to update testimonial'
-    console.error('[PATCH /api/ventures/[id]/testimonials/[testimonialId]] error:', error)
+    logError('ventures/id/testimonials/testimonialId', error, { msg: '[PATCH /api/ventures/[id]/testimonials/[testimonialId]] error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -78,7 +79,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const message = error instanceof Error ? error.message : 'Failed to delete testimonial'
-    console.error('[DELETE /api/ventures/[id]/testimonials/[testimonialId]] error:', error)
+    logError('ventures/id/testimonials/testimonialId', error, { msg: '[DELETE /api/ventures/[id]/testimonials/[testimonialId]] error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

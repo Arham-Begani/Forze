@@ -16,6 +16,7 @@ import { getVenture, getProject } from '@/lib/queries'
 import { generateIcpDraft, runLeadScout } from '@/agents/lead-scout'
 import { enforceRateLimit, AI_RUN_LIMIT, AI_RUN_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateActionForResponse, gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -80,7 +81,7 @@ export async function POST(
     return NextResponse.json(result)
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/scout-leads] POST error:', e)
+    logError('campaigns/id/scout-leads', e, { msg: '[campaigns/scout-leads] POST error' })
     return NextResponse.json({ error: 'Lead scout failed — try again in a moment' }, { status: 502 })
   }
 }

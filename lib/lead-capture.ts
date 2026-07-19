@@ -17,6 +17,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendLeadCapturedMail } from '@/lib/forze-mail'
 import { enforceAnonRateLimit } from '@/lib/rate-limit'
 import type { Lead } from '@/lib/queries'
+import { logError } from '@/lib/log'
 
 function deriveFirstName(email: string, name?: string | null): string {
   if (name && name.trim()) return name.trim().split(/\s+/)[0].slice(0, 100)
@@ -49,7 +50,7 @@ export async function captureLandingLead(
   try {
     await autoEnrollLeadInCampaigns(ventureId, lead as Lead)
   } catch (err) {
-    console.error('[lead-capture] auto-enroll failed:', err)
+    logError('lead-capture', err, { msg: '[lead-capture] auto-enroll failed' })
   }
 
   // Best-effort founder alert — the landing page visibly working is the
@@ -57,7 +58,7 @@ export async function captureLandingLead(
   try {
     await notifyOwnerOfLead(ventureId, lead as Lead)
   } catch (err) {
-    console.error('[lead-capture] lead alert failed:', err)
+    logError('lead-capture', err, { msg: '[lead-capture] lead alert failed' })
   }
 
   return lead as Lead

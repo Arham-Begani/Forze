@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { deletePipelineStage, getPipelineStagesForVenture, getVenture, updatePipelineStage } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { UpdatePipelineStageSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 async function authorizeStage(ventureId: string, stageId: string, userId: string) {
   const venture = await getVenture(ventureId, userId)
@@ -42,7 +43,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, stage: updated })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/pipeline-stages/:stageId] PATCH error:', error)
+    logError('ventures/id/crm/pipeline-stages/stageId', error, { msg: '[crm/pipeline-stages/:stageId] PATCH error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -66,7 +67,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/pipeline-stages/:stageId] DELETE error:', error)
+    logError('ventures/id/crm/pipeline-stages/stageId', error, { msg: '[crm/pipeline-stages/:stageId] DELETE error' })
     // Deleting a stage that still has deals referencing it will hit the
     // stage_id FK constraint (deals.stage_id REFERENCES pipeline_stages(id),
     // no ON DELETE clause) — surface that as a normal 400, not a 500.

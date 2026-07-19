@@ -10,6 +10,7 @@ import {
   getRoutineForUser,
   updateRoutine,
 } from '@/lib/queries/routine-queries'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string; routineId: string }> }
 
@@ -38,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ routine: updated })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[ventures/routines/:routineId] PATCH error:', e)
+    logError('ventures/id/routines/routineId', e, { msg: '[ventures/routines/:routineId] PATCH error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -57,7 +58,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ ok: true })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[ventures/routines/:routineId] DELETE error:', e)
+    logError('ventures/id/routines/routineId', e, { msg: '[ventures/routines/:routineId] DELETE error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

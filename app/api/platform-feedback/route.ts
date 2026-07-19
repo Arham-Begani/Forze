@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, AuthError } from '@/lib/auth'
 import { createPlatformFeedback, type PlatformFeedbackCategory } from '@/lib/queries'
+import { logError } from '@/lib/log'
 
 const ALLOWED: PlatformFeedbackCategory[] = ['bug', 'feature', 'praise', 'other']
 
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const msg = error instanceof Error ? error.message : 'Failed to submit feedback'
-    console.error('[POST /api/platform-feedback] error:', error)
+    logError('platform-feedback', error, { msg: '[POST /api/platform-feedback] error' })
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

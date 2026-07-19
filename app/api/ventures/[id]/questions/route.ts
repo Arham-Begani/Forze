@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getFlashModel, extractJSON } from '@/lib/gemini'
 import { evaluateModuleScope } from '@/lib/module-scope'
+import { logError } from '@/lib/log'
 
 const bodySchema = z.object({
     moduleId: z.enum(['landing']),
@@ -134,7 +135,7 @@ First decide: is this prompt specific enough to proceed without questions? If ye
 
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
-        console.error('Questions generation failed:', e)
+        logError('ventures/id/questions', e, { msg: 'Questions generation failed' })
         // Graceful degradation — if question gen fails, just return empty
         return NextResponse.json({ questions: [] })
     }

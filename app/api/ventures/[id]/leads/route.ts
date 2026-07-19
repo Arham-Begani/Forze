@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { captureLandingLead } from '@/lib/lead-capture'
 import { PublicLeadCaptureSchema } from '@/lib/schemas/crm'
 import { clientIpKey, enforceAnonRateLimit, PUBLIC_LEAD_LIMIT, PUBLIC_WINDOW_SEC } from '@/lib/rate-limit'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -60,7 +61,7 @@ export async function POST(
   } catch (error) {
     // Never echo the raw DB / driver error back to anonymous landing-page
     // traffic — it can leak schema details.
-    console.error('Error creating lead:', error)
+    logError('ventures/id/leads', error, { msg: 'Error creating lead' })
     return NextResponse.json({ error: 'Failed to submit lead' }, { status: 500, headers: corsHeaders })
   }
 }

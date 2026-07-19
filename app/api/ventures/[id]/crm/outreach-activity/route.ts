@@ -13,6 +13,7 @@ import { getOutreachCampaignsForVenture, getVenture } from '@/lib/queries'
 import { listVentureCampaigns } from '@/lib/queries/campaign-queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import type { CampaignSummary } from '@/components/venture/crm/shared'
+import { logError } from '@/lib/log'
 
 const CAMPAIGN_TYPE_LABEL: Record<string, string> = {
   initial_outreach: 'Initial Outreach',
@@ -66,7 +67,7 @@ export async function GET(
     return NextResponse.json({ campaigns: combined })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/outreach-activity] GET error:', error)
+    logError('ventures/id/crm/outreach-activity', error, { msg: '[crm/outreach-activity] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

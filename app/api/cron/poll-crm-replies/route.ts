@@ -6,6 +6,7 @@
 // pattern as /api/cron/run-outreach (Bearer CRON_SECRET / x-vercel-cron).
 import { NextRequest, NextResponse } from 'next/server'
 import { runCrmRepliesSync } from '@/lib/crm-replies-cron'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -40,7 +41,7 @@ async function runOnce(): Promise<NextResponse> {
     return NextResponse.json({ ok: true, summary })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'tick failed'
-    console.error('[cron/poll-crm-replies] error:', err)
+    logError('cron/poll-crm-replies', err, { msg: '[cron/poll-crm-replies] error' })
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

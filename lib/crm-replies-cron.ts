@@ -11,6 +11,7 @@ import { getGmailAccessToken } from '@/lib/gmail-oauth'
 import { analyzeReply } from '@/lib/email-generator'
 import { sendReplyReceivedMail } from '@/lib/forze-mail'
 import { enforceAnonRateLimit } from '@/lib/rate-limit'
+import { logError } from '@/lib/log'
 
 interface GmailPart {
   mimeType?: string
@@ -263,7 +264,7 @@ export async function runCrmRepliesSync(): Promise<{ ventures: number; repliesPe
               }
             }
           } catch (err) {
-            console.error('[crm-replies] reply alert failed:', err)
+            logError('crm-replies-cron', err, { msg: '[crm-replies] reply alert failed' })
           }
         }
       }

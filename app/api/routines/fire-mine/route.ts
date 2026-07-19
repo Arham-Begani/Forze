@@ -21,6 +21,7 @@ import {
   type ClaimedRoutine,
 } from '@/lib/queries/routine-queries'
 import { executeRoutine } from '@/lib/routine-executor'
+import { logError } from '@/lib/log'
 
 // Same ceiling as the cron route — one user shouldn't have more than a
 // handful of routines firing at once anyway, so this is generous headroom.
@@ -68,7 +69,7 @@ export async function POST() {
         else failed += 1
       } catch (err) {
         failed += 1
-        console.error('[routines/fire-mine] unhandled executor error:', err)
+        logError('routines/fire-mine', err, { msg: '[routines/fire-mine] unhandled executor error' })
       }
     }
 

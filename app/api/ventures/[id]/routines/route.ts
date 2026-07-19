@@ -10,6 +10,7 @@ import {
   createRoutine,
   listRoutinesByVenture,
 } from '@/lib/queries/routine-queries'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -27,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ routines })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[ventures/routines] GET error:', e)
+    logError('ventures/id/routines', e, { msg: '[ventures/routines] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ routine }, { status: 201 })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[ventures/routines] POST error:', e)
+    logError('ventures/id/routines', e, { msg: '[ventures/routines] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

@@ -6,6 +6,7 @@ import { UploadLeadsSchema } from '@/lib/schemas/campaign'
 import { getCampaignForUser, createCampaignLeads, getCampaignLeads, getLeadEmailsForCampaign } from '@/lib/queries/campaign-queries'
 import { validateEmail, normalizeEmail } from '@/lib/email-utils'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -30,7 +31,7 @@ export async function GET(
     return NextResponse.json({ leads, total, page, limit, pages: Math.ceil(total / limit) })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/leads] GET error:', e)
+    logError('campaigns/id/leads', e, { msg: '[campaigns/leads] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -88,7 +89,7 @@ export async function POST(
     }, { status: 201 })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/leads] POST error:', e)
+    logError('campaigns/id/leads', e, { msg: '[campaigns/leads] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

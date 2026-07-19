@@ -27,6 +27,7 @@ import {
     LandingAssetKindSchema,
     LandingAssetUploadMetaSchema,
 } from '@/lib/schemas/landing-assets'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -54,7 +55,7 @@ export async function GET(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[GET assets] unexpected', e)
+        logError('ventures/id/assets', e, { msg: '[GET assets] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
@@ -138,7 +139,7 @@ export async function POST(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[POST assets] unexpected', e)
+        logError('ventures/id/assets', e, { msg: '[POST assets] unexpected' })
         return NextResponse.json(
             { error: e instanceof Error ? e.message : 'Internal error' },
             { status: 500 },

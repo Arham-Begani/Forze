@@ -4,6 +4,7 @@ import { getFlashModel } from '@/lib/gemini'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const EnhanceSchema = z.object({
   idea: z.string().min(5).max(2000),
@@ -58,7 +59,7 @@ Rules:
     return NextResponse.json({ enhanced })
   } catch (e) {
     if (isAuthError(e)) return (e as any).toResponse()
-    console.error('Enhance error:', e)
+    logError('enhance', e, { msg: 'Enhance error' })
     return NextResponse.json({ error: 'Failed to enhance idea' }, { status: 500 })
   }
 }

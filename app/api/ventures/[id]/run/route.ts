@@ -218,12 +218,12 @@ async function runAgent(
         try {
             await appendStreamLine(conversationId, `\n[Error: ${message}]`)
         } catch (dbError) {
-            console.error('Failed to write error line to DB:', dbError)
+            logError('ventures/id/run', dbError, { msg: 'Failed to write error line to DB' })
         }
         try {
             await updateConversationStatus(conversationId, 'failed')
         } catch (dbError) {
-            console.error('Failed to update conversation status to failed:', dbError)
+            logError('ventures/id/run', dbError, { msg: 'Failed to update conversation status to failed' })
         }
     }
 }
@@ -290,7 +290,7 @@ export async function POST(
             try {
                 await runAgent(id, conversation.id, moduleId, prompt, session.userId, depth, decisions, isContinuation, partialOutput)
             } catch (err) {
-                console.error('Agent error (after):', err)
+                logError('ventures/id/run', err, { msg: 'Agent error (after)' })
             }
         })
 

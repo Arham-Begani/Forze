@@ -1,6 +1,7 @@
 // GET /api/blog/posts?page=1&pageSize=12 — list published blog posts
 import { NextRequest, NextResponse } from 'next/server'
 import { listPublishedBlogPosts } from '@/lib/queries/blog-queries'
+import { logError } from '@/lib/log'
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('[blog/posts] GET error:', error)
+    logError('blog/posts', error, { msg: '[blog/posts] GET error' })
     return NextResponse.json({ error: 'Failed to fetch blog posts' }, { status: 500 })
   }
 }

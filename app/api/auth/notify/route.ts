@@ -3,6 +3,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { sendForzeAuthMail, type ForzeAuthMailEvent } from '@/lib/forze-mail'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const bodySchema = z.object({
   event: z.enum(['login', 'email_confirmed', 'password_changed']) satisfies z.ZodType<ForzeAuthMailEvent>,
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
 
-    console.error('[POST /api/auth/notify] error:', error)
+    logError('auth/notify', error, { msg: '[POST /api/auth/notify] error' })
     return NextResponse.json({ error: 'Could not send notification' }, { status: 500 })
   }
 }

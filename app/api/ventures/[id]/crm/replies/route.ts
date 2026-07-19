@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { getVenture, getOutreachRepliesForVenture } from '@/lib/queries'
 import { syncCrmReplies } from '@/lib/gmail-replies'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 // Manual "Check for replies" trigger: syncs new Gmail replies into
 // outreach_replies (deduped, AI-classified via analyzeReply()) for this
@@ -35,7 +36,7 @@ export async function GET(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
     const needsReauth = /reconnect|expired|not connected/i.test(message)
-    console.error('[crm/replies] GET error:', error)
+    logError('ventures/id/crm/replies', error, { msg: '[crm/replies] GET error' })
     return NextResponse.json(
       { error: message, code: needsReauth ? 'gmail_reauth_required' : 'crm_replies_failed' },
       { status: needsReauth ? 401 : 500 }

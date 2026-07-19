@@ -1,6 +1,7 @@
 // GET /api/blog/posts/:slug — single published post + related summaries
 import { NextRequest, NextResponse } from 'next/server'
 import { getPublishedBlogPostBySlug, getRelatedBlogPosts } from '@/lib/queries/blog-queries'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ slug: string }> }
 
@@ -20,7 +21,7 @@ export async function GET(
 
     return NextResponse.json({ post, related })
   } catch (error) {
-    console.error('[blog/posts/[slug]] GET error:', error)
+    logError('blog/posts/slug', error, { msg: '[blog/posts/[slug]] GET error' })
     return NextResponse.json({ error: 'Failed to fetch blog post' }, { status: 500 })
   }
 }

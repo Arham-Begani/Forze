@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, AuthError } from '@/lib/auth'
 import { getVentureAccess, listTestimonials, type TestimonialFilters } from '@/lib/queries'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -36,7 +37,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const message = error instanceof Error ? error.message : 'Failed to load testimonials'
-    console.error('[GET /api/ventures/[id]/testimonials] error:', error)
+    logError('ventures/id/testimonials', error, { msg: '[GET /api/ventures/[id]/testimonials] error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

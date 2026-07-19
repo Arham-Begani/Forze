@@ -12,6 +12,7 @@ import { runInvestorKitAgent, InvestorKitSchema } from '@/agents/investor-kit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import crypto from 'crypto'
+import { logError } from '@/lib/log'
 
 // Zod schema for PATCH — only the exact fields that can be manually edited
 const InvestorKitPatchSchema = z.object({
@@ -173,7 +174,7 @@ export async function POST(
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
         const msg = (e as Error)?.message ?? ''
-        console.error('Investor kit generation error:', msg)
+        logError('ventures/id/investor-kit', msg, { msg: 'Investor kit generation error' })
         // Check if it's a missing table error
         if (msg.includes('investor_kits') || msg.includes('relation') || msg.includes('does not exist')) {
             return NextResponse.json(

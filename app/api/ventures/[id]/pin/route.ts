@@ -3,6 +3,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { getVenture, getConversation, updateVentureContext } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const bodySchema = z.object({
     conversationId: z.string().uuid(),
@@ -52,7 +53,7 @@ export async function POST(
         return NextResponse.json({ success: true, pinnedConversationId: conversationId })
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
-        console.error('Pin error:', e)
+        logError('ventures/id/pin', e, { msg: 'Pin error' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

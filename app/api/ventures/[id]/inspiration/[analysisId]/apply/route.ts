@@ -15,6 +15,7 @@ import {
     type InspirationReferenceImage,
 } from '@/lib/queries/inspiration-queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 // Download the inspiration screenshot CDN URLs the analyze route captured,
 // base64-encode the first two (we don't need every URL — the pipeline agent
@@ -138,7 +139,7 @@ export async function POST(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[POST inspiration/apply] unexpected', e)
+        logError('ventures/id/inspiration/analysisId/apply', e, { msg: '[POST inspiration/apply] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
@@ -178,7 +179,7 @@ export async function DELETE(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[DELETE inspiration/apply] unexpected', e)
+        logError('ventures/id/inspiration/analysisId/apply', e, { msg: '[DELETE inspiration/apply] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

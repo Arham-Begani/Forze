@@ -12,6 +12,7 @@ import { getGmailStatus } from '@/lib/gmail-oauth'
 import { sendEmailViaGmail } from '@/lib/gmail-sender'
 import { gateActionForResponse, gateFeatureForResponse } from '@/lib/billing-http'
 import { DispatchSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 function escapeHtml(value: string): string {
   return value
@@ -151,7 +152,7 @@ export async function POST(
       ...(errors.length > 0 ? { errors: errors.slice(0, 20) } : {}),
     })
   } catch (error: unknown) {
-    console.error('Error dispatching outreach:', error)
+    logError('ventures/id/crm/dispatch', error, { msg: 'Error dispatching outreach' })
     return NextResponse.json({ error: 'Failed to dispatch outreach' }, { status: 500 })
   }
 }

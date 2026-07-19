@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAnalyticsEvent } from '@/lib/queries'
 import { clientIpKey, enforceAnonRateLimit, PUBLIC_TRACK_LIMIT, PUBLIC_WINDOW_SEC } from '@/lib/rate-limit'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -61,7 +62,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, event }, { headers: corsHeaders })
   } catch (error) {
-    console.error('Error creating analytics event:', error)
+    logError('ventures/id/track', error, { msg: 'Error creating analytics event' })
     return NextResponse.json({ error: 'Failed to record event' }, { status: 500, headers: corsHeaders })
   }
 }

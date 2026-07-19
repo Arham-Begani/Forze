@@ -8,6 +8,7 @@
 // meant every scheduled invocation 401'd and scheduled posts never published.
 import { dispatchDuePublishJobs } from '@/lib/marketing-dispatch'
 import { NextRequest, NextResponse } from 'next/server'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -53,7 +54,7 @@ async function runOnce(): Promise<NextResponse> {
     const summary = await dispatchDuePublishJobs()
     return NextResponse.json({ ok: true, summary })
   } catch (error) {
-    console.error('[marketing/publish/dispatch] error:', error)
+    logError('marketing/publish/dispatch', error, { msg: '[marketing/publish/dispatch] error' })
     return NextResponse.json({ error: 'Dispatch failed' }, { status: 500 })
   }
 }

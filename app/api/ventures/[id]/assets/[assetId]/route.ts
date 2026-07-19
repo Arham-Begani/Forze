@@ -14,6 +14,7 @@ import {
 } from '@/lib/queries/landing-asset-queries'
 import { deleteLandingAssetFromStorage } from '@/lib/storage/landing-assets-storage'
 import { LandingAssetPatchSchema } from '@/lib/schemas/landing-assets'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -49,7 +50,7 @@ export async function PATCH(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[PATCH asset] unexpected', e)
+        logError('ventures/id/assets/assetId', e, { msg: '[PATCH asset] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
@@ -84,7 +85,7 @@ export async function DELETE(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[DELETE asset] unexpected', e)
+        logError('ventures/id/assets/assetId', e, { msg: '[DELETE asset] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getLeadsForVenture, getVenture } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 export async function GET(
   _request: NextRequest,
@@ -22,7 +23,7 @@ export async function GET(
     return NextResponse.json({ leads })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/email] GET error:', error)
+    logError('ventures/id/crm/leads/email', error, { msg: '[crm/leads/email] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

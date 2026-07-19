@@ -5,6 +5,7 @@ import { listMarketingAssetsByVenture, getSocialConnectionSecretByProvider } fro
 import { fetchInstagramPostInsights, type InstagramPostInsights } from '@/lib/instagram-insights'
 import type { MarketingAsset } from '@/lib/marketing.shared'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type SocialPlatform = 'Twitter (X)' | 'LinkedIn' | 'Instagram'
 
@@ -174,7 +175,7 @@ export async function GET(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('Error fetching CRM analytics:', error)
+    logError('ventures/id/crm/analytics', error, { msg: 'Error fetching CRM analytics' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

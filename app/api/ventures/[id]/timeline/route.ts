@@ -2,6 +2,7 @@
 import { requireAuth, isAuthError } from '@/lib/auth'
 import { getVenture, getConversationsByVenture } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
+import { logError } from '@/lib/log'
 
 export async function GET(
     _request: NextRequest,
@@ -54,7 +55,7 @@ export async function GET(
         })
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
-        console.error('Timeline error:', e)
+        logError('ventures/id/timeline', e, { msg: 'Timeline error' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

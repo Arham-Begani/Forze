@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { createLeadActivity, getLeadActivityForLead, getLeadById, getVenture } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { CreateLeadNoteSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 async function authorizeLead(ventureId: string, leadId: string, userId: string) {
   const venture = await getVenture(ventureId, userId)
@@ -33,7 +34,7 @@ export async function GET(
     return NextResponse.json({ activity })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/:leadId/activity] GET error:', error)
+    logError('ventures/id/crm/leads/leadId/activity', error, { msg: '[crm/leads/:leadId/activity] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -69,7 +70,7 @@ export async function POST(
     return NextResponse.json({ success: true, activity })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/:leadId/activity] POST error:', error)
+    logError('ventures/id/crm/leads/leadId/activity', error, { msg: '[crm/leads/:leadId/activity] POST error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

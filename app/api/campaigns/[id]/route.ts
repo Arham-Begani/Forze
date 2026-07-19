@@ -6,6 +6,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { UpdateCampaignSchema } from '@/lib/schemas/campaign'
 import { getCampaignForUser, updateCampaign, deleteCampaign, getCampaignMetrics } from '@/lib/queries/campaign-queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -26,7 +27,7 @@ export async function GET(
     return NextResponse.json({ campaign: { ...campaign, metrics } })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/[id]] GET error:', e)
+    logError('campaigns/id', e, { msg: '[campaigns/[id]] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -54,7 +55,7 @@ export async function PATCH(
     return NextResponse.json({ campaign: updated })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/[id]] PATCH error:', e)
+    logError('campaigns/id', e, { msg: '[campaigns/[id]] PATCH error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -76,7 +77,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/[id]] DELETE error:', e)
+    logError('campaigns/id', e, { msg: '[campaigns/[id]] DELETE error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

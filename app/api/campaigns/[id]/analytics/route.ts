@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, isAuthError } from '@/lib/auth'
 import { getCampaignForUser, getCampaignMetrics, getLeadsByStatus, getLeadsBySendStatus, getEngagementTimeline } from '@/lib/queries/campaign-queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -43,7 +44,7 @@ export async function GET(
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/analytics] GET error:', e)
+    logError('campaigns/id/analytics', e, { msg: '[campaigns/analytics] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

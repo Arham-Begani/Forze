@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runOutreachTick } from '@/lib/outreach-executor'
+import { logError } from '@/lib/log'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -49,7 +50,7 @@ async function runOnce(): Promise<NextResponse> {
     return NextResponse.json({ ok: true, summary })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'tick failed'
-    console.error('[cron/run-outreach] error:', err)
+    logError('cron/run-outreach', err, { msg: '[cron/run-outreach] error' })
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

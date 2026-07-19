@@ -3,6 +3,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { createDb } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import { getCreditBalance, getCurrentSubscription, getRecentPayments } from '@/lib/billing-queries'
+import { logError } from '@/lib/log'
 
 export async function GET() {
     try {
@@ -198,7 +199,7 @@ export async function GET() {
         })
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
-        console.error('Analytics error:', e)
+        logError('analytics', e, { msg: 'Analytics error' })
         return NextResponse.json({ error: 'Failed to load analytics' }, { status: 500 })
     }
 }

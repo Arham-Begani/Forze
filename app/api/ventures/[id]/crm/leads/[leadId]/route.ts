@@ -12,6 +12,7 @@ import {
 } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { UpdateLeadSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 async function authorizeLead(ventureId: string, leadId: string, userId: string) {
   const venture = await getVenture(ventureId, userId)
@@ -42,7 +43,7 @@ export async function GET(
     return NextResponse.json({ lead, activity })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/:leadId] GET error:', error)
+    logError('ventures/id/crm/leads/leadId', error, { msg: '[crm/leads/:leadId] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -99,7 +100,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, lead: updated })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/:leadId] PATCH error:', error)
+    logError('ventures/id/crm/leads/leadId', error, { msg: '[crm/leads/:leadId] PATCH error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -123,7 +124,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/leads/:leadId] DELETE error:', error)
+    logError('ventures/id/crm/leads/leadId', error, { msg: '[crm/leads/:leadId] DELETE error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

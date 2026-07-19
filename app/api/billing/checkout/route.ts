@@ -24,6 +24,7 @@ import {
 } from '@/lib/razorpay'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { logError } from '@/lib/log'
 
 const CreatePlanSchema = z.object({
   mode: z.literal('create'),
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
     if (e instanceof BillingError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: e.status })
     }
-    console.error('[POST /api/billing/checkout] error:', e)
+    logError('billing/checkout', e, { msg: '[POST /api/billing/checkout] error' })
     return NextResponse.json({ error: 'Checkout failed' }, { status: 500 })
   }
 }

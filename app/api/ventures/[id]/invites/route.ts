@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { getVentureAccess } from '@/lib/queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendVentureInviteMail } from '@/lib/invite-mail'
+import { logError } from '@/lib/log'
 
 const inviteSchema = z.object({
   email: z.string().email().max(254),
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       .single()
 
     if (error) {
-      console.error('Failed to insert invite:', error)
+      logError('ventures/id/invites', error, { msg: 'Failed to insert invite' })
       return NextResponse.json(
         {
           error: 'Failed to create invite',
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       emailReason: mail.sent ? null : mail.reason,
     })
   } catch (error: any) {
-    console.error('Failed to create invite:', error)
+    logError('ventures/id/invites', error, { msg: 'Failed to create invite' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Failed to fetch invites:', error)
+      logError('ventures/id/invites', error, { msg: 'Failed to fetch invites' })
       return NextResponse.json(
         { error: 'Failed to fetch invites. Has migration 024 been applied?' },
         { status: 500 }
@@ -146,7 +147,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
     return NextResponse.json({ invites })
   } catch (error: any) {
-    console.error('Failed to fetch invites:', error)
+    logError('ventures/id/invites', error, { msg: 'Failed to fetch invites' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -180,13 +181,13 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
       .eq('venture_id', ventureId)
 
     if (error) {
-      console.error('Failed to revoke invite:', error)
+      logError('ventures/id/invites', error, { msg: 'Failed to revoke invite' })
       return NextResponse.json({ error: 'Failed to revoke invite' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    console.error('Failed to revoke invite:', error)
+    logError('ventures/id/invites', error, { msg: 'Failed to revoke invite' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

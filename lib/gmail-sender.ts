@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getGmailAccessToken } from '@/lib/gmail-oauth'
 import { createDb } from '@/lib/db'
+import { logError } from '@/lib/log'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ export async function pollGmailForReplies(
 
     return results
   } catch (err) {
-    console.error('[gmail-sender] pollGmailForReplies error:', err)
+    logError('gmail-sender', err, { msg: '[gmail-sender] pollGmailForReplies error' })
     return []
   }
 }
@@ -284,7 +285,7 @@ export async function pollGmailForBounces(userId: string): Promise<BounceNotice[
 
     return notices
   } catch (err) {
-    console.error('[gmail-sender] pollGmailForBounces error:', err)
+    logError('gmail-sender', err, { msg: '[gmail-sender] pollGmailForBounces error' })
     return []
   }
 }

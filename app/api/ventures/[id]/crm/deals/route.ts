@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { CreateDealSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 export async function GET(
   _request: NextRequest,
@@ -30,7 +31,7 @@ export async function GET(
     return NextResponse.json({ deals })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/deals] GET error:', error)
+    logError('ventures/id/crm/deals', error, { msg: '[crm/deals] GET error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -88,7 +89,7 @@ export async function POST(
     return NextResponse.json({ success: true, deal })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/deals] POST error:', error)
+    logError('ventures/id/crm/deals', error, { msg: '[crm/deals] POST error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

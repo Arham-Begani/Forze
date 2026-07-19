@@ -8,6 +8,7 @@ import { parseSocialProvider, requireMarketingSession } from '@/lib/marketing-ap
 import { upsertSocialConnection } from '@/lib/marketing-queries'
 import { sanitizeUrlParam } from '@/lib/sanitize'
 import { NextRequest, NextResponse } from 'next/server'
+import { logError } from '@/lib/log'
 
 function buildRedirect(request: NextRequest, path: string, status: 'success' | 'error', provider: string, message?: string) {
   const url = new URL(path, request.url)
@@ -75,7 +76,7 @@ export async function GET(
     response.cookies.delete(cookieName)
     return response
   } catch (error) {
-    console.error('[integrations/[provider]/callback] error:', error)
+    logError('integrations/provider/callback', error, { msg: '[integrations/[provider]/callback] error' })
     const response = NextResponse.redirect(buildRedirect(
       request,
       returnTo,

@@ -11,6 +11,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { getCampaignForUser } from '@/lib/queries/campaign-queries'
 import { createDb } from '@/lib/db'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -69,7 +70,7 @@ export async function GET(
     return NextResponse.json({ leads })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/leads/from-crm] GET error:', e)
+    logError('campaigns/id/leads/from-crm', e, { msg: '[campaigns/leads/from-crm] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -137,7 +138,7 @@ export async function POST(
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/leads/from-crm] POST error:', e)
+    logError('campaigns/id/leads/from-crm', e, { msg: '[campaigns/leads/from-crm] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

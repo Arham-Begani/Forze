@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { handleGmailCallback, verifyOAuthState, getReturnToFromState } from '@/lib/gmail-oauth'
 import { recordCampaignEvent } from '@/lib/queries/campaign-queries'
+import { logError } from '@/lib/log'
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = req.nextUrl
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       `${appUrl}${returnTo}${sep}gmail_connected=1&email=${encodeURIComponent(result.emailAddress)}`
     )
   } catch (err) {
-    console.error('[gmail/callback] error:', err)
+    logError('integrations/gmail/callback', err, { msg: '[gmail/callback] error' })
     const msg = err instanceof Error ? err.message : 'unknown'
     await recordCampaignEvent({
       eventType: 'gmail_callback_error',

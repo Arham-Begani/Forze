@@ -7,6 +7,7 @@ import {
   createBlogPostForAuthor,
   listAllBlogPostsForAuthor,
 } from '@/lib/queries/blog-queries'
+import { logError } from '@/lib/log'
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -15,7 +16,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ posts })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[admin/blog] GET error:', e)
+    logError('admin/blog', e, { msg: '[admin/blog] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (/duplicate key|unique/i.test(msg)) {
       return NextResponse.json({ error: 'Slug already in use' }, { status: 409 })
     }
-    console.error('[admin/blog] POST error:', e)
+    logError('admin/blog', e, { msg: '[admin/blog] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

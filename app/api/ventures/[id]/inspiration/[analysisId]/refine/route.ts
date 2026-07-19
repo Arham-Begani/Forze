@@ -21,6 +21,7 @@ import { validateAccessibility } from '@/lib/inspiration/accessibility'
 import { suggestRefinement } from '@/lib/inspiration/refine'
 import { getInspirationAnalysis } from '@/lib/queries/inspiration-queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -94,7 +95,7 @@ export async function POST(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[POST inspiration/refine] unexpected', e)
+        logError('ventures/id/inspiration/analysisId/refine', e, { msg: '[POST inspiration/refine] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

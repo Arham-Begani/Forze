@@ -9,6 +9,7 @@ import { advanceCrmLeadStatus } from '@/lib/lead-capture'
 import { updateCampaign } from '@/lib/queries/campaign-queries'
 import { enforceRateLimit, POLL_LIMIT, POLL_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -35,7 +36,7 @@ export async function GET(
     return NextResponse.json({ replies })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/poll-replies] GET error:', e)
+    logError('campaigns/id/poll-replies', e, { msg: '[campaigns/poll-replies] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -133,7 +134,7 @@ export async function POST(
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/poll-replies] POST error:', e)
+    logError('campaigns/id/poll-replies', e, { msg: '[campaigns/poll-replies] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

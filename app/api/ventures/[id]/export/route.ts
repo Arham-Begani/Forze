@@ -4,6 +4,7 @@ import { getBillingSnapshot } from '@/lib/billing-queries'
 import { getVenture } from '@/lib/queries'
 import { generateUnifiedPDF } from '@/lib/pdf-export'
 import { NextRequest, NextResponse } from 'next/server'
+import { logError } from '@/lib/log'
 
 export async function GET(
     request: NextRequest,
@@ -34,7 +35,7 @@ export async function GET(
         })
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
-        console.error('PDF Export Error:', e)
+        logError('ventures/id/export', e, { msg: 'PDF Export Error' })
         return NextResponse.json({ error: 'Internal error during export' }, { status: 500 })
     }
 }

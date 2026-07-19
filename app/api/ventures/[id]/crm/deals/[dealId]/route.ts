@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { UpdateDealSchema } from '@/lib/schemas/crm'
+import { logError } from '@/lib/log'
 
 async function authorizeDeal(ventureId: string, dealId: string, userId: string) {
   const venture = await getVenture(ventureId, userId)
@@ -68,7 +69,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, deal: updated })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/deals/:dealId] PATCH error:', error)
+    logError('ventures/id/crm/deals/dealId', error, { msg: '[crm/deals/:dealId] PATCH error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
@@ -92,7 +93,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal error'
-    console.error('[crm/deals/:dealId] DELETE error:', error)
+    logError('ventures/id/crm/deals/dealId', error, { msg: '[crm/deals/:dealId] DELETE error' })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

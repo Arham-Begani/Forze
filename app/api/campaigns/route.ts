@@ -7,6 +7,7 @@ import { CreateCampaignSchema } from '@/lib/schemas/campaign'
 import { createCampaign, listVentureCampaigns } from '@/lib/queries/campaign-queries'
 import { getVenture } from '@/lib/queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 const ListQuerySchema = z.object({
   venture_id: z.string().uuid().optional(),
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ campaigns })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns] GET error:', e)
+    logError('campaigns', e, { msg: '[campaigns] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ campaign }, { status: 201 })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns] POST error:', e)
+    logError('campaigns', e, { msg: '[campaigns] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

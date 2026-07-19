@@ -8,6 +8,7 @@ import { getVenture } from '@/lib/queries'
 import { buildOutreachBrief } from '@/lib/outreach-brief'
 import { enforceRateLimit, AI_RUN_LIMIT, AI_RUN_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -72,7 +73,7 @@ export async function POST(
     return NextResponse.json({ generated })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/generate-email] POST error:', e)
+    logError('campaigns/id/generate-email', e, { msg: '[campaigns/generate-email] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

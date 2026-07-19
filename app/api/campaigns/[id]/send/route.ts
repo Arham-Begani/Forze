@@ -20,6 +20,7 @@ import { signTrackingToken } from '@/lib/tracking-hmac'
 import { enforceRateLimit, SEND_LIMIT, SEND_WINDOW_SEC } from '@/lib/rate-limit'
 import { getGmailStatus } from '@/lib/gmail-oauth'
 import { gateActionForResponse, gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -304,7 +305,7 @@ export async function POST(
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/send] POST error:', e)
+    logError('campaigns/id/send', e, { msg: '[campaigns/send] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

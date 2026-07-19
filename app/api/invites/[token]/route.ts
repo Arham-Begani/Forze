@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { logError } from '@/lib/log'
 
 export async function POST(req: NextRequest, props: { params: Promise<{ token: string }> }) {
   try {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
 
     return NextResponse.json({ success: true, ventureId: invite.venture_id })
   } catch (error: any) {
-    console.error('Failed to accept invite:', error)
+    logError('invites/token', error, { msg: 'Failed to accept invite' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ token: st
 
     return NextResponse.json({ invite: data })
   } catch (error: any) {
-    console.error('Failed to fetch invite:', error)
+    logError('invites/token', error, { msg: 'Failed to fetch invite' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

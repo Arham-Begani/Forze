@@ -36,6 +36,7 @@ import {
     updateInspirationAnalysis,
 } from '@/lib/queries/inspiration-queries'
 import { gateActionForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -262,7 +263,7 @@ export async function POST(
             })
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Vision analysis failed'
-            console.error('[POST inspiration/analyze] internal error', err)
+            logError('ventures/id/inspiration/analyze', err, { msg: '[POST inspiration/analyze] internal error' })
             await updateInspirationAnalysis(analysis.id, session.userId, {
                 status: 'failed',
                 error_message: message,
@@ -275,7 +276,7 @@ export async function POST(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[POST inspiration/analyze] unexpected', e)
+        logError('ventures/id/inspiration/analyze', e, { msg: '[POST inspiration/analyze] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

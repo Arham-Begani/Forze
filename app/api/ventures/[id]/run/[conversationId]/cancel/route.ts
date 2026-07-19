@@ -2,6 +2,7 @@
 import { requireAuth, isAuthError } from '@/lib/auth'
 import { getVenture, getConversation, updateConversationStatus } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
+import { logError } from '@/lib/log'
 
 export async function POST(
     request: NextRequest,
@@ -30,7 +31,7 @@ export async function POST(
         return NextResponse.json({ success: true })
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
-        console.error('Cancel failed:', e)
+        logError('ventures/id/run/conversationId/cancel', e, { msg: 'Cancel failed' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

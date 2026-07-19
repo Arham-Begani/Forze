@@ -14,6 +14,7 @@ import {
 import { validateEmail, normalizeEmail } from '@/lib/email-utils'
 import { deriveFirstNameFromEmail } from '@/lib/auto-name'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -75,7 +76,7 @@ export async function POST(
     }, { status: 201 })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[campaigns/direct-leads] POST error:', e)
+    logError('campaigns/id/direct-leads', e, { msg: '[campaigns/direct-leads] POST error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

@@ -11,6 +11,7 @@ import {
     listInspirationAnalysesForVenture,
 } from '@/lib/queries/inspiration-queries'
 import { gateFeatureForResponse } from '@/lib/billing-http'
+import { logError } from '@/lib/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -54,7 +55,7 @@ export async function GET(
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
         if (e instanceof AuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        console.error('[GET inspiration] unexpected', e)
+        logError('ventures/id/inspiration', e, { msg: '[GET inspiration] unexpected' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }

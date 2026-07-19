@@ -6,6 +6,7 @@ import {
   getRoutineForUser,
   listRoutineRuns,
 } from '@/lib/queries/routine-queries'
+import { logError } from '@/lib/log'
 
 type RouteContext = { params: Promise<{ id: string; routineId: string }> }
 
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ runs })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
-    console.error('[ventures/routines/runs] GET error:', e)
+    logError('ventures/id/routines/routineId/runs', e, { msg: '[ventures/routines/runs] GET error' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

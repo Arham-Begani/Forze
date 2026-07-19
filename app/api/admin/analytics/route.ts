@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { requireAdmin, isAuthError } from '@/lib/auth'
 import { hasUnlimitedBillingOverride } from '@/lib/billing'
 import { createDb } from '@/lib/db'
+import { logError } from '@/lib/log'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -551,7 +552,7 @@ export async function GET() {
     )
   } catch (e) {
     if (isAuthError(e)) return (e as any).toResponse()
-    console.error('Admin analytics error:', e)
+    logError('admin/analytics', e, { msg: 'Admin analytics error' })
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Failed to load admin analytics' },
       { status: 500, headers: { 'Cache-Control': 'no-store, max-age=0' } }

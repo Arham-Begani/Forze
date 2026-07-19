@@ -2,6 +2,7 @@
 // Public route — no auth required. Returns investor kit data by access code.
 import { getInvestorKitByCode, incrementKitViews } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
+import { logError } from '@/lib/log'
 
 export async function GET(
     _request: NextRequest,
@@ -41,7 +42,7 @@ export async function GET(
             },
         })
     } catch (e) {
-        console.error('Public kit access error:', e)
+        logError('investor-kit/code', e, { msg: 'Public kit access error' })
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
     }
 }
