@@ -372,7 +372,16 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
       <NavigationProgress />
 
       {/* Loading Screen */}
-      {!appReady && <LoadingScreen onComplete={handleLoadingComplete} minimumDuration={200} />}
+      {/* Reveals as soon as the bootstrap data lands (with a 200ms floor so a
+          warm load doesn't flash), instead of on a fixed ~650ms timer chain.
+          Left mounted deliberately — it owns its own exit animation, so the
+          overlay fades out while the app fades in underneath. Gating it on
+          !appReady here would unmount it mid-exit and make it pop away. */}
+      <LoadingScreen
+        onComplete={handleLoadingComplete}
+        minimumDuration={200}
+        ready={!loading}
+      />
 
       <div className="flex h-[100dvh] overflow-hidden" style={{ opacity: appReady ? 1 : 0, transition: 'opacity 0.3s ease' }}>
 

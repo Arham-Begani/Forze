@@ -1,22 +1,43 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface LoadingScreenProps {
   onComplete?: () => void
+  /** Floor, so a fast load doesn't flash the screen for a single frame. */
   minimumDuration?: number
+  /**
+   * Whether the app actually has what it needs. Defaults true (pure-timer
+   * behavior). When passed, the screen dismisses on real readiness instead of
+   * on a fixed timer.
+   */
+  ready?: boolean
+  /**
+   * Hard ceiling. Never let a hung or failed request trap someone on a
+   * loading screen — after this we reveal the app regardless of `ready`.
+   */
+  maximumDuration?: number
 }
 
-export function LoadingScreen({ onComplete, minimumDuration = 800 }: LoadingScreenProps) {
+export function LoadingScreen({
+  onComplete,
+  minimumDuration = 800,
+  ready = true,
+  maximumDuration = 4000,
+}: LoadingScreenProps) {
   const [visible, setVisible] = useState(true)
   const [progress, setProgress] = useState(0)
   const [mounted, setMounted] = useState(false)
+  // Dismissal needs BOTH the floor elapsed and the app ready; the cap forces it.
+  const [floorElapsed, setFloorElapsed] = useState(false)
+  const [capReached, setCapReached] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     setMounted(true)
     // Animate progress from 0 to 100
-    const interval = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       setProgress(prev => {
         const remaining = 100 - prev
         const increment = remaining * 0.12 + Math.random() * 4
@@ -24,20 +45,29 @@ export function LoadingScreen({ onComplete, minimumDuration = 800 }: LoadingScre
       })
     }, 40)
 
-    const timer = setTimeout(() => {
-      clearInterval(interval)
-      setProgress(100)
-      setTimeout(() => {
-        setVisible(false)
-        setTimeout(() => onComplete?.(), 300)
-      }, 150)
-    }, minimumDuration)
+    const floorTimer = setTimeout(() => setFloorElapsed(true), minimumDuration)
+    const capTimer = setTimeout(() => setCapReached(true), maximumDuration)
 
     return () => {
-      clearTimeout(timer)
-      clearInterval(interval)
+      clearTimeout(floorTimer)
+      clearTimeout(capTimer)
+      if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [minimumDuration, onComplete])
+  }, [minimumDuration, maximumDuration])
+
+  useEffect(() => {
+    if (!(floorElapsed && ready) && !capReached) return
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    setProgress(100)
+    setVisible(false)
+    // Fire immediately rather than after the exit animation: the app fades in
+    // underneath while the overlay fades out, so the two crossfade instead of
+    // costing ~450ms of dead time in series.
+    onComplete?.()
+  }, [floorElapsed, ready, capReached, onComplete])
 
   if (!mounted) return null
 
