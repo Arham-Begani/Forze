@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useCallback, type ReactNode } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -8,38 +8,23 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
 import { ToastProvider, useToast } from '@/components/ui/Toast'
 import { PlatformFeedbackButton } from '@/components/ui/PlatformFeedbackButton'
+import {
+  DashboardShellProvider,
+  normalizeVenture,
+  type DashboardShellValue,
+  type DashboardSession,
+  type DashboardProject,
+  type DashboardVenture,
+} from '@/components/dashboard/DashboardShellContext'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
+// Shapes live in DashboardShellContext so the shell and the pages reading from
+// it can never drift. Local aliases keep the rest of this file unchanged.
 
-interface SessionData {
-  userId: string
-  email: string
-  name: string
-  plan: string
-  planLabel?: string
-  creditsRemaining?: number
-  allowedModules?: string[]
-  hasUnlimitedAccess?: boolean
-  isAdmin?: boolean
-}
+type SessionData = DashboardSession
+type ProjectItem = DashboardProject
 
-interface ProjectItem {
-  id: string
-  name: string
-  description: string
-  icon: string
-  status: string
-  global_idea: string | null
-  created_at: string
-}
-
-interface VentureItem {
-  id: string
-  name: string
-  project_id: string | null
-  created_at: string
-  completedModules: string[]
-}
+type VentureItem = DashboardVenture
 
 const MODULES = [
   { id: 'landing',      label: 'Landing Page', icon: '▣', accent: '#8C7A5A' },
@@ -65,12 +50,7 @@ function getInitials(name: string): string {
 
 // ─── Layout ─────────────────────────────────────────────────────────────────────
 
-function normalizeVentureItem(venture: Omit<VentureItem, 'completedModules'> & { completedModules?: string[] }): VentureItem {
-  return {
-    ...venture,
-    completedModules: Array.isArray(venture.completedModules) ? venture.completedModules : [],
-  }
-}
+const normalizeVentureItem = normalizeVenture
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -375,6 +355,16 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
   // Derived sidebar state
   const activeVenture = ventures.find(v => v.id === activeVentureId) ?? null
   const projectVentures = ventures.filter(v => v.project_id === activeProjectId)
+
+  // Publish what the shell already fetched so pages don't re-request it.
+  // Memoized: a fresh object each render would restart consumers' effects.
+  const shellValue = useMemo<DashboardShellValue>(
+    () => ({ session, projects, ventures, loading }),
+    [session, projects, ventures, loading]
+  )
+  // Built once per render and reused in both branches below, so switching
+  // between them never remounts the page subtree.
+  const shellChildren = <DashboardShellProvider value={shellValue}>{children}</DashboardShellProvider>
 
   return (
     <>
@@ -1086,11 +1076,11 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                 transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
                 style={{ height: '100%' }}
               >
-                {children}
+                {shellChildren}
               </motion.div>
             </AnimatePresence>
           ) : (
-            children
+            shellChildren
           )}
         </main>
       </div>

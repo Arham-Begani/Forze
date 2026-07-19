@@ -4,25 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface Project {
-  id: string
-  name: string
-  description: string
-  icon: string
-  status: string
-  created_at: string
-  updated_at: string
-}
-
-interface Venture {
-  id: string
-  name: string
-  project_id: string | null
-  created_at: string
-}
+import { useDashboardCollections } from '@/components/dashboard/DashboardShellContext'
 
 // ─── Module data ────────────────────────────────────────────────────────────
 
@@ -44,9 +26,9 @@ const QUICK_ACTIONS = [
 export default function DashboardPage() {
   const router = useRouter()
 
-  const [projects, setProjects] = useState<Project[]>([])
-  const [ventures, setVentures] = useState<Venture[]>([])
-  const [loading, setLoading] = useState(true)
+  // Projects + ventures come from the dashboard shell, which already loaded
+  // them via /api/bootstrap — this page used to re-fetch both.
+  const { projects, ventures, loading } = useDashboardCollections()
   const [hoveredProject, setHoveredProject] = useState<string | null>(null)
 
   // ── Idea intake ──────────────────────────────────────────────────────────
@@ -62,25 +44,19 @@ export default function DashboardPage() {
     setMounted(true)
   }, [])
 
+  // Only the idea is page-specific now; the collections arrive from the shell.
   useEffect(() => {
-    async function load() {
-      try {
-        const [projRes, ventRes, ideaRes] = await Promise.all([
-          fetch('/api/projects'),
-          fetch('/api/ventures'),
-          fetch('/api/user/idea'),
-        ])
-        if (projRes.ok) setProjects(await projRes.json())
-        if (ventRes.ok) setVentures(await ventRes.json())
-        const ideaData = ideaRes.ok ? await ideaRes.json() : null
-        setIdea(ideaData?.idea ?? null)
-      } catch (err) {
-        console.error('Failed to load dashboard data:', err)
-      } finally {
-        setLoading(false)
-      }
+    let cancelled = false
+    async function loadIdea() {
+      const data = await fetch('/api/user/idea')
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+      if (!cancelled) setIdea(data?.idea ?? null)
     }
-    load()
+    loadIdea()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function getVentureCount(projectId: string) {

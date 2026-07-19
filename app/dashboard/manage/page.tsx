@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useDashboardCollections } from '@/components/dashboard/DashboardShellContext'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,9 @@ const STATUS_OPTIONS = [
 export default function ManageProjectsPage() {
   const router = useRouter()
 
+  const shell = useDashboardCollections()
+  const seededRef = useRef(false)
+
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [ventures, setVentures] = useState<Venture[]>([])
@@ -56,22 +60,19 @@ export default function ManageProjectsPage() {
 
   useEffect(() => {
     setMounted(true)
-    async function load() {
-      try {
-        const [projRes, ventRes] = await Promise.all([
-          fetch('/api/projects'),
-          fetch('/api/ventures'),
-        ])
-        if (projRes.ok) setProjects(await projRes.json())
-        if (ventRes.ok) setVentures(await ventRes.json())
-      } catch (err) {
-        console.error('Failed to load manage page data:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
   }, [])
+
+  // Seed from the shell's already-loaded data instead of re-fetching both
+  // collections. Seeded ONCE (not read through) because this page renames,
+  // deletes and re-statuses rows optimistically — a later shell update must
+  // never clobber an edit in progress.
+  useEffect(() => {
+    if (seededRef.current || shell.loading) return
+    seededRef.current = true
+    setProjects(shell.projects)
+    setVentures(shell.ventures)
+    setLoading(false)
+  }, [shell.loading, shell.projects, shell.ventures])
 
   useEffect(() => {
     if (renamingId && renameRef.current) { renameRef.current.focus(); renameRef.current.select() }
