@@ -8,8 +8,19 @@ This file is the Agent's memory between sessions.
 ---
 
 ## Current Status
-**Phase:** 30 — Roadmap phases 3–5 sweep: Starter unlocks Inspiration, deleted Launch Autopilot + MVP Scalpel, structured logging, sign-in throttle, tenant SEO, vitest harness, CLAUDE.md module-set refresh
-**Last updated:** July 14, 2026
+**Phase:** 31 — /download SmartScreen + Gatekeeper install notes, `WINDOWS_DOWNLOAD_URL` constant
+**Last updated:** July 19, 2026
+
+### Latest Session (July 19 2026) — Unsigned-installer expectations on the download page
+- **Problem:** the Windows `.exe` is unsigned, so SmartScreen throws "Windows protected your PC" on first run and users assume malware and abandon the install. The page said nothing about it.
+- **Where:** `components/download/DownloadClient.tsx` (the `/download` page — the only surface with real installer buttons; `components/ide-landing/IdePlatforms.tsx` cards just `router.push('/download')`, so they were left alone).
+- **Added `InstallNote`** — a native `<details>` disclosure, collapsed by default so the page stays clean. Copy lives in one `INSTALL_NOTES` map: **windows** ("Seeing a \"Windows protected your PC\" warning?" → SmartScreen is a publisher-reputation check, not a virus alert; new independent developer, not code-signed yet → 1. Click "More info" 2. Click "Run anyway") and **macos** (not notarized → Gatekeeper blocks first launch → 1. Right-click/Control-click in Applications 2. Choose "Open", then "Open" again). Linux has no equivalent gate, so `noteOsFor()` returns null for it.
+- **Placement:** the note for the auto-detected OS renders directly under the primary CTA; notes for the remaining relevant OSes render under the "other platforms" grid (deduped against the primary's, so a note never appears twice). Notes are **gated on `item.available`** — when no build is published the buttons say "coming soon" and no warning renders.
+- **Refactor:** new `WINDOWS_DOWNLOAD_URL = '/api/download/windows-x86_64'` + `downloadHref(key)` helper; both `PrimaryButton` and `SecondaryCard` now route through it. **Href is unchanged** — same route as before. Carries the requested TODO: swap to the Microsoft Store listing URL once the Store version is live, and delete the SmartScreen note at that point.
+- **Styling:** existing tokens only (`--glass-bg`/`--glass-border`/`--radius-md`, DM Sans), no fixed widths, no new deps. Mobile-safe (the note is full-width inside the existing 640px column and wraps).
+- **Verified:** `npx tsc --noEmit` 0, `npm run build` 0 (49/49 pages), `npx vitest run` 9/9 (unrelated billing suite, no regression). `/download` is auth-gated so it can't be hit anonymously in a browser — instead rendered `DownloadClient` to static markup via a scratch script using the repo's own `typescript` + `react-dom/server` (no deps added, nothing written into the repo) and asserted: all three platform hrefs unchanged, both notes present with the exact button labels, `<details>` collapsed by default, exactly 2 notes (no Linux note), and **0 notes when every item is unavailable**.
+- **Flagged, not changed:** the page's "Signed — auto-updating builds" trust chip refers to Tauri *update-bundle* signing, but sitting inches from "isn't code-signed yet" it reads as a contradiction. Left alone (marketing copy, outside this task) — worth a wording pass.
+- **Next:** remove both notes when code signing / notarization ships; carry-over from Phase 30 (onboarding checklist, `[module]/page.tsx` code-split, `logError` adoption).
 
 ### Latest Session (July 14 2026, part 2) — Roadmap sweep across phases 3/4/5 (founder said "go ahead with all")
 - Asked the two money-affecting decisions first (AskUserQuestion): **Starter tier → unlock Inspiration**; hidden agents → **delete them** (not expose). Then executed the safe/verified batch. All gates green throughout (`tsc` 0, `npm run build` 0, `npm test` 9/9); route table + build clean.
