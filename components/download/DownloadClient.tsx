@@ -30,6 +30,40 @@ const OS_STYLE: Record<IdeOs, { glyph: string; accent: string }> = {
   linux: { glyph: 'Tux', accent: '#5A8C6E' },
 }
 
+// Where the Windows installer button points. Kept as one named constant so the
+// button and the SmartScreen note below can never drift apart.
+// TODO: swap to Microsoft Store listing URL once the Store version is live —
+// at that point remove the SmartScreen note entirely.
+const WINDOWS_DOWNLOAD_URL = '/api/download/windows-x86_64'
+
+// Every other platform is served straight from the gated download route.
+function downloadHref(key: IdePlatformKey): string {
+  return key === 'windows-x86_64' ? WINDOWS_DOWNLOAD_URL : `/api/download/${key}`
+}
+
+// First-launch OS warnings. The installers aren't code-signed/notarised yet, so
+// both OSes throw a scary-looking dialog at people — say so up front instead of
+// letting them assume it's malware and bail.
+type NoteOs = 'windows' | 'macos'
+
+const INSTALL_NOTES: Record<NoteOs, { summary: string; body: string; steps: string[] }> = {
+  windows: {
+    summary: 'Seeing a "Windows protected your PC" warning?',
+    body: 'That blue screen is SmartScreen checking publisher reputation, not a virus alert. Forze IDE comes from a new independent developer and isn’t code-signed yet, so Windows doesn’t recognize the publisher. It’s safe to continue:',
+    steps: ['Click "More info"', 'Click "Run anyway"'],
+  },
+  macos: {
+    summary: 'macOS won’t open the app?',
+    body: 'Same reason — the build isn’t notarized yet, so Gatekeeper blocks the very first launch. You only have to do this once:',
+    steps: ['Right-click (or Control-click) Forze IDE in Applications', 'Choose "Open", then "Open" again to confirm'],
+  },
+}
+
+// Linux has no equivalent gate, so it gets no note.
+function noteOsFor(os: IdeOs): NoteOs | null {
+  return os === 'windows' || os === 'macos' ? os : null
+}
+
 const TRUST = [
   { value: 'Local-first', label: 'your data, your machine' },
   { value: 'BYOK', label: 'keyless or your own key' },
@@ -70,6 +104,17 @@ export function DownloadClient({ version, pubDate, items, configured }: Download
     () => items.filter((i) => i.key !== primary?.key),
     [items, primary]
   )
+
+  // Only warn about a platform someone can actually download right now.
+  const primaryNote = primary?.available ? noteOsFor(primary.os) : null
+  const otherNotes = useMemo(() => {
+    const seen = new Set<NoteOs>()
+    for (const item of others) {
+      const os = noteOsFor(item.os)
+      if (os && item.available && os !== primaryNote) seen.add(os)
+    }
+    return Array.from(seen)
+  }, [others, primaryNote])
 
   const releasedOn = useMemo(() => {
     if (!pubDate) return null
@@ -263,6 +308,7 @@ export function DownloadClient({ version, pubDate, items, configured }: Download
         {primary && (
           <div style={{ width: '100%', marginTop: '32px', animation: 'card-rise 0.7s 0.25s ease both' }}>
             <PrimaryButton item={primary} />
+            {primaryNote && <InstallNote os={primaryNote} />}
           </div>
         )}
 
@@ -291,6 +337,9 @@ export function DownloadClient({ version, pubDate, items, configured }: Download
                 <SecondaryCard key={item.key} item={item} />
               ))}
             </div>
+            {otherNotes.map((os) => (
+              <InstallNote key={os} os={os} />
+            ))}
           </>
         )}
 
@@ -375,7 +424,7 @@ function PrimaryButton({ item }: { item: DownloadItem }) {
 
   return (
     <a
-      href={`/api/download/${item.key}`}
+      href={downloadHref(item.key)}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -409,6 +458,57 @@ function PrimaryButton({ item }: { item: DownloadItem }) {
       </div>
       <span style={{ fontSize: '18px', fontWeight: 700, opacity: 0.9 }}>↓</span>
     </a>
+  )
+}
+
+// Collapsed by default so the page stays clean — it only matters to the people
+// who hit the dialog, and they'll be looking for exactly this.
+function InstallNote({ os }: { os: NoteOs }) {
+  const note = INSTALL_NOTES[os]
+
+  return (
+    <details style={{
+      width: '100%',
+      marginTop: '12px',
+      padding: '10px 14px',
+      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--glass-border)',
+      background: 'var(--glass-bg)',
+      backdropFilter: 'blur(var(--glass-blur))',
+      WebkitBackdropFilter: 'blur(var(--glass-blur))',
+      textAlign: 'left',
+    }}>
+      <summary style={{
+        cursor: 'pointer',
+        fontFamily: 'var(--font-dm-sans), sans-serif',
+        fontSize: '13px',
+        fontWeight: 600,
+        color: 'var(--text-soft)',
+      }}>
+        {note.summary}
+      </summary>
+      <p style={{
+        margin: '10px 0 0',
+        fontFamily: 'var(--font-dm-sans), sans-serif',
+        fontSize: '13px',
+        lineHeight: 1.6,
+        color: 'var(--text-soft)',
+      }}>
+        {note.body}
+      </p>
+      <ol style={{
+        margin: '8px 0 0',
+        paddingLeft: '20px',
+        fontFamily: 'var(--font-dm-sans), sans-serif',
+        fontSize: '13px',
+        lineHeight: 1.7,
+        color: 'var(--text)',
+      }}>
+        {note.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+    </details>
   )
 }
 
@@ -457,7 +557,7 @@ function SecondaryCard({ item }: { item: DownloadItem }) {
 
   return (
     <a
-      href={`/api/download/${item.key}`}
+      href={downloadHref(item.key)}
       style={{ ...baseStyle, transition: 'transform var(--transition-fast), box-shadow 0.25s ease, border-color 0.2s ease' }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-3px)'
