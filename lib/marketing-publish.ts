@@ -2,7 +2,12 @@ import 'server-only'
 
 import { Buffer } from 'node:buffer'
 import { decryptSecret, encryptSecret, isSecretDecryptError } from '@/lib/marketing-crypto'
-import { generatePostImage, prepareInstagramImageUrl } from '@/lib/marketing-image-gen'
+import {
+  generatePostImage,
+  isImageAspect,
+  isImageStyle,
+  prepareInstagramImageUrl,
+} from '@/lib/marketing-image-gen'
 import {
   markSocialConnectionStatus,
   updateSocialConnectionTokens,
@@ -384,6 +389,38 @@ async function uploadLinkedInImage(input: {
   return assetUrn
 }
 
+// Resolves which image a post should publish with, in priority order:
+//   1. payload.imageUrl          — the founder uploaded or explicitly set it
+//   2. the selected candidate    — they generated options and picked one
+//   3. null                      — caller falls back to blind generation
+// Drafts created before the image studio existed carry neither new key and so
+// fall straight through to (3), i.e. exactly the old behaviour.
+function selectedImageFromPayload(payload: Record<string, unknown>): string | null {
+  const direct = stringValue(payload.imageUrl)
+  if (direct) return direct
+
+  const candidates = Array.isArray(payload.imageCandidates)
+    ? (payload.imageCandidates as unknown[]).filter((c): c is string => typeof c === 'string')
+    : []
+  if (candidates.length === 0) return null
+
+  const rawIndex = typeof payload.selectedImageIndex === 'number' ? payload.selectedImageIndex : 0
+  const index = Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex < candidates.length ? rawIndex : 0
+  return candidates[index] ?? null
+}
+
+// Art direction stamped on the asset, used only when we still have to generate
+// blind (scheduled posts the founder never opened, routine-published posts).
+function imageOptionsFromPayload(payload: Record<string, unknown>) {
+  const style = payload.imageStyle
+  const aspect = payload.aspect
+  return {
+    style: isImageStyle(style) ? style : undefined,
+    aspect: isImageAspect(aspect) ? aspect : undefined,
+    artDirection: typeof payload.artDirection === 'string' ? payload.artDirection : undefined,
+  }
+}
+
 // Generate (or fetch) the image and hand the bytes off to LinkedIn's asset
 // uploader. Returns null on any failure so the post can still go out as
 // text-only — a transient image-gen error should never kill a working post.
@@ -401,9 +438,14 @@ async function resolveLinkedInImageAsset(input: {
     : []
 
   try {
-    let imageUrl = stringValue(input.payload.imageUrl)
+    let imageUrl = selectedImageFromPayload(input.payload)
     if (!imageUrl) {
-      imageUrl = await generatePostImage(input.asset.body.trim(), ventureName, brandColors)
+      imageUrl = await generatePostImage(
+        input.asset.body.trim(),
+        ventureName,
+        brandColors,
+        imageOptionsFromPayload(input.payload)
+      )
     }
 
     const fetchRes = await fetch(imageUrl, { cache: 'no-store' })
@@ -827,12 +869,19 @@ async function publishInstagramAsset(
     ? (payload.brandColors as unknown[]).filter((c): c is string => typeof c === 'string')
     : []
 
-  // Use existing image URL if present (e.g. user supplied one), else AI-generate
-  let imageUrl = stringValue(payload.imageUrl)
-  if (!imageUrl) {
-    imageUrl = await generatePostImage(caption, ventureName, brandColors)
+  // Use the founder's chosen image if there is one (uploaded, or picked from
+  // the generated candidates in the image studio), else AI-generate blind.
+  const chosenImage = selectedImageFromPayload(payload)
+  let imageUrl: string
+  if (chosenImage) {
+    imageUrl = await prepareInstagramImageUrl(chosenImage, ventureName)
   } else {
-    imageUrl = await prepareInstagramImageUrl(imageUrl, ventureName)
+    imageUrl = await generatePostImage(
+      caption,
+      ventureName,
+      brandColors,
+      imageOptionsFromPayload(payload)
+    )
   }
 
   // Verify the image URL is publicly fetchable AND served as image/* before

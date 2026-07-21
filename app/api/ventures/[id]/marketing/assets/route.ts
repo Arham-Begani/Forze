@@ -3,6 +3,8 @@ import { buildInstagramDraftSeeds, buildLinkedInDraftSeeds, buildYouTubeDraftSee
 import { generateFreshInstagramDrafts } from '@/lib/instagram-content-ai'
 import { generateFreshLinkedInDrafts } from '@/lib/linkedin-content-ai'
 import { buildOutreachBrief } from '@/lib/outreach-brief'
+import { buildBrandKit, buildBrandVoiceBlock } from '@/lib/brand-kit'
+import { DEFAULT_IMAGE_STYLE } from '@/lib/marketing-image-gen'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
 import {
   createMarketingAssets,
@@ -63,10 +65,18 @@ export async function POST(
       // Post-pivot brand context: built from landing copy + shadow board (the
       // marketing/research agents no longer exist, so their context keys are
       // null for every new venture).
-      const brief = buildOutreachBrief(
-        venture.name,
-        (venture.context ?? {}) as unknown as Record<string, unknown>
-      )
+      const context = (venture.context ?? {}) as unknown as Record<string, unknown>
+      const brief = buildOutreachBrief(venture.name, context)
+      // Brand kit + voice (lib/brand-kit.ts). `brandColors` is stamped onto
+      // every seed payload so the image generator finally receives the
+      // venture's real palette — lib/marketing-publish.ts has always read
+      // this key, but nothing wrote it until now.
+      const brandKit = buildBrandKit(context)
+      const voiceBlock = buildBrandVoiceBlock(context)
+      const brandPayload = {
+        brandColors: brandKit.colors,
+        imageStyle: DEFAULT_IMAGE_STYLE,
+      }
       let seeds: CreateMarketingAssetSeed[]
       if (parsed.data.provider === 'linkedin') {
         // Try the LinkedInRocket AI generator first (varied hook+tone per
@@ -81,7 +91,8 @@ export async function POST(
             research,
             LINKEDIN_DRAFT_COUNT,
             Date.now(),
-            brief
+            brief,
+            voiceBlock
           )
           if (seeds.length === 0) {
             seeds = buildLinkedInDraftSeeds(venture.name, marketing, LINKEDIN_DRAFT_COUNT)
@@ -109,7 +120,7 @@ export async function POST(
         }
 
         try {
-          seeds = await generateFreshInstagramDrafts(venture.name, marketing, slots, Date.now(), brief)
+          seeds = await generateFreshInstagramDrafts(venture.name, marketing, slots, Date.now(), brief, voiceBlock)
         } catch {
           // Gemini failure — fall back to deterministic seeds so the user still gets drafts.
           seeds = buildInstagramDraftSeeds(venture.name, marketing, slots).slice(0, slots)
@@ -134,7 +145,8 @@ export async function POST(
           assetType: seed.assetType,
           title: seed.title,
           body: seed.body,
-          payload: seed.payload,
+          // brandPayload first so a seed that already set imageStyle wins.
+          payload: { ...brandPayload, ...seed.payload },
           ventureId: id,
           userId: session.userId,
           status: 'draft',

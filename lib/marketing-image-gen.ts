@@ -18,6 +18,90 @@ const IMAGE_MODEL = process.env.IMAGE_GEMINI_MODEL || 'gemini-2.5-flash-image'
 
 const INSTAGRAM_MEDIA_BUCKET = 'instagram-media'
 
+// ─── Art direction ────────────────────────────────────────────────────────────
+//
+// Before these existed, every generated post image used one hardcoded
+// editorial-photography prompt and the founder never saw the result until it
+// was live on their account. `editorial_photo` reproduces that exact prompt,
+// so any draft that doesn't name a style behaves identically to before.
+
+export const IMAGE_STYLES = [
+  'editorial_photo',
+  'bold_graphic',
+  'product_shot',
+  'minimal_type',
+  'illustrated',
+] as const
+export type ImageStyle = (typeof IMAGE_STYLES)[number]
+export const DEFAULT_IMAGE_STYLE: ImageStyle = 'editorial_photo'
+
+export function isImageStyle(value: unknown): value is ImageStyle {
+  return typeof value === 'string' && (IMAGE_STYLES as readonly string[]).includes(value)
+}
+
+interface StylePreset {
+  label: string
+  /** Positive direction: medium, lighting, composition. */
+  style: string
+  /** Extra forbidden elements on top of the shared hard rules. */
+  negative: string
+}
+
+export const IMAGE_STYLE_PRESETS: Record<ImageStyle, StylePreset> = {
+  editorial_photo: {
+    label: 'Editorial photo',
+    style:
+      'Style: photorealistic, editorial photography, shallow depth of field, soft directional lighting, considered negative space, premium magazine feel. ' +
+      'Composition: rule of thirds, sharp focus on the subject, clean uncluttered background.',
+    negative: 'stock-photo clichés (handshakes, lightbulb-ideas, generic office scenes)',
+  },
+  bold_graphic: {
+    label: 'Bold graphic',
+    style:
+      'Style: flat vector-style graphic design, large simple shapes, high colour contrast, confident geometry, poster-like impact. ' +
+      'Composition: one dominant shape or motif, generous flat background, strong silhouette that reads at thumbnail size.',
+    negative: 'photorealism, gradients that muddy the shapes, drop shadows, skeuomorphism',
+  },
+  product_shot: {
+    label: 'Product shot',
+    style:
+      'Style: studio product photography, seamless backdrop, controlled soft-box lighting with one crisp highlight, subtle contact shadow, catalogue quality. ' +
+      'Composition: the product centred and hero-framed, filling roughly two thirds of the frame.',
+    negative: 'busy environments, human faces, hands entering the frame, cluttered props',
+  },
+  minimal_type: {
+    label: 'Minimal',
+    style:
+      'Style: extreme minimalism, one subject on a vast plain background, abundant negative space, muted palette, quiet and confident. ' +
+      'Composition: subject small and off-centre, most of the frame intentionally empty.',
+    negative: 'busy detail, multiple subjects, textures competing for attention',
+  },
+  illustrated: {
+    label: 'Illustrated',
+    style:
+      'Style: hand-drawn editorial illustration, confident linework, limited flat colour palette, subtle paper grain, New Yorker / Financial Times op-ed feel. ' +
+      'Composition: one clear illustrated metaphor, balanced and legible at small sizes.',
+    negative: 'photorealism, 3D renders, cartoon mascots, clip-art',
+  },
+}
+
+// ─── Aspect ratios ────────────────────────────────────────────────────────────
+// 1:1 is the default and matches the previous hardcoded 1080x1080 behaviour.
+
+export const IMAGE_ASPECTS = ['1:1', '4:5', '1.91:1'] as const
+export type ImageAspect = (typeof IMAGE_ASPECTS)[number]
+export const DEFAULT_IMAGE_ASPECT: ImageAspect = '1:1'
+
+export function isImageAspect(value: unknown): value is ImageAspect {
+  return typeof value === 'string' && (IMAGE_ASPECTS as readonly string[]).includes(value)
+}
+
+const ASPECT_DIMENSIONS: Record<ImageAspect, { width: number; height: number }> = {
+  '1:1': { width: 1080, height: 1080 },
+  '4:5': { width: 1080, height: 1350 },
+  '1.91:1': { width: 1080, height: 566 },
+}
+
 interface GeneratedImage {
   buffer: Buffer
   mimeType: string
@@ -32,7 +116,10 @@ interface GeminiImageResult {
   }
 }
 
-async function generateWithImagen(prompt: string): Promise<GeneratedImage> {
+async function generateWithImagen(
+  prompt: string,
+  aspect: ImageAspect = DEFAULT_IMAGE_ASPECT
+): Promise<GeneratedImage> {
   const apiKey = getImageGeminiApiKey()
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:predict?key=${encodeURIComponent(apiKey)}`
 
@@ -43,7 +130,9 @@ async function generateWithImagen(prompt: string): Promise<GeneratedImage> {
       instances: [{ prompt }],
       parameters: {
         sampleCount: 1,
-        aspectRatio: '1:1',
+        // Imagen accepts 1:1 / 4:5 / 16:9 style ratios; 1.91:1 is not in its
+        // enum, so ask for the nearest landscape and let sharp do the exact crop.
+        aspectRatio: aspect === '1.91:1' ? '16:9' : aspect,
         personGeneration: 'allow_adult',
       },
     }),
@@ -121,10 +210,14 @@ async function generateWithGeminiInlineImage(prompt: string): Promise<GeneratedI
   throw new Error('Gemini image generation returned no image data')
 }
 
-async function normalizeForInstagramFeed(image: GeneratedImage): Promise<GeneratedImage> {
+async function normalizeForInstagramFeed(
+  image: GeneratedImage,
+  aspect: ImageAspect = DEFAULT_IMAGE_ASPECT
+): Promise<GeneratedImage> {
+  const { width, height } = ASPECT_DIMENSIONS[aspect] ?? ASPECT_DIMENSIONS[DEFAULT_IMAGE_ASPECT]
   const buffer = await sharp(image.buffer, { failOn: 'error' })
     .rotate()
-    .resize(1080, 1080, {
+    .resize(width, height, {
       fit: 'cover',
       position: 'attention',
     })
@@ -271,11 +364,39 @@ export async function prepareInstagramImageUrl(imageUrl: string, ventureName: st
  * public Supabase Storage bucket. Returns the public URL that Instagram's crawler
  * will fetch when creating the media container.
  */
-export async function generatePostImage(
-  caption: string,
-  ventureName: string,
+export interface PostImageOptions {
+  caption: string
+  ventureName: string
   brandColors?: string[]
-): Promise<string> {
+  style?: ImageStyle
+  /** Free-text art direction typed by the founder. Treated as untrusted. */
+  artDirection?: string
+  aspect?: ImageAspect
+}
+
+const MAX_ART_DIRECTION = 400
+
+// The art-direction box is founder-supplied text that lands in a model prompt.
+// Strip control characters and cap the length so it can't be used to smuggle
+// a wall of instructions past the hard rules below.
+function sanitizeArtDirection(input: string | undefined | null): string {
+  if (!input) return ''
+  return input
+    .replace(/[\u0000-\u0008\u000B-\u001F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_ART_DIRECTION)
+}
+
+/**
+ * Builds the image-generation prompt. Exported and pure so the same string can
+ * be shown to the founder or unit-tested without spending a generation.
+ */
+export function buildImagePrompt(options: PostImageOptions): string {
+  const { caption, ventureName, brandColors, aspect = DEFAULT_IMAGE_ASPECT } = options
+  const preset = IMAGE_STYLE_PRESETS[options.style ?? DEFAULT_IMAGE_STYLE]
+    ?? IMAGE_STYLE_PRESETS[DEFAULT_IMAGE_STYLE]
+
   const colorHint =
     brandColors && brandColors.length > 0
       ? `Brand palette: ${brandColors.join(', ')}. Use these tones tastefully — do not paint the entire image in them.`
@@ -287,26 +408,85 @@ export async function generatePostImage(
     .trim()
     .slice(0, 320)
 
-  const prompt =
+  const artDirection = sanitizeArtDirection(options.artDirection)
+  const artDirectionHint = artDirection
+    ? `The brand owner asked for this specifically, honour it wherever it does not conflict with the hard rules: "${artDirection}". `
+    : ''
+
+  const aspectHint = aspect === '4:5'
+    ? '4:5 portrait'
+    : aspect === '1.91:1'
+      ? '1.91:1 landscape'
+      : '1:1 square'
+
+  return (
     `You are an editorial art director composing a single Instagram feed post for a brand called "${ventureName}". ` +
     `The caption the image must visually support is: "${cleanCaption}". ` +
-    `Translate the meaning of that caption into a concrete, photographable scene — not an abstract concept. ` +
-    `Pick ONE clear subject (a person mid-action, an object on a surface, an environment, or a still life) and stage it cinematically. ` +
+    `Translate the meaning of that caption into a concrete, depictable scene — not an abstract concept. ` +
+    `Pick ONE clear subject (a person mid-action, an object on a surface, an environment, or a still life) and stage it deliberately. ` +
     `${colorHint} ` +
-    `Style: photorealistic, editorial photography, shallow depth of field, soft directional lighting, considered negative space, premium magazine feel. ` +
-    `Composition: 1:1 square, rule of thirds, sharp focus on the subject, clean uncluttered background. ` +
+    `${artDirectionHint}` +
+    `${preset.style} Frame it as ${aspectHint}. ` +
     `Hard rules — do NOT include any of these: text, words, letters, numbers, logos, watermarks, captions, UI mockups, app screenshots, charts, infographics, ` +
-    `collages, multiple panels, borders, frames, AI-generated faces with distorted features, or stock-photo clichés (handshakes, lightbulb-ideas, generic office scenes). ` +
+    `collages, multiple panels, borders, frames, AI-generated faces with distorted features, or ${preset.negative}. ` +
     `If the caption mentions a product, depict the product itself — not a person holding a sign about it. ` +
-    `Output a single, full-bleed, gallery-quality photograph.`
+    `Output a single, full-bleed, gallery-quality image.`
+  )
+}
 
+async function renderAndUpload(options: PostImageOptions): Promise<string> {
+  const aspect = options.aspect ?? DEFAULT_IMAGE_ASPECT
+  const prompt = buildImagePrompt(options)
   const usingImagen = IMAGE_MODEL.startsWith('imagen-')
   const generatedImage = usingImagen
-    ? await generateWithImagen(prompt)
+    ? await generateWithImagen(prompt, aspect)
     : await generateWithGeminiInlineImage(prompt)
-  const image = await normalizeForInstagramFeed(generatedImage)
+  const image = await normalizeForInstagramFeed(generatedImage, aspect)
 
-  const safeName = ventureName.replace(/[^a-zA-Z0-9-]+/g, '-').toLowerCase().slice(0, 40) || 'post'
-  const filename = `generated/${safeName}-${Date.now()}.${image.extension}`
+  const safeName = options.ventureName.replace(/[^a-zA-Z0-9-]+/g, '-').toLowerCase().slice(0, 40) || 'post'
+  // Random suffix: candidates generated in the same millisecond would
+  // otherwise collide on filename and the second upload would fail
+  // (uploadInstagramImage uses upsert: false).
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const filename = `generated/${safeName}-${Date.now()}-${suffix}.${image.extension}`
   return uploadInstagramImage(filename, image)
+}
+
+export async function generatePostImage(
+  caption: string,
+  ventureName: string,
+  brandColors?: string[],
+  options: Omit<PostImageOptions, 'caption' | 'ventureName' | 'brandColors'> = {}
+): Promise<string> {
+  return renderAndUpload({ caption, ventureName, brandColors, ...options })
+}
+
+export const MAX_IMAGE_CANDIDATES = 3
+
+/**
+ * Generates up to `count` independent candidates so the founder can pick one
+ * before publishing. Partial success is a valid result — a single model hiccup
+ * shouldn't waste the candidates that did render. Throws only when every
+ * attempt failed, so the caller can surface one honest error.
+ */
+export async function generatePostImageCandidates(
+  options: PostImageOptions,
+  count: number
+): Promise<string[]> {
+  const attempts = Math.max(1, Math.min(MAX_IMAGE_CANDIDATES, Math.floor(count) || 1))
+  const results = await Promise.allSettled(
+    Array.from({ length: attempts }, () => renderAndUpload(options))
+  )
+
+  const urls = results
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+    .map((r) => r.value)
+
+  if (urls.length === 0) {
+    const firstRejection = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    const reason = firstRejection?.reason
+    throw new Error(reason instanceof Error ? reason.message : 'Image generation failed')
+  }
+
+  return urls
 }

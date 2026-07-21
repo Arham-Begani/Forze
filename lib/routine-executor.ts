@@ -25,6 +25,8 @@ import {
 import { generateFreshInstagramDrafts } from '@/lib/instagram-content-ai'
 import { generateFreshLinkedInDrafts } from '@/lib/linkedin-content-ai'
 import { buildOutreachBrief } from '@/lib/outreach-brief'
+import { buildBrandKit, buildBrandVoiceBlock } from '@/lib/brand-kit'
+import { DEFAULT_IMAGE_STYLE } from '@/lib/marketing-image-gen'
 import {
   createMarketingAssets,
   createOrReplaceQueuedPublishJob,
@@ -323,7 +325,8 @@ async function executeInstagramRoutine(
       marketing,
       1,
       Date.now() + routine.run_count,
-      buildOutreachBrief(ventureName, context)
+      buildOutreachBrief(ventureName, context),
+      buildBrandVoiceBlock(context)
     )
     if (seeds.length === 0) {
       throw new Error('Instagram caption generator returned no drafts')
@@ -343,6 +346,10 @@ async function executeInstagramRoutine(
           title: seed.title,
           body: seed.body,
           payload: {
+            // Brand palette + default art direction so routine-published
+            // posts get the same image treatment as hand-made drafts.
+            brandColors: buildBrandKit(context).colors,
+            imageStyle: DEFAULT_IMAGE_STYLE,
             ...(seed.payload ?? {}),
             origin: 'routine',
             routine_id: routine.id,
@@ -444,7 +451,8 @@ async function executeLinkedInRoutine(
       research,
       1,
       Date.now() + routine.run_count,
-      buildOutreachBrief(ventureName, context)
+      buildOutreachBrief(ventureName, context),
+      buildBrandVoiceBlock(context)
     )
     if (seeds.length === 0) {
       throw new Error('LinkedIn post generator returned no drafts')
@@ -464,6 +472,10 @@ async function executeLinkedInRoutine(
           title: seed.title,
           body: seed.body,
           payload: {
+            // Brand palette + default art direction so routine-published
+            // posts get the same image treatment as hand-made drafts.
+            brandColors: buildBrandKit(context).colors,
+            imageStyle: DEFAULT_IMAGE_STYLE,
             ...(seed.payload ?? {}),
             origin: 'routine',
             routine_id: routine.id,
