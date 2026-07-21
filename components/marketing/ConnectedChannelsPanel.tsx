@@ -1,7 +1,40 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MarketingAsset, SocialConnection, SocialProvider } from '@/lib/marketing.shared'
+import { ImageStudio } from './ImageStudio'
+import { PostPreview } from './PostPreview'
+import { buttonStyle, editorGridStyle, inputStyle, sectionLabelStyle } from './styles'
+
+// A preview is cosmetic — if one throws on a malformed payload it must not
+// unmount the editor the founder is mid-way through using.
+class PreviewBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 16,
+            padding: 16,
+            fontSize: 12,
+            color: 'var(--muted)',
+            lineHeight: 1.6,
+          }}
+        >
+          Preview unavailable for this draft. Editing and publishing still work.
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const INSTAGRAM_DRAFT_QUEUE_CAP = 2
 const DRAFT_LIKE_STATUSES = new Set(['draft', 'approved', 'scheduled'])
@@ -164,12 +197,26 @@ function FlashMessage({
   )
 }
 
+// Payload readers — a payload is jsonb, so every field is "possibly anything".
+function payloadString(payload: Record<string, unknown>, key: string, fallback = ''): string {
+  const value = payload[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+function payloadStringArray(payload: Record<string, unknown>, key: string): string[] {
+  const value = payload[key]
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
+
 function AssetEditorCard({
   asset,
+  handle,
   onSaved,
   onRemoved,
 }: {
   asset: MarketingAsset
+  /** Account label for the preview chrome, e.g. the connected IG handle. */
+  handle: string
   onSaved: (asset: MarketingAsset) => void
   onRemoved: (asset: MarketingAsset) => void
 }) {
@@ -180,45 +227,22 @@ function AssetEditorCard({
   const [tags, setTags] = useState(Array.isArray(asset.payload.tags) ? asset.payload.tags.join(', ') : '')
   const [privacyStatus, setPrivacyStatus] = useState(typeof asset.payload.privacyStatus === 'string' ? asset.payload.privacyStatus : 'unlisted')
   const [linkUrl, setLinkUrl] = useState(typeof asset.payload.linkUrl === 'string' ? asset.payload.linkUrl : '')
-  const [imageUrl, setImageUrl] = useState(typeof asset.payload.imageUrl === 'string' ? asset.payload.imageUrl : '')
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [imageUrl, setImageUrl] = useState(payloadString(asset.payload, 'imageUrl'))
+  const [imageStyle, setImageStyle] = useState(payloadString(asset.payload, 'imageStyle', 'editorial_photo'))
+  const [aspect, setAspect] = useState(payloadString(asset.payload, 'aspect', '1:1'))
+  const [artDirection, setArtDirection] = useState(payloadString(asset.payload, 'artDirection'))
+  const [candidates, setCandidates] = useState<string[]>(payloadStringArray(asset.payload, 'imageCandidates'))
+  const [selectedImageIndex, setSelectedImageIndex] = useState(
+    typeof asset.payload.selectedImageIndex === 'number' ? asset.payload.selectedImageIndex : 0
+  )
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleImageFile(file: File | null) {
-    if (!file) return
-    const mime = (file.type || '').toLowerCase()
-    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(mime)) {
-      setError('Only PNG and JPG images are accepted')
-      return
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      setError('Image must be 8 MB or smaller')
-      return
-    }
-
-    setUploadingImage(true)
-    setError(null)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const response = await fetch(`/api/ventures/${asset.venture_id}/marketing/upload`, {
-        method: 'POST',
-        body: formData,
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Image upload failed')
-      setImageUrl(data.url as string)
-      setMessage('Image uploaded')
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Image upload failed')
-    } finally {
-      setUploadingImage(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
+  const brandColors = useMemo(
+    () => payloadStringArray(asset.payload, 'brandColors'),
+    [asset.payload]
+  )
 
   useEffect(() => {
     setTitle(asset.title)
@@ -228,8 +252,23 @@ function AssetEditorCard({
     setTags(Array.isArray(asset.payload.tags) ? asset.payload.tags.join(', ') : '')
     setPrivacyStatus(typeof asset.payload.privacyStatus === 'string' ? asset.payload.privacyStatus : 'unlisted')
     setLinkUrl(typeof asset.payload.linkUrl === 'string' ? asset.payload.linkUrl : '')
-    setImageUrl(typeof asset.payload.imageUrl === 'string' ? asset.payload.imageUrl : '')
+    setImageUrl(payloadString(asset.payload, 'imageUrl'))
+    setImageStyle(payloadString(asset.payload, 'imageStyle', 'editorial_photo'))
+    setAspect(payloadString(asset.payload, 'aspect', '1:1'))
+    setArtDirection(payloadString(asset.payload, 'artDirection'))
+    setCandidates(payloadStringArray(asset.payload, 'imageCandidates'))
+    setSelectedImageIndex(
+      typeof asset.payload.selectedImageIndex === 'number' ? asset.payload.selectedImageIndex : 0
+    )
   }, [asset])
+
+  // What the preview shows and what publish will use must be the same
+  // resolution order as selectedImageFromPayload() in lib/marketing-publish.ts.
+  const previewImages = useMemo(() => {
+    if (imageUrl.trim()) return [imageUrl.trim()]
+    const chosen = candidates[selectedImageIndex]
+    return chosen ? [chosen] : []
+  }, [imageUrl, candidates, selectedImageIndex])
 
   const payload = useMemo(() => {
     if (asset.provider === 'youtube') {
@@ -245,20 +284,45 @@ function AssetEditorCard({
       }
     }
 
+    // Art direction is shared by Instagram and LinkedIn — both generate an
+    // image through the same path in lib/marketing-publish.ts.
+    const imageFields = {
+      imageUrl: imageUrl.trim(),
+      imageStyle,
+      aspect,
+      artDirection: artDirection.trim(),
+      imageCandidates: candidates,
+      selectedImageIndex,
+    }
+
     if (asset.provider === 'instagram') {
       return {
         ...providerPayloadDefaults('instagram'),
         ...asset.payload,
-        imageUrl: imageUrl.trim(),
+        ...imageFields,
       }
     }
 
     return {
       ...providerPayloadDefaults('linkedin'),
       ...asset.payload,
+      ...imageFields,
       linkUrl,
     }
-  }, [asset.payload, asset.provider, imageUrl, linkUrl, privacyStatus, tags, videoSourceUrl])
+  }, [
+    asset.payload,
+    asset.provider,
+    imageUrl,
+    imageStyle,
+    aspect,
+    artDirection,
+    candidates,
+    selectedImageIndex,
+    linkUrl,
+    privacyStatus,
+    tags,
+    videoSourceUrl,
+  ])
 
   async function saveAsset(showMessage = true) {
     const response = await fetch(`/api/ventures/${asset.venture_id}/marketing/assets/${asset.id}`, {
@@ -379,6 +443,12 @@ function AssetEditorCard({
         </span>
       </div>
 
+      {/* Editor left, live preview right. Collapses to one column under 900px
+          via the wrapper's grid-template-columns, so the preview stacks
+          beneath the fields on narrow screens. */}
+      <div style={editorGridStyle}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+
       <input
         value={title}
         onChange={(event) => setTitle(event.target.value)}
@@ -437,108 +507,44 @@ function AssetEditorCard({
             <option value="public">Public</option>
           </select>
         </div>
-      ) : asset.provider === 'instagram' ? (
-        <div style={{ display: 'grid', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
-              Post image
-            </label>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-              PNG or JPG · up to 8 MB
-            </span>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={(event) => handleImageFile(event.target.files?.[0] ?? null)}
-            style={{ display: 'none' }}
-          />
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              alignItems: 'center',
-              padding: 10,
-              borderRadius: 14,
-              background: 'var(--sidebar)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            {imageUrl.trim() ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imageUrl}
-                alt="Instagram post preview"
-                style={{
-                  width: 72,
-                  height: 72,
-                  objectFit: 'cover',
-                  borderRadius: 10,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg)',
-                  flexShrink: 0,
-                }}
-                onError={(event) => {
-                  ;(event.currentTarget as HTMLImageElement).style.visibility = 'hidden'
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 10,
-                  border: '1px dashed var(--border)',
-                  background: 'var(--bg)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  color: 'var(--muted)',
-                  textAlign: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                No image
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.5 }}>
-                {imageUrl.trim()
-                  ? 'Will be normalized to 1080×1080 before publishing.'
-                  : 'Upload your own image, or leave empty to AI-generate a branded square image.'}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingImage || busy}
-                  style={buttonStyle('secondary')}
-                >
-                  {uploadingImage ? 'Uploading…' : imageUrl.trim() ? 'Replace image' : 'Upload image'}
-                </button>
-                {imageUrl.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setImageUrl('')}
-                    disabled={uploadingImage || busy}
-                    style={buttonStyle('danger')}
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       ) : (
-        <input
-          value={linkUrl}
-          onChange={(event) => setLinkUrl(event.target.value)}
-          placeholder="Optional link URL"
-          style={inputStyle}
-        />
+        <>
+          {asset.provider === 'linkedin' && (
+            <input
+              value={linkUrl}
+              onChange={(event) => setLinkUrl(event.target.value)}
+              placeholder="Optional link URL"
+              style={inputStyle}
+            />
+          )}
+          <ImageStudio
+            asset={asset}
+            brandColors={brandColors}
+            style={imageStyle}
+            aspect={aspect}
+            artDirection={artDirection}
+            candidates={candidates}
+            selectedIndex={selectedImageIndex}
+            uploadedUrl={imageUrl}
+            busy={busy}
+            onChange={(patch) => {
+              if (patch.style !== undefined) setImageStyle(patch.style)
+              if (patch.aspect !== undefined) setAspect(patch.aspect)
+              if (patch.artDirection !== undefined) setArtDirection(patch.artDirection)
+              if (patch.selectedIndex !== undefined) setSelectedImageIndex(patch.selectedIndex)
+              if (patch.uploadedUrl !== undefined) setImageUrl(patch.uploadedUrl)
+            }}
+            onGenerated={(next) => {
+              // The image route already persisted these server-side; mirror
+              // them locally so the preview updates without a refetch.
+              setCandidates(payloadStringArray(next.payload, 'imageCandidates'))
+              setSelectedImageIndex(
+                typeof next.payload.selectedImageIndex === 'number' ? next.payload.selectedImageIndex : 0
+              )
+              onSaved(next)
+            }}
+          />
+        </>
       )}
 
       <div style={{ display: 'grid', gap: 10 }}>
@@ -591,6 +597,26 @@ function AssetEditorCard({
             Cancel
           </button>
         )}
+      </div>
+
+      </div>
+
+      {/* Preview column. A malformed payload must never take the editor down
+          with it, so it renders inside its own error boundary. */}
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={sectionLabelStyle}>Preview</div>
+        <PreviewBoundary>
+          <PostPreview
+            provider={asset.provider}
+            handle={handle}
+            title={title}
+            body={body}
+            images={previewImages}
+            aspect={aspect}
+          />
+        </PreviewBoundary>
+      </div>
+
       </div>
     </div>
   )
@@ -1520,6 +1546,14 @@ export function ConnectedChannelsPanel({
     [draftAssets]
   )
 
+  // Real account label for the preview chrome, so the mock shows the handle
+  // the post will actually publish under. Falls back to the venture name when
+  // that provider isn't connected yet.
+  function handleForProvider(provider: SocialProvider): string {
+    const connection = connections.find((item) => item.provider === provider)
+    return connection?.provider_account_label?.trim() || ventureName
+  }
+
   function handleAssetUpdated(nextAsset: MarketingAsset) {
     setAssets((current) => current.map((item) => item.id === nextAsset.id ? nextAsset : item))
   }
@@ -1707,6 +1741,7 @@ export function ConnectedChannelsPanel({
               <AssetEditorCard
                 key={asset.id}
                 asset={asset}
+                handle={handleForProvider(asset.provider)}
                 onSaved={handleAssetUpdated}
                 onRemoved={() => {
                   refreshData()
@@ -1799,14 +1834,6 @@ const panelStyle: React.CSSProperties = {
   borderRadius: 22,
   padding: '22px 22px 24px',
   boxShadow: 'var(--shadow-md)',
-}
-
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  letterSpacing: 0.6,
-  textTransform: 'uppercase',
-  color: 'var(--accent)',
 }
 
 const dividerStyle: React.CSSProperties = {
@@ -1911,55 +1938,3 @@ const providerCardStyle: React.CSSProperties = {
   padding: 16,
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  borderRadius: 12,
-  border: '1px solid var(--border)',
-  background: 'var(--sidebar)',
-  color: 'var(--text)',
-  padding: '10px 12px',
-  fontSize: 14,
-  fontFamily: 'inherit',
-}
-
-function buttonStyle(kind: 'primary' | 'secondary' | 'danger'): React.CSSProperties {
-  if (kind === 'primary') {
-    return {
-      border: 'none',
-      borderRadius: 12,
-      background: 'linear-gradient(135deg, #8C5A7A, #B26F95)',
-      color: '#fff',
-      padding: '10px 14px',
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: 'pointer',
-      fontFamily: 'inherit',
-    }
-  }
-
-  if (kind === 'danger') {
-    return {
-      border: '1px solid rgba(220, 38, 38, 0.2)',
-      borderRadius: 12,
-      background: 'rgba(220, 38, 38, 0.08)',
-      color: '#dc2626',
-      padding: '10px 14px',
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: 'pointer',
-      fontFamily: 'inherit',
-    }
-  }
-
-  return {
-    border: '1px solid var(--border)',
-    borderRadius: 12,
-    background: 'transparent',
-    color: 'var(--text)',
-    padding: '10px 14px',
-    fontSize: 12,
-    fontWeight: 700,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  }
-}
