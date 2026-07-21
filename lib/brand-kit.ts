@@ -93,8 +93,12 @@ export function buildBrandKit(context: Record<string, unknown>): BrandKit {
 
   return {
     // De-duplicate case-insensitively — the analyzer sometimes returns the
-    // same hex for primary and accent when a page is near-monochrome.
-    colors: Array.from(new Map(colors.map((hex) => [hex.toLowerCase(), hex])).values()).slice(0, 4),
+    // same hex for primary and accent when a page is near-monochrome. Keeps
+    // the FIRST occurrence so the more brand-defining slot (primary before
+    // secondary before accent) is the one that survives.
+    colors: colors
+      .filter((hex, index) => colors.findIndex((c) => c.toLowerCase() === hex.toLowerCase()) === index)
+      .slice(0, 4),
     mood: asString(brand.mood),
     personality: clip(asString(brand.personality), 240),
   }
