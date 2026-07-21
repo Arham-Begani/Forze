@@ -208,7 +208,10 @@ export async function generateFreshLinkedInDrafts(
   seed: number = Date.now(),
   // Post-pivot venture brief (lib/outreach-brief.ts) — built from landing
   // copy + shadow board instead of the retired marketing agent's context.
-  brief?: string | null
+  brief?: string | null,
+  // Founder-authored writing profile (lib/brand-kit.ts). Empty string for
+  // every venture that hasn't set one — the prompt is then unchanged.
+  voiceBlock?: string | null
 ): Promise<CreateMarketingAssetSeed[]> {
   if (count <= 0) return []
 
@@ -230,6 +233,7 @@ export async function generateFreshLinkedInDrafts(
   const userPrompt = [
     'Brand context:',
     contextSummary,
+    ...(voiceBlock ? ['', voiceBlock] : []),
     '',
     `Generate ${count} fresh, distinct LinkedIn feed posts for this venture.`,
     'For each post use the assigned (angle, tone) pair below. Each pair MUST be different from the others.',

@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from '@/lib/auth'
 import { GenerateEmailSchema } from '@/lib/schemas/campaign'
 import { getVenture } from '@/lib/queries'
 import { generateCampaignEmail } from '@/lib/email-generator'
+import { buildBrandVoiceBlock } from '@/lib/brand-kit'
 import { enforceRateLimit, AI_RUN_LIMIT, AI_RUN_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { logError } from '@/lib/log'
@@ -40,7 +41,8 @@ export async function POST(
       input.data.targetAudience,
       input.data.exampleLeads,
       input.data.intent,
-      input.data.intentDetails
+      input.data.intentDetails,
+      buildBrandVoiceBlock(venture.context as unknown as Record<string, unknown>)
     )
 
     return NextResponse.json({ generated })

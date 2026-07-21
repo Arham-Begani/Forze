@@ -68,7 +68,10 @@ export async function generateCampaignEmail(
   targetAudience: string,
   exampleLeads: Array<{ firstName: string; company?: string; jobTitle?: string }>,
   intent?: DirectMailIntentValue,
-  intentDetails?: string
+  intentDetails?: string,
+  // Founder-authored writing profile (lib/brand-kit.ts). It is user-authored
+  // text, so it goes inside the ===USER DATA=== fencing like everything else.
+  voiceBlock?: string | null
 ): Promise<GeneratedEmail> {
   // Direct Mail (intent provided) uses the warm system prompt; cold outreach
   // keeps the original GTM specialist instruction unchanged.
@@ -118,7 +121,11 @@ ${safeAudience}
 
 ===USER DATA: EXAMPLE LEADS===
 ${leadsText}
-===END EXAMPLE LEADS===${intentBlock}
+===END EXAMPLE LEADS===${intentBlock}${voiceBlock ? `
+
+===USER DATA: BRAND VOICE===
+${sanitizeForPrompt(voiceBlock, 1600)}
+===END BRAND VOICE===` : ''}
 
 Generate:
 1. Main subject line (no template variables in subject)

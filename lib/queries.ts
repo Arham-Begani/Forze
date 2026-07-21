@@ -439,7 +439,7 @@ export async function updateVentureName(id: string, name: string): Promise<void>
 
 export async function updateVentureContext(
   id: string,
-  contextKey: 'research' | 'branding' | 'marketing' | 'landing' | 'feasibility' | 'shadowBoard' | 'investorKit' | 'launchAutopilot' | 'mvpScalpel',
+  contextKey: 'research' | 'branding' | 'marketing' | 'landing' | 'feasibility' | 'shadowBoard' | 'investorKit' | 'launchAutopilot' | 'mvpScalpel' | 'brandVoice',
   value: unknown
 ): Promise<void> {
   return withRetry(async () => {

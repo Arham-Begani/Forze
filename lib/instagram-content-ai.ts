@@ -82,7 +82,10 @@ export async function generateFreshInstagramDrafts(
   // copy + shadow board instead of the retired marketing agent's context.
   // When present it becomes the primary brand context; legacy marketing
   // context (older ventures) still enriches it.
-  brief?: string | null
+  brief?: string | null,
+  // Founder-authored writing profile (lib/brand-kit.ts). Empty string for
+  // every venture that hasn't set one — the prompt is then unchanged.
+  voiceBlock?: string | null
 ): Promise<CreateMarketingAssetSeed[]> {
   if (count <= 0) return []
 
@@ -115,6 +118,7 @@ export async function generateFreshInstagramDrafts(
     '',
     'Brand context:',
     contextSummary,
+    ...(voiceBlock ? ['', voiceBlock] : []),
     '',
     `Generate ${count} fresh, distinct Instagram feed posts. Each post should explore a DIFFERENT angle from this rotation:`,
     rotatedAngles.slice(0, count).map((angle, idx) => `${idx + 1}. ${angle}`).join('\n'),

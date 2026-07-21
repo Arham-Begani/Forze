@@ -6,6 +6,7 @@ import { getCampaignForUser, updateCampaign } from '@/lib/queries/campaign-queri
 import { generateCampaignEmail } from '@/lib/email-generator'
 import { getVenture } from '@/lib/queries'
 import { buildOutreachBrief } from '@/lib/outreach-brief'
+import { buildBrandVoiceBlock } from '@/lib/brand-kit'
 import { enforceRateLimit, AI_RUN_LIMIT, AI_RUN_WINDOW_SEC } from '@/lib/rate-limit'
 import { gateFeatureForResponse } from '@/lib/billing-http'
 import { logError } from '@/lib/log'
@@ -41,16 +42,18 @@ export async function POST(
     // context, server-side. Best-effort — a missing venture just means the
     // generator works from the client description alone.
     let ventureDescription = input.data.ventureDescription
+    // Founder-authored voice profile, shared with the social generators so
+    // cold email sounds like the same company. Empty when unset.
+    let voiceBlock = ''
     try {
       const venture = await getVenture(campaign.venture_id, session.userId)
       if (venture) {
-        const brief = buildOutreachBrief(
-          venture.name,
-          venture.context as unknown as Record<string, unknown>
-        )
+        const context = venture.context as unknown as Record<string, unknown>
+        const brief = buildOutreachBrief(venture.name, context)
         if (brief.includes('\n')) {
           ventureDescription = `${input.data.ventureDescription}\n\n${brief}`.slice(0, 2000)
         }
+        voiceBlock = buildBrandVoiceBlock(context)
       }
     } catch {
       // non-fatal
@@ -59,7 +62,12 @@ export async function POST(
     const generated = await generateCampaignEmail(
       ventureDescription,
       input.data.targetAudience,
-      input.data.exampleLeads
+      input.data.exampleLeads,
+      // Cold outreach never carries an intent — Direct Mail has its own route
+      // (app/api/ventures/[id]/direct-mail/generate-email) for the warm prompt.
+      undefined,
+      undefined,
+      voiceBlock
     )
 
     // Save to campaign
