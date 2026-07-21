@@ -409,6 +409,15 @@ function selectedImageFromPayload(payload: Record<string, unknown>): string | nu
   return candidates[index] ?? null
 }
 
+// Explicit multi-image attachment. Empty for every draft that doesn't use a
+// carousel, which is the single-image path unchanged.
+function carouselImagesFromPayload(payload: Record<string, unknown>): string[] {
+  const urls = Array.isArray(payload.imageUrls)
+    ? (payload.imageUrls as unknown[]).filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
+    : []
+  return urls.slice(0, IG_CAROUSEL_MAX)
+}
+
 // Art direction stamped on the asset, used only when we still have to generate
 // blind (scheduled posts the founder never opened, routine-published posts).
 function imageOptionsFromPayload(payload: Record<string, unknown>) {
@@ -421,45 +430,23 @@ function imageOptionsFromPayload(payload: Record<string, unknown>) {
   }
 }
 
-// Generate (or fetch) the image and hand the bytes off to LinkedIn's asset
-// uploader. Returns null on any failure so the post can still go out as
-// text-only — a transient image-gen error should never kill a working post.
-async function resolveLinkedInImageAsset(input: {
+// Fetches one image URL and hands its bytes to LinkedIn's asset uploader.
+// Returns null on any failure so the post can still go out — a transient
+// image error should never kill a working post.
+async function uploadOneLinkedInImage(input: {
   accessToken: string
   ownerUrn: string
-  asset: MarketingAsset
-  payload: Record<string, unknown>
+  imageUrl: string
 }): Promise<string | null> {
-  if (input.payload.skipImage === true) return null
-
-  const ventureName = stringValue(input.payload.ventureName) || input.asset.title || 'Brand'
-  const brandColors = Array.isArray(input.payload.brandColors)
-    ? (input.payload.brandColors as unknown[]).filter((c): c is string => typeof c === 'string')
-    : []
-
   try {
-    let imageUrl = selectedImageFromPayload(input.payload)
-    if (!imageUrl) {
-      imageUrl = await generatePostImage(
-        input.asset.body.trim(),
-        ventureName,
-        brandColors,
-        imageOptionsFromPayload(input.payload)
-      )
-    }
+    const fetchRes = await fetch(input.imageUrl, { cache: 'no-store' })
+    if (!fetchRes.ok) return null
 
-    const fetchRes = await fetch(imageUrl, { cache: 'no-store' })
-    if (!fetchRes.ok) {
-      return null
-    }
     const contentType = fetchRes.headers.get('content-type') || 'image/jpeg'
-    if (!contentType.startsWith('image/')) {
-      return null
-    }
+    if (!contentType.startsWith('image/')) return null
+
     const bytes = Buffer.from(await fetchRes.arrayBuffer())
-    if (bytes.byteLength === 0) {
-      return null
-    }
+    if (bytes.byteLength === 0) return null
 
     return await uploadLinkedInImage({
       accessToken: input.accessToken,
@@ -468,8 +455,59 @@ async function resolveLinkedInImageAsset(input: {
       contentType,
     })
   } catch (err) {
-    console.warn('[linkedin] image attachment failed, falling back to text-only post:', err)
+    console.warn('[linkedin] image attachment failed:', err)
     return null
+  }
+}
+
+// Resolves every image a LinkedIn post should carry. Returns [] to publish
+// text-only. A multi-image post keeps whichever uploads succeeded rather than
+// dropping all images because one of them failed.
+async function resolveLinkedInImageAssets(input: {
+  accessToken: string
+  ownerUrn: string
+  asset: MarketingAsset
+  payload: Record<string, unknown>
+}): Promise<string[]> {
+  if (input.payload.skipImage === true) return []
+
+  const ventureName = stringValue(input.payload.ventureName) || input.asset.title || 'Brand'
+  const brandColors = Array.isArray(input.payload.brandColors)
+    ? (input.payload.brandColors as unknown[]).filter((c): c is string => typeof c === 'string')
+    : []
+
+  try {
+    const carousel = carouselImagesFromPayload(input.payload)
+    let imageUrls: string[]
+
+    if (carousel.length > 0) {
+      imageUrls = carousel
+    } else {
+      const chosen = selectedImageFromPayload(input.payload)
+      imageUrls = [
+        chosen ?? (await generatePostImage(
+          input.asset.body.trim(),
+          ventureName,
+          brandColors,
+          imageOptionsFromPayload(input.payload)
+        )),
+      ]
+    }
+
+    const uploaded = await Promise.all(
+      imageUrls.map((imageUrl) =>
+        uploadOneLinkedInImage({
+          accessToken: input.accessToken,
+          ownerUrn: input.ownerUrn,
+          imageUrl,
+        })
+      )
+    )
+
+    return uploaded.filter((urn): urn is string => Boolean(urn))
+  } catch (err) {
+    console.warn('[linkedin] image attachment failed, falling back to text-only post:', err)
+    return []
   }
 }
 
@@ -489,7 +527,7 @@ async function publishLinkedInAsset(
 
   // Prefer image over link card — LinkedIn only allows one media category per
   // post, and native images get the biggest algorithmic boost.
-  const imageAssetUrn = await resolveLinkedInImageAsset({
+  const imageAssetUrns = await resolveLinkedInImageAssets({
     accessToken,
     ownerUrn: author,
     asset,
@@ -499,16 +537,14 @@ async function publishLinkedInAsset(
   let shareMediaCategory: 'IMAGE' | 'ARTICLE' | 'NONE' = 'NONE'
   let mediaEntries: Array<Record<string, unknown>> = []
 
-  if (imageAssetUrn) {
+  if (imageAssetUrns.length > 0) {
     shareMediaCategory = 'IMAGE'
-    mediaEntries = [
-      {
-        status: 'READY',
-        media: imageAssetUrn,
-        title: { text: asset.title || 'Post image' },
-        description: { text: asset.title || '' },
-      },
-    ]
+    mediaEntries = imageAssetUrns.map((urn) => ({
+      status: 'READY',
+      media: urn,
+      title: { text: asset.title || 'Post image' },
+      description: { text: asset.title || '' },
+    }))
   } else if (linkUrl) {
     shareMediaCategory = 'ARTICLE'
     mediaEntries = [
@@ -569,7 +605,12 @@ async function publishLinkedInAsset(
     : null
   const metadata: Record<string, unknown> = {}
   if (restliId) metadata.restliId = restliId
-  if (imageAssetUrn) metadata.imageAssetUrn = imageAssetUrn
+  // Keep the singular key for backward compatibility with metadata already
+  // written on published assets, and add the full list for multi-image posts.
+  if (imageAssetUrns.length > 0) {
+    metadata.imageAssetUrn = imageAssetUrns[0]
+    if (imageAssetUrns.length > 1) metadata.imageAssetUrns = imageAssetUrns
+  }
   return {
     providerAssetId: restliId,
     permalink,
@@ -760,6 +801,71 @@ function getInstagramPublishTargets(
   ])
 }
 
+// POSTs one /media container to a specific IG target. Returns null only for
+// the "object does not exist" case, which means this target id is wrong and
+// the caller should try the next candidate. Every other failure throws.
+async function postInstagramContainer(input: {
+  accessToken: string
+  targetId: string
+  body: Record<string, unknown>
+  connection: SocialConnectionSecretRecord
+}): Promise<{ id: string } | { missing: string }> {
+  const containerRes = await fetch(
+    `https://graph.instagram.com/v21.0/${encodeURIComponent(input.targetId)}/media`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input.body),
+    }
+  )
+
+  if (containerRes.status === 401 || containerRes.status === 403) {
+    await markSocialConnectionStatus(input.connection.id, 'reauth_required')
+    throw new MarketingProviderError('Instagram authorization expired or missing required permissions', {
+      retryable: false,
+      requiresReauth: true,
+    })
+  }
+
+  const responseText = await containerRes.text()
+  if (containerRes.ok) {
+    let containerData: { id?: string }
+    try {
+      containerData = JSON.parse(responseText) as { id?: string }
+    } catch {
+      throw new MarketingProviderError(`Unexpected Instagram container response: ${responseText}`, {
+        retryable: true,
+      })
+    }
+
+    if (!containerData.id) {
+      throw new MarketingProviderError('Instagram media container did not return a creation ID', { retryable: false })
+    }
+
+    return { id: containerData.id }
+  }
+
+  if (isObjectMissingError(responseText)) {
+    return { missing: `${input.targetId}: ${responseText}` }
+  }
+
+  throw new MarketingProviderError(`Instagram media container creation failed: ${responseText}`, {
+    retryable: containerRes.status >= 500 || containerRes.status === 429,
+  })
+}
+
+function noPublishableAccountError(failures: string[]): MarketingProviderError {
+  return new MarketingProviderError(
+    'Instagram could not find a publishable professional account for this token. ' +
+      'Reconnect Instagram and make sure the account is professional and has content publishing permission. ' +
+      `Tried: ${failures.join(' | ')}`,
+    { retryable: false, requiresReauth: true }
+  )
+}
+
 async function createInstagramMediaContainer(input: {
   accessToken: string
   imageUrl: string
@@ -771,58 +877,92 @@ async function createInstagramMediaContainer(input: {
   const failures: string[] = []
 
   for (const targetId of targets) {
-    const containerRes = await fetch(
-      `https://graph.instagram.com/v21.0/${encodeURIComponent(targetId)}/media`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${input.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image_url: input.imageUrl, caption: input.caption }),
-      }
-    )
+    const result = await postInstagramContainer({
+      accessToken: input.accessToken,
+      targetId,
+      body: { image_url: input.imageUrl, caption: input.caption },
+      connection: input.connection,
+    })
 
-    if (containerRes.status === 401 || containerRes.status === 403) {
-      await markSocialConnectionStatus(input.connection.id, 'reauth_required')
-      throw new MarketingProviderError('Instagram authorization expired or missing required permissions', {
-        retryable: false,
-        requiresReauth: true,
-      })
-    }
-
-    const responseText = await containerRes.text()
-    if (containerRes.ok) {
-      let containerData: { id?: string }
-      try {
-        containerData = JSON.parse(responseText) as { id?: string }
-      } catch {
-        throw new MarketingProviderError(`Unexpected Instagram container response: ${responseText}`, {
-          retryable: true,
-        })
-      }
-
-      if (!containerData.id) {
-        throw new MarketingProviderError('Instagram media container did not return a creation ID', { retryable: false })
-      }
-
-      return { creationId: containerData.id, targetId }
-    }
-
-    failures.push(`${targetId}: ${responseText}`)
-    if (!isObjectMissingError(responseText)) {
-      throw new MarketingProviderError(`Instagram media container creation failed: ${responseText}`, {
-        retryable: containerRes.status >= 500 || containerRes.status === 429,
-      })
-    }
+    if ('id' in result) return { creationId: result.id, targetId }
+    failures.push(result.missing)
   }
 
-  throw new MarketingProviderError(
-    'Instagram could not find a publishable professional account for this token. ' +
-      'Reconnect Instagram and make sure the account is professional and has content publishing permission. ' +
-      `Tried: ${failures.join(' | ')}`,
-    { retryable: false, requiresReauth: true }
-  )
+  throw noPublishableAccountError(failures)
+}
+
+// Carousel: every image becomes a child container (is_carousel_item), then one
+// parent container references them by id. Meta caps a carousel at 10 items.
+const IG_CAROUSEL_MAX = 10
+
+async function createInstagramCarouselContainer(input: {
+  accessToken: string
+  imageUrls: string[]
+  caption: string
+  connection: SocialConnectionSecretRecord
+}): Promise<{ creationId: string; targetId: string }> {
+  const profile = await fetchInstagramProfile(input.accessToken)
+  const targets = getInstagramPublishTargets(input.connection, profile)
+  const images = input.imageUrls.slice(0, IG_CAROUSEL_MAX)
+  const failures: string[] = []
+
+  for (const targetId of targets) {
+    // Probe with the first child. If this target id is wrong we learn it here
+    // and move on without having created orphan containers for the rest.
+    const first = await postInstagramContainer({
+      accessToken: input.accessToken,
+      targetId,
+      body: { image_url: images[0], is_carousel_item: true },
+      connection: input.connection,
+    })
+
+    if (!('id' in first)) {
+      failures.push(first.missing)
+      continue
+    }
+
+    const childIds = [first.id]
+    for (const imageUrl of images.slice(1)) {
+      const child = await postInstagramContainer({
+        accessToken: input.accessToken,
+        targetId,
+        body: { image_url: imageUrl, is_carousel_item: true },
+        connection: input.connection,
+      })
+      if (!('id' in child)) {
+        // The target worked for the first child, so a missing-object error on
+        // a later one is a genuine failure, not a wrong-target signal.
+        throw new MarketingProviderError(
+          `Instagram carousel child creation failed: ${child.missing}`,
+          { retryable: true }
+        )
+      }
+      childIds.push(child.id)
+    }
+
+    // Children must finish ingesting before the parent can reference them.
+    for (const childId of childIds) {
+      await waitForInstagramContainerReady(childId, input.accessToken, targetId)
+    }
+
+    const parent = await postInstagramContainer({
+      accessToken: input.accessToken,
+      targetId,
+      body: { media_type: 'CAROUSEL', children: childIds, caption: input.caption },
+      connection: input.connection,
+    })
+
+    if (!('id' in parent)) {
+      throw new MarketingProviderError(
+        `Instagram carousel container creation failed: ${parent.missing}`,
+        { retryable: true }
+      )
+    }
+
+    return { creationId: parent.id, targetId }
+  }
+
+  throw noPublishableAccountError(failures)
 }
 
 async function waitForInstagramContainerReady(
@@ -857,6 +997,34 @@ async function waitForInstagramContainerReady(
   throw new MarketingProviderError(`Instagram container did not finish processing in time for ${targetId}`, { retryable: true })
 }
 
+// Posts the first comment on a freshly published media. Requires the
+// instagram_business_manage_comments scope, which lib/marketing-oauth.ts
+// already requests. Never throws: the post is live by the time this runs.
+async function postInstagramFirstComment(
+  mediaId: string,
+  message: string,
+  accessToken: string
+): Promise<void> {
+  try {
+    const res = await fetch(
+      `https://graph.instagram.com/v21.0/${encodeURIComponent(mediaId)}/comments`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: message.slice(0, 2200) }),
+      }
+    )
+    if (!res.ok) {
+      console.warn('[instagram] first comment failed:', await res.text())
+    }
+  } catch (err) {
+    console.warn('[instagram] first comment failed:', err)
+  }
+}
+
 async function publishInstagramAsset(
   asset: MarketingAsset,
   connection: SocialConnectionSecretRecord
@@ -869,37 +1037,40 @@ async function publishInstagramAsset(
     ? (payload.brandColors as unknown[]).filter((c): c is string => typeof c === 'string')
     : []
 
-  // Use the founder's chosen image if there is one (uploaded, or picked from
-  // the generated candidates in the image studio), else AI-generate blind.
-  const chosenImage = selectedImageFromPayload(payload)
-  let imageUrl: string
-  if (chosenImage) {
-    imageUrl = await prepareInstagramImageUrl(chosenImage, ventureName)
-  } else {
-    imageUrl = await generatePostImage(
-      caption,
-      ventureName,
-      brandColors,
-      imageOptionsFromPayload(payload)
+  // A carousel wins when the founder attached more than one image; otherwise
+  // fall back to the single-image path (chosen image, else blind generation).
+  const carouselImages = carouselImagesFromPayload(payload)
+  let imageUrls: string[]
+  if (carouselImages.length > 1) {
+    imageUrls = await Promise.all(
+      carouselImages.map((url) => prepareInstagramImageUrl(url, ventureName))
     )
+  } else {
+    const chosenImage = carouselImages[0] ?? selectedImageFromPayload(payload)
+    imageUrls = [
+      chosenImage
+        ? await prepareInstagramImageUrl(chosenImage, ventureName)
+        : await generatePostImage(caption, ventureName, brandColors, imageOptionsFromPayload(payload)),
+    ]
   }
 
-  // Verify the image URL is publicly fetchable AND served as image/* before
+  // Verify each image URL is publicly fetchable AND served as image/* before
   // handing it to Meta. Without this, error_subcode 2207052 ("Media URI does
   // not meet our terms") fires when the Vercel Blob CDN hasn't propagated yet
   // or when the upstream model returned malformed bytes.
-  await verifyImageUrlReachable(imageUrl)
+  for (const url of imageUrls) {
+    await verifyImageUrlReachable(url)
+  }
 
-  // Use /me/media instead of /{stored-id}/media — Meta resolves the IG User ID
-  // from the access token. Avoids the error_subcode 33 "Object with ID X does
-  // not exist" failure when the stored provider_account_id drifts from the
-  // canonical Instagram Graph user_id.
-  const { creationId, targetId } = await createInstagramMediaContainer({
-    accessToken,
-    imageUrl,
-    caption,
-    connection,
-  })
+  // Meta resolves the IG User ID from the access token, so the helpers walk a
+  // list of candidate target ids. Avoids the error_subcode 33 "Object with ID
+  // X does not exist" failure when the stored provider_account_id drifts from
+  // the canonical Instagram Graph user_id.
+  const { creationId, targetId } = imageUrls.length > 1
+    ? await createInstagramCarouselContainer({ accessToken, imageUrls, caption, connection })
+    : await createInstagramMediaContainer({ accessToken, imageUrl: imageUrls[0], caption, connection })
+
+  const imageUrl = imageUrls[0]
 
   // Step 2: poll container status until Meta finishes ingesting the image.
   // Skipping this leads to intermittent media_publish failures.
@@ -927,6 +1098,14 @@ async function publishInstagramAsset(
 
   const publishData = await parseJson<{ id?: string }>(publishRes)
   const mediaId = publishData.id ?? null
+
+  // Step 3b: first comment. Keeps hashtags and links out of the caption.
+  // Best-effort by design — the post is already live at this point, so a
+  // failed comment must never turn a successful publish into a failure.
+  const firstComment = stringValue(payload.firstComment)
+  if (mediaId && firstComment) {
+    await postInstagramFirstComment(mediaId, firstComment, accessToken)
+  }
 
   // Step 4: fetch the real permalink. The published media id is numeric; the
   // user-facing instagram.com URL uses a shortcode that only Meta knows.

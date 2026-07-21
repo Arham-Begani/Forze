@@ -233,6 +233,8 @@ function AssetEditorCard({
   const [aspect, setAspect] = useState(payloadString(asset.payload, 'aspect', '1:1'))
   const [artDirection, setArtDirection] = useState(payloadString(asset.payload, 'artDirection'))
   const [candidates, setCandidates] = useState<string[]>(payloadStringArray(asset.payload, 'imageCandidates'))
+  const [carousel, setCarousel] = useState<string[]>(payloadStringArray(asset.payload, 'imageUrls'))
+  const [firstComment, setFirstComment] = useState(payloadString(asset.payload, 'firstComment'))
   const [selectedImageIndex, setSelectedImageIndex] = useState(
     typeof asset.payload.selectedImageIndex === 'number' ? asset.payload.selectedImageIndex : 0
   )
@@ -258,18 +260,21 @@ function AssetEditorCard({
     setAspect(payloadString(asset.payload, 'aspect', '1:1'))
     setArtDirection(payloadString(asset.payload, 'artDirection'))
     setCandidates(payloadStringArray(asset.payload, 'imageCandidates'))
+    setCarousel(payloadStringArray(asset.payload, 'imageUrls'))
+    setFirstComment(payloadString(asset.payload, 'firstComment'))
     setSelectedImageIndex(
       typeof asset.payload.selectedImageIndex === 'number' ? asset.payload.selectedImageIndex : 0
     )
   }, [asset])
 
-  // What the preview shows and what publish will use must be the same
-  // resolution order as selectedImageFromPayload() in lib/marketing-publish.ts.
+  // What the preview shows and what publish will use must follow the same
+  // order as publishInstagramAsset(): carousel, then uploaded/selected image.
   const previewImages = useMemo(() => {
+    if (carousel.length > 0) return carousel
     if (imageUrl.trim()) return [imageUrl.trim()]
     const chosen = candidates[selectedImageIndex]
     return chosen ? [chosen] : []
-  }, [imageUrl, candidates, selectedImageIndex])
+  }, [carousel, imageUrl, candidates, selectedImageIndex])
 
   const payload = useMemo(() => {
     if (asset.provider === 'youtube') {
@@ -294,6 +299,8 @@ function AssetEditorCard({
       artDirection: artDirection.trim(),
       imageCandidates: candidates,
       selectedImageIndex,
+      imageUrls: carousel,
+      firstComment: firstComment.trim(),
     }
 
     if (asset.provider === 'instagram') {
@@ -319,6 +326,8 @@ function AssetEditorCard({
     artDirection,
     candidates,
     selectedImageIndex,
+    carousel,
+    firstComment,
     linkUrl,
     privacyStatus,
     tags,
@@ -527,6 +536,7 @@ function AssetEditorCard({
             candidates={candidates}
             selectedIndex={selectedImageIndex}
             uploadedUrl={imageUrl}
+            carousel={carousel}
             busy={busy}
             onChange={(patch) => {
               if (patch.style !== undefined) setImageStyle(patch.style)
@@ -534,6 +544,7 @@ function AssetEditorCard({
               if (patch.artDirection !== undefined) setArtDirection(patch.artDirection)
               if (patch.selectedIndex !== undefined) setSelectedImageIndex(patch.selectedIndex)
               if (patch.uploadedUrl !== undefined) setImageUrl(patch.uploadedUrl)
+              if (patch.carousel !== undefined) setCarousel(patch.carousel)
             }}
             onGenerated={(next) => {
               // The image route already persisted these server-side; mirror
@@ -545,6 +556,22 @@ function AssetEditorCard({
               onSaved(next)
             }}
           />
+
+          {/* Posted as a reply the moment the post goes live — the usual way
+              to keep hashtags and links out of the caption itself. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
+              First comment (optional)
+            </label>
+            <textarea
+              value={firstComment}
+              maxLength={2200}
+              rows={2}
+              onChange={(event) => setFirstComment(event.target.value)}
+              placeholder="Hashtags, links, or context you'd rather keep out of the caption"
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
         </>
       )}
 
@@ -614,6 +641,7 @@ function AssetEditorCard({
             body={body}
             images={previewImages}
             aspect={aspect}
+            firstComment={firstComment}
           />
         </PreviewBoundary>
       </div>
