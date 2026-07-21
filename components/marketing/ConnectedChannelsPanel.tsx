@@ -2,6 +2,7 @@
 
 import { Component, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MarketingAsset, SocialConnection, SocialProvider } from '@/lib/marketing.shared'
+import { BrandVoiceCard } from './BrandVoiceCard'
 import { ImageStudio } from './ImageStudio'
 import { PostPreview } from './PostPreview'
 import { buttonStyle, editorGridStyle, inputStyle, sectionLabelStyle } from './styles'
@@ -1576,6 +1577,8 @@ export function ConnectedChannelsPanel({
 
       {success && <FlashMessage tone="success" message={success} />}
       {error && <FlashMessage tone="error" message={error} />}
+
+      <BrandVoiceCard ventureId={ventureId} />
 
       <div style={providerGridStyle}>
         {PROVIDERS.map((provider) => {
