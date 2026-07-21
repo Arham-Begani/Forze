@@ -5,6 +5,7 @@ import type { MarketingAsset, SocialConnection, SocialProvider } from '@/lib/mar
 import { BrandVoiceCard } from './BrandVoiceCard'
 import { ImageStudio } from './ImageStudio'
 import { PostPreview } from './PostPreview'
+import { PostQueue } from './PostQueue'
 import { buttonStyle, editorGridStyle, inputStyle, sectionLabelStyle } from './styles'
 
 // A preview is cosmetic — if one throws on a malformed payload it must not
@@ -214,12 +215,14 @@ function AssetEditorCard({
   handle,
   onSaved,
   onRemoved,
+  onRepurpose,
 }: {
   asset: MarketingAsset
   /** Account label for the preview chrome, e.g. the connected IG handle. */
   handle: string
   onSaved: (asset: MarketingAsset) => void
   onRemoved: (asset: MarketingAsset) => void
+  onRepurpose: (asset: MarketingAsset, target: 'instagram' | 'linkedin') => void
 }) {
   const [title, setTitle] = useState(asset.title)
   const [body, setBody] = useState(asset.body)
@@ -623,6 +626,18 @@ function AssetEditorCard({
         {asset.status === 'scheduled' && (
           <button type="button" onClick={() => doAction('cancel')} disabled={busy} style={buttonStyle('danger')}>
             Cancel
+          </button>
+        )}
+        {/* Re-cut this same idea for the other network rather than generating
+            an unrelated post there from scratch. */}
+        {(asset.provider === 'instagram' || asset.provider === 'linkedin') && (
+          <button
+            type="button"
+            onClick={() => onRepurpose(asset, asset.provider === 'instagram' ? 'linkedin' : 'instagram')}
+            disabled={busy}
+            style={buttonStyle('secondary')}
+          >
+            {asset.provider === 'instagram' ? 'Re-cut for LinkedIn' : 'Re-cut for Instagram'}
           </button>
         )}
       </div>
@@ -1583,6 +1598,31 @@ export function ConnectedChannelsPanel({
     return connection?.provider_account_label?.trim() || ventureName
   }
 
+  async function handleRepurpose(asset: MarketingAsset, target: 'instagram' | 'linkedin') {
+    setBusyProvider(target)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch(`/api/ventures/${ventureId}/marketing/assets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'repurpose',
+          sourceAssetId: asset.id,
+          targetProvider: target,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Repurpose failed')
+      setAssets((current) => [...(data.assets as MarketingAsset[]), ...current])
+      setSuccess(`Re-cut as a ${target === 'instagram' ? 'Instagram' : 'LinkedIn'} draft`)
+    } catch (repurposeError) {
+      setError(repurposeError instanceof Error ? repurposeError.message : 'Repurpose failed')
+    } finally {
+      setBusyProvider(null)
+    }
+  }
+
   function handleAssetUpdated(nextAsset: MarketingAsset) {
     setAssets((current) => current.map((item) => item.id === nextAsset.id ? nextAsset : item))
   }
@@ -1730,6 +1770,14 @@ export function ConnectedChannelsPanel({
         </div>
       </div>
 
+      {/* Only worth the vertical space once something is actually queued. */}
+      {assets.some((asset) => asset.status === 'scheduled' && asset.scheduled_for) && (
+        <>
+          <div style={dividerStyle} />
+          <PostQueue assets={assets} onRescheduled={handleAssetUpdated} />
+        </>
+      )}
+
       <div style={dividerStyle} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1774,6 +1822,7 @@ export function ConnectedChannelsPanel({
                 asset={asset}
                 handle={handleForProvider(asset.provider)}
                 onSaved={handleAssetUpdated}
+                onRepurpose={handleRepurpose}
                 onRemoved={() => {
                   refreshData()
                 }}

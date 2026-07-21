@@ -8,6 +8,7 @@ import { DEFAULT_IMAGE_STYLE } from '@/lib/marketing-image-gen'
 import { requireMarketingVenture, marketingErrorResponse } from '@/lib/marketing-api'
 import {
   createMarketingAssets,
+  getMarketingAssetById,
   listMarketingAssetsByVenture,
 } from '@/lib/marketing-queries'
 import type { CreateMarketingAssetSeed } from '@/lib/marketing.shared'
@@ -20,6 +21,13 @@ const createDraftSchema = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('generate_from_marketing'),
     provider: z.enum(['youtube', 'linkedin', 'instagram']),
+  }),
+  // Take one approved idea and re-cut it for another channel, instead of
+  // generating each channel from scratch and getting unrelated angles.
+  z.object({
+    mode: z.literal('repurpose'),
+    sourceAssetId: z.string().uuid(),
+    targetProvider: z.enum(['linkedin', 'instagram']),
   }),
   z.object({
     mode: z.literal('manual'),
@@ -147,6 +155,75 @@ export async function POST(
           body: seed.body,
           // brandPayload first so a seed that already set imageStyle wins.
           payload: { ...brandPayload, ...seed.payload },
+          ventureId: id,
+          userId: session.userId,
+          status: 'draft',
+        }))
+      )
+    } else if (parsed.data.mode === 'repurpose') {
+      const context = (venture.context ?? {}) as unknown as Record<string, unknown>
+      const brandKit = buildBrandKit(context)
+      const voiceBlock = buildBrandVoiceBlock(context)
+
+      const source = await getMarketingAssetById(parsed.data.sourceAssetId, session.userId, id)
+      if (!source) {
+        return NextResponse.json({ error: 'Source post not found' }, { status: 404 })
+      }
+
+      const target = parsed.data.targetProvider
+
+      // Same queue cap as fresh generation — repurposing must not be a way to
+      // sidestep it.
+      if (target === 'instagram') {
+        const existing = await listMarketingAssetsByVenture(id, session.userId)
+        const draftCount = existing.filter(
+          (asset) => asset.provider === 'instagram' && DRAFT_LIKE_STATUSES.has(asset.status)
+        ).length
+        if (draftCount >= INSTAGRAM_DRAFT_QUEUE_CAP) {
+          return NextResponse.json(
+            { error: `Instagram draft queue is full (max ${INSTAGRAM_DRAFT_QUEUE_CAP}). Publish or delete a draft first.` },
+            { status: 409 }
+          )
+        }
+      }
+
+      // Feed the source post in as the angle so the re-cut argues the same
+      // point rather than inventing an unrelated one.
+      const sourceBrief = [
+        buildOutreachBrief(venture.name, context),
+        '',
+        'Re-cut this existing post for a different platform. Keep its core idea, claim, and specifics — change only the format, length, and rhythm to suit the new platform:',
+        `"""\n${source.body.slice(0, 1500)}\n"""`,
+      ].join('\n')
+
+      let seeds: CreateMarketingAssetSeed[]
+      try {
+        seeds = target === 'instagram'
+          ? await generateFreshInstagramDrafts(venture.name, null, 1, Date.now(), sourceBrief, voiceBlock)
+          : await generateFreshLinkedInDrafts(venture.name, null, null, 1, Date.now(), sourceBrief, voiceBlock)
+      } catch {
+        return NextResponse.json(
+          { error: 'Repurpose failed — try again in a moment.' },
+          { status: 502 }
+        )
+      }
+
+      if (seeds.length === 0) {
+        return NextResponse.json({ error: 'Repurpose returned no drafts' }, { status: 502 })
+      }
+
+      assets = await createMarketingAssets(
+        seeds.map((seed) => ({
+          provider: seed.provider,
+          assetType: seed.assetType,
+          title: seed.title,
+          body: seed.body,
+          payload: {
+            brandColors: brandKit.colors,
+            imageStyle: DEFAULT_IMAGE_STYLE,
+            ...seed.payload,
+            repurposedFrom: source.id,
+          },
           ventureId: id,
           userId: session.userId,
           status: 'draft',
