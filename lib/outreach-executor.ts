@@ -28,7 +28,8 @@ import { z } from 'zod'
 import { extractJSON, getFlashModel } from '@/lib/gemini'
 import { sendEmailViaGmail, pollGmailForReplies, pollGmailForBounces } from '@/lib/gmail-sender'
 import { getGmailStatus } from '@/lib/gmail-oauth'
-import { personalizeEmail, personalizeSubject, analyzeReply } from '@/lib/email-generator'
+import { personalizeEmail, personalizeSubject, analyzeReply, personalizeLeadOpener } from '@/lib/email-generator'
+import { buildOutreachBrief, briefHasSubstance } from '@/lib/outreach-brief'
 import {
   addTrackingPixel,
   injectUnsubscribeFooter,
@@ -183,6 +184,28 @@ function consumeGmailAllowance(cache: Map<string, GmailHealth>, userId: string, 
   if (health.remaining === 0) health.canSend = false
 }
 
+// Venture positioning for the per-lead opener rewrite. Best-effort: a failed
+// read returns '' and the caller then skips personalization entirely rather
+// than letting the model invent an angle from nothing.
+async function loadVentureBrief(db: DbClient, ventureId: string): Promise<string> {
+  try {
+    const { data } = await db
+      .from('ventures')
+      .select('name, context')
+      .eq('id', ventureId)
+      .single()
+
+    if (!data?.name) return ''
+    const brief = buildOutreachBrief(
+      data.name as string,
+      (data.context ?? {}) as Record<string, unknown>
+    )
+    return briefHasSubstance(brief) ? brief : ''
+  } catch {
+    return ''
+  }
+}
+
 // ─── Initial sends (scheduled + drip + all_now continuation) ──────────────────
 
 interface SendBatchResult {
@@ -215,6 +238,10 @@ async function sendPendingBatch(
   if (leads.length === 0) return { sent: 0, failed: 0 }
 
   const baseUrl = getBaseUrl()
+  // Loaded once per batch, not per lead. Empty brief means the opener rewrite
+  // has nothing to ground itself in, so we skip it entirely.
+  const deepPersonalize = campaign.deep_personalize === true
+  const ventureBrief = deepPersonalize ? await loadVentureBrief(db, campaign.venture_id) : ''
   let sent = 0
   let failed = 0
 
@@ -232,8 +259,25 @@ async function sendPendingBatch(
         jobTitle: lead.job_title ?? undefined,
       })
 
-      let personalizedBody = personalizeEmail(bodyTemplate, {
+      // Rewrite the opener before token substitution so the model sees the
+      // template (with {{firstName}} intact) rather than half-rendered copy.
+      let workingTemplate = bodyTemplate
+      if (deepPersonalize && ventureBrief) {
+        workingTemplate = await personalizeLeadOpener(
+          bodyTemplate,
+          {
+            firstName: lead.first_name,
+            company: lead.company ?? undefined,
+            jobTitle: lead.job_title ?? undefined,
+            sourceContext: lead.source_context ?? null,
+          },
+          ventureBrief
+        )
+      }
+
+      let personalizedBody = personalizeEmail(workingTemplate, {
         firstName: lead.first_name,
+        lastName: lead.last_name ?? undefined,
         company: lead.company ?? undefined,
         jobTitle: lead.job_title ?? undefined,
       })

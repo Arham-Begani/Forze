@@ -24,6 +24,9 @@ export const CampaignSchema = z.object({
   // When true, new landing-page leads are auto-enrolled as pending
   // recipients of this campaign (migration 041).
   auto_enroll_landing_leads: z.boolean().optional().default(false),
+  // Per-lead opening-line rewrite at send time (migration 046). Optional so a
+  // DB without the column still parses campaign rows.
+  deep_personalize: z.boolean().optional().default(false),
   enable_followups: z.boolean().optional().default(false),
   followup_delay_hours: z.number().int().min(1).optional().default(72),
   followup_message: z.string().nullable().optional(),
@@ -167,6 +170,8 @@ export const SendCampaignSchema = z.object({
   maxFollowups: z.number().int().min(1).max(5).optional(),
   // Keep enrolling future landing-page leads into this campaign.
   autoEnroll: z.boolean().optional(),
+  // Rewrite each email's opening line per recipient at send time.
+  deepPersonalize: z.boolean().optional(),
 })
 
 export const UploadLeadsSchema = z.object({

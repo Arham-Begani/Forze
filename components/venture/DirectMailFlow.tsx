@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { ArrowLeft, Loader2, Send, AlertCircle, CheckCircle, Mail, Sparkles, Megaphone, Package, Heart, RotateCcw, HelpCircle, PenLine } from 'lucide-react'
+import { EmailPreview } from '@/components/venture/EmailPreview'
 import { deriveFirstNameFromEmail } from '@/lib/auto-name'
 
 interface DirectMailFlowProps {
@@ -569,6 +570,24 @@ export function DirectMailFlow({
             <span className="text-xs text-[var(--muted)]">— replaced with the auto-detected (or overridden) name per recipient.</span>
           </div>
         </div>
+
+        {/* Rendered preview — Direct Mail only reliably has firstName, so this
+            is also where a recipient whose name failed to auto-detect shows up
+            before the send rather than after. */}
+        {recipients.length > 0 && subject.trim() && body.trim() && (
+          <EmailPreview
+            subject={subject}
+            body={body}
+            leads={recipients.map((r) => ({
+              // Same precedence the send path uses: a manual override wins
+              // over the auto-detected name.
+              first_name: r.override.trim() || r.detected,
+              email: r.email,
+            }))}
+            ventureName={ventureName}
+            fromEmail={gmail?.email ?? null}
+          />
+        )}
 
         {sendErrors.length > 0 && (
           <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3">

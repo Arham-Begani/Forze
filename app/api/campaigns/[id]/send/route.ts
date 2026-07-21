@@ -13,7 +13,9 @@ import {
   recordCampaignEvent,
 } from '@/lib/queries/campaign-queries'
 import { sendEmailViaGmail } from '@/lib/gmail-sender'
-import { personalizeEmail, personalizeSubject } from '@/lib/email-generator'
+import { personalizeEmail, personalizeSubject, personalizeLeadOpener } from '@/lib/email-generator'
+import { getVenture } from '@/lib/queries'
+import { buildOutreachBrief, briefHasSubstance } from '@/lib/outreach-brief'
 import { addTrackingPixel, rewriteLinksForTracking, injectUnsubscribeFooter, wrapInHtml } from '@/lib/email-utils'
 import { advanceCrmLeadStatus } from '@/lib/lead-capture'
 import { signTrackingToken } from '@/lib/tracking-hmac'
@@ -87,6 +89,7 @@ export async function POST(
       ...(sendInput.followupDelayHours !== undefined ? { followup_delay_hours: sendInput.followupDelayHours } : {}),
       ...(sendInput.maxFollowups !== undefined ? { max_followups: sendInput.maxFollowups } : {}),
       ...(sendInput.autoEnroll !== undefined ? { auto_enroll_landing_leads: sendInput.autoEnroll } : {}),
+      ...(sendInput.deepPersonalize !== undefined ? { deep_personalize: sendInput.deepPersonalize } : {}),
     }
 
     // Deferred sends: an explicit future start time or drip mode hands the
@@ -137,6 +140,26 @@ export async function POST(
     await updateCampaign(id, sequenceSettings, session.userId)
 
     const baseUrl = getBaseUrl()
+
+    // Venture positioning for the per-lead opener rewrite — fetched once for
+    // the whole batch. An empty brief disables the rewrite rather than letting
+    // the model invent an angle from nothing.
+    let ventureBrief = ''
+    if (sendInput.deepPersonalize) {
+      try {
+        const venture = await getVenture(campaign.venture_id, session.userId)
+        if (venture) {
+          const brief = buildOutreachBrief(
+            venture.name,
+            venture.context as unknown as Record<string, unknown>
+          )
+          if (briefHasSubstance(brief)) ventureBrief = brief
+        }
+      } catch {
+        // non-fatal — send proceeds with plain token substitution
+      }
+    }
+
     const today = new Date().toISOString().split('T')[0]
     let sentCount = 0
     let failedCount = 0
@@ -172,8 +195,26 @@ export async function POST(
           jobTitle: lead.job_title ?? undefined,
         })
 
-        let personalizedBody = personalizeEmail(sendInput.emailBodyApproved, {
+        // Rewrite the opener before token substitution so the model sees the
+        // template with {{firstName}} intact. Falls back to the untouched
+        // template on any failure — a send never fails over personalization.
+        let workingTemplate = sendInput.emailBodyApproved
+        if (sendInput.deepPersonalize && ventureBrief) {
+          workingTemplate = await personalizeLeadOpener(
+            sendInput.emailBodyApproved,
+            {
+              firstName: lead.first_name,
+              company: lead.company ?? undefined,
+              jobTitle: lead.job_title ?? undefined,
+              sourceContext: lead.source_context ?? null,
+            },
+            ventureBrief
+          )
+        }
+
+        let personalizedBody = personalizeEmail(workingTemplate, {
           firstName: lead.first_name,
+          lastName: lead.last_name ?? undefined,
           company: lead.company ?? undefined,
           jobTitle: lead.job_title ?? undefined,
         })

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, Send, Upload, CheckCircle, AlertCircle, Mail } from 'lucide-react'
+import { EmailPreview } from '@/components/venture/EmailPreview'
 
 interface CreateCampaignFlowProps {
   ventureId: string
@@ -130,6 +131,7 @@ export function CreateCampaignFlow({
   const [followupDelayDays, setFollowupDelayDays] = useState(3)
   const [maxFollowups, setMaxFollowups] = useState(2)
   const [autoEnroll, setAutoEnroll] = useState(false)
+  const [deepPersonalize, setDeepPersonalize] = useState(false)
   // Lead source: pasted/uploaded CSV, or the venture's own CRM pool
   // (landing-page captures) enrolled via /leads/from-crm.
   type CrmLeadRow = {
@@ -464,6 +466,7 @@ export function CreateCampaignFlow({
           followupDelayHours: Math.max(1, followupDelayDays * 24),
           maxFollowups,
           autoEnroll,
+          deepPersonalize,
         }),
       })
 
@@ -1181,6 +1184,25 @@ export function CreateCampaignFlow({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-[var(--muted)]">Personalize each opening line</p>
+                <button
+                  onClick={() => setDeepPersonalize(!deepPersonalize)}
+                  role="switch"
+                  aria-checked={deepPersonalize}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${deepPersonalize ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+                >
+                  <span className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform" style={{ transform: deepPersonalize ? 'translateX(16px)' : 'translateX(0)' }} />
+                </button>
+              </div>
+              {deepPersonalize && (
+                <p className="text-[11px] text-[var(--muted)]">
+                  AI rewrites only the first line per recipient using their title, company, and where they were found. The rest of your copy is sent exactly as written. Adds one AI call per email.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-[var(--muted)]">Auto-enroll new landing-page leads</p>
                 <button
                   onClick={() => setAutoEnroll(!autoEnroll)}
@@ -1208,17 +1230,15 @@ export function CreateCampaignFlow({
               <p className="text-xs font-medium text-[var(--muted)]">Leads</p>
               <p className="text-sm text-[var(--text)]">{parsedLeads.length} recipients</p>
             </div>
-            <div>
-              <p className="text-xs font-medium text-[var(--muted)]">Subject</p>
-              <p className="text-sm text-[var(--text)]">{selectedSubject}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-[var(--muted)]">Preview</p>
-              <p className="mt-1 rounded-lg bg-[var(--sidebar)] px-3 py-2 text-xs text-[var(--text-soft)] whitespace-pre-wrap line-clamp-4">
-                {selectedBody.slice(0, 300)}{selectedBody.length > 300 ? '...' : ''}
-              </p>
-            </div>
           </div>
+
+          <EmailPreview
+            subject={selectedSubject}
+            body={selectedBody}
+            leads={parsedLeads}
+            ventureName={ventureName}
+            fromEmail={gmail?.email ?? null}
+          />
 
           {uploadSummary && (uploadSummary.duplicates > 0 || uploadSummary.invalid > 0) && (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--sidebar)] p-3 text-xs text-[var(--text-soft)]">
