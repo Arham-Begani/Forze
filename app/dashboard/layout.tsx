@@ -305,6 +305,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     if (moduleId === 'crm') return `/dashboard/venture/${ventureId}/crm`
     if (moduleId === 'testimonials') return `/dashboard/venture/${ventureId}/testimonials`
     if (moduleId === 'inspiration') return `/dashboard/venture/${ventureId}/inspiration`
+    if (moduleId === 'autopilot') return `/dashboard/venture/${ventureId}/autopilot`
     return `/dashboard/venture/${ventureId}/${moduleId}`
   }
 
@@ -320,6 +321,9 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
     }
     if (moduleId === 'inspiration') {
       return pathname.startsWith(`/dashboard/venture/${ventureId}/inspiration`)
+    }
+    if (moduleId === 'autopilot') {
+      return pathname.startsWith(`/dashboard/venture/${ventureId}/autopilot`)
     }
     return pathname === `/dashboard/venture/${ventureId}/${moduleId}`
   }
@@ -913,6 +917,24 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                               <span style={{ color: crmModule.accent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>{crmModule.icon}</span>
                               <span style={{ fontSize: 13, color: crmActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: crmActive ? 700 : 600 }}>CRM</span>
                             </motion.button>
+
+                            {/* Autopilot — calendar, event radar and the autonomous operator */}
+                            {(() => {
+                              const autopilotAccent = '#C4975A'
+                              const autopilotActive = isModuleActive(activeVenture.id, 'autopilot')
+                              return (
+                                <motion.button
+                                  whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
+                                  onClick={() => router.push(moduleHref(activeVenture.id, 'autopilot'))}
+                                  aria-label="Open Autopilot"
+                                  aria-current={autopilotActive ? 'page' : undefined}
+                                  style={sectionButtonStyle(autopilotActive, autopilotAccent)}
+                                >
+                                  <span style={{ color: autopilotAccent, fontSize: 13, lineHeight: 1, width: 18, textAlign: 'center', flexShrink: 0 }}>◎</span>
+                                  <span style={{ fontSize: 13, color: autopilotActive ? 'var(--text)' : 'var(--text-soft)', fontWeight: autopilotActive ? 700 : 600 }}>Autopilot</span>
+                                </motion.button>
+                              )
+                            })()}
 
                             {/* Testimonials — sibling feature (not an agent module) */}
                             {(() => {
