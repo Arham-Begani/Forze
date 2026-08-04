@@ -2,7 +2,27 @@ import { z } from 'zod'
 
 // ─── Enums (match db/migrations/019_routines.sql) ─────────────────────────────
 
-export const ROUTINE_CHANNELS = ['gmail', 'instagram', 'linkedin'] as const
+export const ROUTINE_CHANNELS = [
+  'gmail',
+  'instagram',
+  'linkedin',
+  'instagram_comment_reply',
+  'comment_suggestions',
+  'agenda',
+] as const
+
+export const ROUTINE_CHANNEL_LABELS: Record<(typeof ROUTINE_CHANNELS)[number], string> = {
+  gmail: 'Cold email',
+  instagram: 'Instagram post',
+  linkedin: 'LinkedIn post',
+  instagram_comment_reply: 'Instagram comment replies',
+  comment_suggestions: 'Comment suggestions',
+  agenda: 'Weekly agenda',
+}
+
+export const DEFAULT_APPROVAL_WINDOW_HOURS = 12
+
+export const PUBLISHING_ROUTINE_CHANNELS = ['instagram', 'linkedin'] as const
 export const ROUTINE_CADENCES = ['every_3_days', 'weekly', 'monthly'] as const
 export const ROUTINE_STATUSES = ['active', 'paused', 'archived'] as const
 export const ROUTINE_RUN_STATUSES = ['success', 'failed', 'skipped'] as const
@@ -54,6 +74,7 @@ export const RoutineSchema = z.object({
   send_hour: z.number().int().min(0).max(23),
   send_minute: z.number().int().min(0).max(59),
   timezone: z.string(),
+  approval_window_hours: z.number().int().min(0).max(168).optional().default(0),
   next_run_at: z.string(),
   last_run_at: z.string().nullable(),
   last_error: z.string().nullable(),
@@ -92,6 +113,7 @@ export const CreateRoutineInputSchema = z
       .regex(IANA_TZ_REGEX, 'Invalid timezone (use an IANA name like Asia/Kolkata)')
       .optional()
       .default('UTC'),
+    approval_window_hours: z.number().int().min(0).max(168).optional(),
   })
   .superRefine((input, ctx) => {
     if (input.channel === 'gmail' && !input.campaign_id) {
@@ -118,6 +140,7 @@ export const UpdateRoutineInputSchema = z
       .max(80)
       .regex(IANA_TZ_REGEX, 'Invalid timezone (use an IANA name like Asia/Kolkata)')
       .optional(),
+    approval_window_hours: z.number().int().min(0).max(168).optional(),
   })
   .refine(
     (v) =>
@@ -127,7 +150,8 @@ export const UpdateRoutineInputSchema = z
       v.angle_hint !== undefined ||
       v.send_hour !== undefined ||
       v.send_minute !== undefined ||
-      v.timezone !== undefined,
+      v.timezone !== undefined ||
+      v.approval_window_hours !== undefined,
     { message: 'At least one field must be provided' }
   )
 

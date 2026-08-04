@@ -81,27 +81,53 @@ export async function createRoutine(
     timezone
   ).toISOString()
 
+  const base = {
+    user_id: userId,
+    venture_id: ventureId,
+    name: input.name,
+    channel: input.channel,
+    cadence: input.cadence,
+    status: 'active',
+    campaign_id: input.campaign_id ?? null,
+    angle_hint: input.angle_hint ?? null,
+    send_hour: sendHour,
+    send_minute: sendMinute,
+    timezone,
+    next_run_at: nextRunAt,
+  }
+
+  const approvalWindowHours = input.approval_window_hours
+
+  if (approvalWindowHours === undefined) {
+    const { data, error } = await client.from('routines').insert(base).select('*').single()
+    if (error) throw new Error(`createRoutine failed: ${error.message}`)
+    return data as Routine
+  }
+
   const { data, error } = await client
     .from('routines')
-    .insert({
-      user_id: userId,
-      venture_id: ventureId,
-      name: input.name,
-      channel: input.channel,
-      cadence: input.cadence,
-      status: 'active',
-      campaign_id: input.campaign_id ?? null,
-      angle_hint: input.angle_hint ?? null,
-      send_hour: sendHour,
-      send_minute: sendMinute,
-      timezone,
-      next_run_at: nextRunAt,
-    })
+    .insert({ ...base, approval_window_hours: approvalWindowHours })
     .select('*')
     .single()
 
-  if (error) throw new Error(`createRoutine failed: ${error.message}`)
+  if (error) {
+    // Migration 048 may not be applied yet. Creating the routine without an
+    // approval window is strictly better than failing the create outright —
+    // the executor reads the window as 0 and publishes inline, which is the
+    // pre-048 behavior.
+    if (isMissingApprovalWindowColumn(error.message)) {
+      const retry = await client.from('routines').insert(base).select('*').single()
+      if (retry.error) throw new Error(`createRoutine failed: ${retry.error.message}`)
+      return retry.data as Routine
+    }
+    throw new Error(`createRoutine failed: ${error.message}`)
+  }
   return data as Routine
+}
+
+function isMissingApprovalWindowColumn(message: string): boolean {
+  const lowered = message.toLowerCase()
+  return lowered.includes('approval_window_hours')
 }
 
 export async function updateRoutine(
@@ -122,6 +148,9 @@ export async function updateRoutine(
   if (input.send_hour !== undefined) payload.send_hour = input.send_hour
   if (input.send_minute !== undefined) payload.send_minute = input.send_minute
   if (input.timezone !== undefined) payload.timezone = input.timezone
+  if (input.approval_window_hours !== undefined) {
+    payload.approval_window_hours = input.approval_window_hours
+  }
 
   // If cadence or schedule changed, recompute next_run_at so the new
   // schedule takes effect immediately instead of after the next fire. Same
@@ -157,7 +186,22 @@ export async function updateRoutine(
     .select('*')
     .single()
 
-  if (error) throw new Error(`updateRoutine failed: ${error.message}`)
+  if (error) {
+    if (isMissingApprovalWindowColumn(error.message) && payload.approval_window_hours !== undefined) {
+      const { approval_window_hours: _dropped, ...rest } = payload
+      if (Object.keys(rest).length === 0) return (await getRoutineForUser(routineId, userId, client)) as Routine
+      const retry = await client
+        .from('routines')
+        .update(rest)
+        .eq('id', routineId)
+        .eq('user_id', userId)
+        .select('*')
+        .single()
+      if (retry.error) throw new Error(`updateRoutine failed: ${retry.error.message}`)
+      return retry.data as Routine
+    }
+    throw new Error(`updateRoutine failed: ${error.message}`)
+  }
   return data as Routine
 }
 

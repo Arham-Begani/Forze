@@ -27,6 +27,9 @@ const CHANNEL_LABEL: Record<RoutineChannel, string> = {
   gmail: 'Gmail',
   instagram: 'Instagram',
   linkedin: 'LinkedIn',
+  instagram_comment_reply: 'Instagram replies',
+  comment_suggestions: 'Comment ideas',
+  agenda: 'Weekly agenda',
 }
 
 interface FireMineSummary {

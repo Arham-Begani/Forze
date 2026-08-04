@@ -31,7 +31,9 @@ import {
   createMarketingAssets,
   createOrReplaceQueuedPublishJob,
   getMarketingAssetByIdAdmin,
+  updateMarketingAssetStatusAdmin,
 } from '@/lib/marketing-queries'
+import { getRoutineApprovalWindowHours } from '@/lib/queries/autopilot-queries'
 import { dispatchDuePublishJobs } from '@/lib/marketing-dispatch'
 import {
   advanceRoutineNextRun,
@@ -363,12 +365,43 @@ async function executeInstagramRoutine(
     if (assets.length === 0) throw new Error('Asset insert returned no rows')
     const asset = assets[0]
 
+    const approvalWindowHours = await getRoutineApprovalWindowHours(routine.id, adminDb)
+    const publishAt =
+      approvalWindowHours > 0
+        ? new Date(Date.now() + approvalWindowHours * 60 * 60 * 1000).toISOString()
+        : new Date().toISOString()
+
+    if (approvalWindowHours > 0) {
+      await updateMarketingAssetStatusAdmin(
+        asset.id,
+        { status: 'scheduled', scheduledFor: publishAt },
+        adminDb
+      )
+    }
+
     const job = await createOrReplaceQueuedPublishJob(
       asset,
-      new Date().toISOString(),
+      publishAt,
       routine.user_id,
       adminDb
     )
+
+    if (approvalWindowHours > 0) {
+      await recordRoutineRun({
+        routineId: routine.id,
+        userId: routine.user_id,
+        status: 'success',
+        channel: 'instagram',
+        metadata: {
+          asset_id: asset.id,
+          job_id: job.id,
+          pending_review: true,
+          publish_at: publishAt,
+          approval_window_hours: approvalWindowHours,
+        },
+      })
+      return { routineId: routine.id, status: 'success' }
+    }
 
     // Publish inline. The previous design relied on a second cron
     // (/api/marketing/publish/dispatch) to drain the queue, which meant
@@ -489,12 +522,43 @@ async function executeLinkedInRoutine(
     if (assets.length === 0) throw new Error('Asset insert returned no rows')
     const asset = assets[0]
 
+    const approvalWindowHours = await getRoutineApprovalWindowHours(routine.id, adminDb)
+    const publishAt =
+      approvalWindowHours > 0
+        ? new Date(Date.now() + approvalWindowHours * 60 * 60 * 1000).toISOString()
+        : new Date().toISOString()
+
+    if (approvalWindowHours > 0) {
+      await updateMarketingAssetStatusAdmin(
+        asset.id,
+        { status: 'scheduled', scheduledFor: publishAt },
+        adminDb
+      )
+    }
+
     const job = await createOrReplaceQueuedPublishJob(
       asset,
-      new Date().toISOString(),
+      publishAt,
       routine.user_id,
       adminDb
     )
+
+    if (approvalWindowHours > 0) {
+      await recordRoutineRun({
+        routineId: routine.id,
+        userId: routine.user_id,
+        status: 'success',
+        channel: 'linkedin',
+        metadata: {
+          asset_id: asset.id,
+          job_id: job.id,
+          pending_review: true,
+          publish_at: publishAt,
+          approval_window_hours: approvalWindowHours,
+        },
+      })
+      return { routineId: routine.id, status: 'success' }
+    }
 
     const summary = await dispatchDuePublishJobs({ jobIds: [job.id] })
 
