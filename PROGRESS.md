@@ -938,3 +938,49 @@ Founder asked for max scope. Worked lowest-risk → highest-risk, verifying at e
 **Verification:** Documentation/handoff only — no web app code changed, no build run. The web-side download/updater routes were read and confirmed to already implement the contract the doc targets.
 **Broken:** None.
 **Next (user actions, can't be done from this repo):** (1) In the IDE repo: generate the updater keypair, add `TAURI_SIGNING_PRIVATE_KEY` + `..._PASSWORD` as GitHub secrets, wire `tauri.conf.json`, add the workflow, push a `v*` tag. (2) On Vercel (forze.in): set `IDE_MANIFEST_URL=https://github.com/<owner>/<ide-repo>/releases/latest/download/manifest.json` and redeploy. (3) Optional but recommended: Windows Authenticode + macOS notarization to avoid "unknown developer" warnings.
+
+### Day 24 — August 4, 2026
+**Goal:** Replace the blank-textarea idea capture with a conversational intake, and make Forze keep up with ideas as they change.
+
+**Why:** A venture was seeded from one free-text field (`projects.global_idea`) and there was *no* surface anywhere in the app to edit it afterwards. Founders under-specified, agents guessed, and when someone added a feature or pivoted, every module kept building against the original sentence forever.
+
+**Built (3 commits, one per phase):**
+
+**Phase 1 — storage + prompt plumbing (`c42a832`), no user-visible change**
+- `db/migrations/047_idea_brief_and_updates.sql` — additive + idempotent: `projects.idea_brief` (JSONB), `projects.idea_version`, `conversations.idea_version` (nullable), the `idea_updates` changelog table with RLS (four owner policies, copied in shape from 027), and an atomic `bump_project_idea` RPC so two concurrent updates can't land on the same version.
+- `lib/schemas/idea.ts` — `IdeaBriefSchema` + the interview wire format. The question shape deliberately mirrors `app/api/ventures/[id]/questions` so intake chips reuse the module decision vocabulary. `summary` is capped at 900 chars on purpose (see below).
+- `lib/idea-brief.ts` — `renderBriefForPrompt` (pure), `parseBrief`, `mergeBriefDraft`, `foldUpdateIntoBrief`. Lives in `lib/` not `agents/` because none of it runs through the venture-module pipeline — same precedent as `lib/email-generator.ts`.
+- `lib/idea-intake.ts` — stateless interview engine, 4–8 adaptive questions, always terminates in a usable brief.
+- `lib/queries/idea-queries.ts` — every helper degrades to a no-op/empty result if 047 hasn't been applied.
+- `app/api/ventures/[id]/run/route.ts` — appends the rendered brief to `globalIdea` and stamps the run's `idea_version`.
+
+**Phase 2 — the intake chatbot (`eaef717`)**
+- `POST /api/idea/interview` — one turn per call, stateless (nothing exists in the DB pre-venture, so the client holds the transcript). `requireAuth()` + `enforceRateLimit(userId, 'idea-interview', 3600, 60)`.
+- `components/dashboard/IdeaIntakeChat.tsx` — option chips + free text on every question, per-question skip, "skip to my venture", and an editable review card before anything is written.
+- `app/dashboard/new/page.tsx` and `app/dashboard/greeting/page.tsx` both mount it. `[Initialize]` → `[Start]`. Nothing touches the DB until the founder confirms, so an abandoned interview leaves no orphan project. Creation stays AI-free once confirmed — the interview already proposes a name, so `refineProjectNameInBackground` is skipped when it gave us one.
+
+**Phase 3 — living idea updates (`b5ab80c`)**
+- `GET/POST /api/projects/[id]/idea` — read the brief + changelog, or fold a "what changed" note into the next version. `requireAuth()` + `getProject(id, userId)` ownership + `enforceRateLimit(..., 'idea-update', 3600, 20)`. No business logic in the route.
+- `components/venture/IdeaPanel.tsx` on the project page — current brief, composer, and a timeline of each change with its kind and affected modules.
+- Stale badge on `app/dashboard/venture/[id]/[module]/page.tsx`. Stale **only** when both the run's `idea_version` and the project's are known and the run's is older — so conversations predating 047 never show a false badge. Re-run is an explicit click (it spends credits), wired to the existing `executeRun`.
+- `app/api/ventures/[id]/route.ts` now returns `currentIdeaVersion` (best-effort, null on any failure).
+
+**Bug fixed along the way:** the run route has always appended uploaded source documents (up to 5 × 50k chars) onto `globalIdea`, but all four agents clipped that string at **1000 chars** — `agents/pipeline.ts:703`, `shadow.ts:301`, `investor-kit.ts:222`, `general.ts:75`. **Uploaded reference documents were being truncated away almost entirely.** Clip raised to 6000 in all four.
+
+**Bug caught by the new test:** a brief with every field at its schema maximum renders to ~6.2k chars, which would have consumed the entire 6000-char agent budget and crowded out `global_idea` and documents. `renderBriefForPrompt` now caps its own block at 2500 chars; `test/idea.test.ts` asserts the bound.
+
+**Backward compatibility:** `global_idea` keeps its exact current meaning and stays the source of truth for every existing consumer (run route, questions route, investor-kit, lead-scout, `lib/outreach-brief.ts`). `idea_brief` is purely additive. `createConversation` and `updateProject` each retry without the new column if 047 hasn't been applied, so a half-applied migration can never break an agent run or venture creation.
+
+**Verification:**
+- ✅ `npx tsc --noEmit` → 0 errors (run after each phase)
+- ✅ `npm run build` → clean, all routes compile including `/api/idea/interview` and `/api/projects/[id]/idea`
+- ✅ `npm run test` → 56 passed (22 new in `test/idea.test.ts`)
+- ✅ Dev server: all three new endpoints return **401** unauthenticated (auth guards intact, no 500s)
+- ✅ Unrelated regression check: `/api/ventures`, `/api/campaigns`, `/api/projects` all still 401; `/pricing` and `/signin` still 200; no compile errors in the dev log
+- ✅ **Live Gemini run** (temporary test, since deleted): produced an idea-specific interview question with plausible options, a well-formed brief with a 600-char summary and a suggested name, and a correct fold that propagated a new B2B tier across summary/problem/customer/solution/differentiator/model/features, bumped to v2, carried the transcript forward, and named all three affected modules.
+
+**Broken:** None.
+
+**Not yet done (requires the user):**
+1. Apply `db/migrations/047_idea_brief_and_updates.sql` in the Supabase SQL editor. Until then the app runs unchanged: no brief is stored, no versions are stamped, and no stale badges appear — every fallback path was written and type-checked for exactly this state, but the *applied*-migration path has not been exercised against a live DB.
+2. An authenticated click-through of the full flow (interview → create → run a module → log an update → see the badge → re-run). Everything below the UI is verified; the browser flow itself is not.
