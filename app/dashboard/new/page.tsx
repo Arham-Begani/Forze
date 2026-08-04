@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { IdeaIntakeChat, type IdeaBriefValue } from '@/components/dashboard/IdeaIntakeChat'
 
 interface UploadedDoc {
   name: string
@@ -111,6 +112,10 @@ export default function NewProjectPage() {
   const router = useRouter()
 
   const [ideaInput, setIdeaInput] = useState('')
+  // 'seed' = the founder is typing their opening sentence.
+  // 'interview' = the intake chatbot is asking follow-ups. Nothing is written
+  // to the DB until they confirm the brief at the end of the interview.
+  const [phase, setPhase] = useState<'seed' | 'interview'>('seed')
   const [submitting, setSubmitting] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
   const [enhanced, setEnhanced] = useState(false)
@@ -153,8 +158,8 @@ export default function NewProjectPage() {
     setMounted(true)
   }, [])
 
-  const canSubmit = ideaInput.trim().length > 5 && !submitting
-  const canEnhance = ideaInput.trim().length >= 5 && !enhancing && !submitting
+  const canSubmit = ideaInput.trim().length > 5 && !submitting && phase === 'seed'
+  const canEnhance = ideaInput.trim().length >= 5 && !enhancing && !submitting && phase === 'seed'
 
   async function handleEnhance() {
     if (!canEnhance) return
@@ -180,18 +185,30 @@ export default function NewProjectPage() {
     }
   }
 
-  async function handleSubmit() {
+  // Start the interview. Deliberately does NOT touch the DB — an abandoned
+  // interview must leave no orphan project behind.
+  function handleStartInterview() {
     if (!canSubmit) return
-    const idea = ideaInput.trim()
+    setError('')
+    setPhase('interview')
+  }
+
+  // Called once the founder confirms their brief at the end of the interview.
+  // The creation sequence below is unchanged from the pre-chatbot flow apart
+  // from carrying the structured brief alongside global_idea.
+  async function handleSubmit(brief: IdeaBriefValue, suggestedName: string | null) {
+    if (submitting) return
+    const rawIdea = ideaInput.trim()
+    // The synthesized summary is what agents read. Fall back to the founder's
+    // raw sentence if the interview degraded and produced nothing usable.
+    const idea = brief.summary.trim() || rawIdea
     setSubmitting(true)
     setError('')
 
     try {
-      // Instant local name — NO AI on the critical path. The old flow blocked
-      // venture creation on a Gemini call (which, when the model was slow/hung,
-      // took minutes). We name it locally now and let the AI refine it in the
-      // background afterward, so the venture appears in well under a second.
-      const instantName = deriveNameFromIdea(idea)
+      // Instant name — NO AI on the critical path. The interview already
+      // proposed a name, so we usually skip the background namer entirely.
+      const instantName = (suggestedName || '').trim() || deriveNameFromIdea(rawIdea)
 
       // Step 1: Create the project
       setStatus('Creating project...')
@@ -206,11 +223,11 @@ export default function NewProjectPage() {
       }
       const project = await projRes.json()
 
-      // Step 2: Save the idea (+docs) AND create the initial venture in parallel —
-      // both only need project.id and are independent of each other, so there's no
-      // reason to await them one after the other.
+      // Step 2: Save the idea (+brief +docs) AND create the initial venture in
+      // parallel — both only need project.id and are independent of each other,
+      // so there's no reason to await them one after the other.
       setStatus('Setting up your venture...')
-      const patchBody: Record<string, unknown> = { global_idea: idea }
+      const patchBody: Record<string, unknown> = { global_idea: idea, idea_brief: brief }
       if (docs.length > 0) {
         patchBody.source_documents = docs.map(d => ({
           name: d.name,
@@ -243,8 +260,9 @@ export default function NewProjectPage() {
 
       // ── Background, non-blocking: AI naming + first-idea save. Their latency no
       // longer affects how fast the venture is created. ──
-      void refineProjectNameInBackground(project.id, idea, instantName)
-      void saveFirstIdeaInBackground(idea)
+      // Skip the namer when the interview already gave us a real product name.
+      if (!suggestedName) void refineProjectNameInBackground(project.id, idea, instantName)
+      void saveFirstIdeaInBackground(rawIdea)
 
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -294,7 +312,7 @@ export default function NewProjectPage() {
         transition={{ delay: 0.15, duration: 0.5 }}
         style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: '0 0 8px', letterSpacing: '-0.03em', textAlign: 'center' }}
       >
-        What do you want to build?
+        {phase === 'seed' ? 'What do you want to build?' : 'Let’s sharpen it'}
       </motion.h2>
       <motion.p
         initial={mounted ? { opacity: 0 } : false}
@@ -302,10 +320,25 @@ export default function NewProjectPage() {
         transition={{ delay: 0.25 }}
         style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 32px', textAlign: 'center', maxWidth: 420 }}
       >
-        Tell us your big idea and our AI workforce will handle the rest.
+        {phase === 'seed'
+          ? 'Tell us your big idea and our AI workforce will handle the rest.'
+          : 'A few quick questions so every agent builds the right thing. Skip any of them.'}
       </motion.p>
 
+      {/* Interview — the founder's opening line seeds a short adaptive
+          Q&A. Nothing is saved until they confirm the brief. */}
+      {phase === 'interview' && (
+        <IdeaIntakeChat
+          seed={ideaInput.trim()}
+          docNames={docs.map(d => d.name)}
+          busy={submitting}
+          onComplete={handleSubmit}
+          onBack={() => { setPhase('seed'); setError(''); setStatus('') }}
+        />
+      )}
+
       {/* Input card */}
+      {phase === 'seed' && (
       <motion.div
         initial={mounted ? { opacity: 0, y: 20, scale: 0.97 } : false}
         animate={mounted ? { opacity: 1, y: 0, scale: 1 } : false}
@@ -341,7 +374,7 @@ export default function NewProjectPage() {
             value={ideaInput}
             onChange={e => setIdeaInput(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit()
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleStartInterview()
             }}
             placeholder="Describe your startup idea in detail — the problem it solves, who it's for, and what makes it unique..."
             style={{
@@ -588,7 +621,7 @@ export default function NewProjectPage() {
                     initial={{ opacity: 0, scale: 0.8, x: 12 }}
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.8, x: 12 }}
-                    onClick={handleSubmit}
+                    onClick={handleStartInterview}
                     disabled={submitting}
                     style={{
                       display: 'flex',
@@ -623,7 +656,7 @@ export default function NewProjectPage() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                         </svg>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>Initialize</span>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>Start</span>
                       </>
                     )}
                   </motion.button>
@@ -632,29 +665,31 @@ export default function NewProjectPage() {
             )}
           </div>
         </div>
-
-        {/* Status / hint */}
-        <motion.p
-          style={{ marginTop: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center', opacity: 0.5, minHeight: 20 }}
-          initial={mounted ? { opacity: 0 } : false}
-          animate={mounted ? { opacity: 0.5 } : false}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
-          {error ? (
-            <span style={{ color: '#e05252', opacity: 1 }}>{error}</span>
-          ) : submitting ? (
-            <motion.span
-              style={{ color: 'var(--accent)', opacity: 1 }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              {status}
-            </motion.span>
-          ) : (
-            <>Press <kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>Enter</kbd> to initialize your vision</>
-          )}
-        </motion.p>
       </motion.div>
+      )}
+
+      {/* Status / hint — rendered in BOTH phases so a creation error raised
+          after the interview is never swallowed. */}
+      <motion.p
+        style={{ marginTop: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center', opacity: 0.5, minHeight: 20, maxWidth: 620 }}
+        initial={mounted ? { opacity: 0 } : false}
+        animate={mounted ? { opacity: 0.5 } : false}
+        transition={{ duration: 0.5, delay: 0.4 }}
+      >
+        {error ? (
+          <span style={{ color: '#e05252', opacity: 1 }}>{error}</span>
+        ) : submitting ? (
+          <motion.span
+            style={{ color: 'var(--accent)', opacity: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            {status}
+          </motion.span>
+        ) : phase === 'seed' ? (
+          <>Press <kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>Enter</kbd> to begin — Forze will ask a few questions</>
+        ) : null}
+      </motion.p>
     </motion.div>
   )
 }

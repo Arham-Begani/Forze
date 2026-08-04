@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { IdeaIntakeChat, type IdeaBriefValue } from '@/components/dashboard/IdeaIntakeChat'
 
 // ─── Smart emoji picker ────────────────────────────────────────────────────���──
 function pickEmojiForIdea(idea: string): string {
@@ -120,7 +121,12 @@ function GreetingContent() {
   const projectId = searchParams.get('projectId')
 
   const [idea, setIdea] = useState('')
+  // 'seed' = typing the opening sentence; 'interview' = the intake chatbot is
+  // asking follow-ups. The project already exists here, but global_idea is not
+  // written until the founder confirms their brief.
+  const [phase, setPhase] = useState<'seed' | 'interview'>('seed')
   const [loading, setLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [projectName, setProjectName] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const [charCount, setCharCount] = useState(0)
@@ -164,41 +170,66 @@ function GreetingContent() {
     if (idea.length > 0) setShowSuggestions(false)
   }, [idea])
 
-  async function handleSubmit() {
+  // Start the interview — no DB write yet.
+  function handleStartInterview() {
     if (!idea.trim() || loading) return
+    setPhase('interview')
+  }
+
+  // Called once the founder confirms the brief the interview produced.
+  async function handleSubmit(brief: IdeaBriefValue, suggestedName: string | null) {
+    if (loading) return
+    const rawIdea = idea.trim()
+    const finalIdea = brief.summary.trim() || rawIdea
+    if (!finalIdea) return
     setLoading(true)
 
     try {
+      const icon = pickEmojiForIdea(finalIdea)
       const res = await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ global_idea: idea.trim(), icon: pickEmojiForIdea(idea.trim()) }),
+        body: JSON.stringify({
+          global_idea: finalIdea,
+          idea_brief: brief,
+          icon,
+          ...(suggestedName ? { name: suggestedName } : {}),
+        }),
       })
 
       if (res.ok) {
         window.dispatchEvent(new CustomEvent('Forze:project-updated', {
-          detail: { projectId, global_idea: idea.trim(), icon: pickEmojiForIdea(idea.trim()) }
+          detail: { projectId, global_idea: finalIdea, icon }
         }))
+
+        // Use the name we just wrote, not the stale local copy.
+        const effectiveName = suggestedName || projectName
 
         try {
           const ventureRes = await fetch('/api/ventures', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: projectName ? `${projectName} - v1` : 'Initial Venture', projectId }),
+            body: JSON.stringify({ name: effectiveName ? `${effectiveName} - v1` : 'Initial Venture', projectId }),
           })
 
           if (ventureRes.ok) {
-            const newVenture = await ventureRes.json()
-            window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
+            const newVenture = await ventureRes.json().catch(() => null)
+            if (newVenture) window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
           }
         } catch (err) {
           console.error('Failed to create initial venture:', err)
         }
 
+        window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
         router.push(`/dashboard/project/${projectId}`)
+        return
       }
+
+      // PATCH failed — surface it instead of silently returning to the form.
+      setSaveError('Could not save your idea. Please try again.')
     } catch (err) {
       console.error('Failed to save idea:', err)
+      setSaveError('Could not save your idea. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -206,7 +237,7 @@ function GreetingContent() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleSubmit()
+      handleStartInterview()
     }
   }
 
@@ -234,7 +265,7 @@ function GreetingContent() {
     }
   }
 
-  const canSubmit = idea.trim().length > 5
+  const canSubmit = idea.trim().length > 5 && phase === 'seed'
 
   if (!mounted) return (
     <div className="ambient-page" style={containerStyle}>
@@ -266,7 +297,7 @@ function GreetingContent() {
           />
           <div style={{ textAlign: 'center' }}>
             <h1 style={titleStyle}>
-              Describe what you want to validate
+              {phase === 'seed' ? 'Describe what you want to validate' : 'Let’s sharpen it'}
             </h1>
             {projectName && (
               <motion.p
@@ -281,7 +312,24 @@ function GreetingContent() {
           </div>
         </motion.div>
 
+        {/* Interview — a few adaptive questions before the idea is saved. */}
+        {phase === 'interview' && (
+          <div style={{ width: '100%', maxWidth: 680, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <IdeaIntakeChat
+              seed={idea.trim()}
+              busy={loading}
+              onComplete={handleSubmit}
+              onBack={() => { setPhase('seed'); setSaveError('') }}
+              confirmLabel="Save my idea"
+            />
+            {saveError && (
+              <p style={{ fontSize: 12, color: '#e05252', textAlign: 'center', margin: 0 }}>{saveError}</p>
+            )}
+          </div>
+        )}
+
         {/* Input card */}
+        {phase === 'seed' && (
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -437,7 +485,7 @@ function GreetingContent() {
                     initial={{ opacity: 0, scale: 0.8, x: 12 }}
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.8, x: 12 }}
-                    onClick={handleSubmit}
+                    onClick={handleStartInterview}
                     disabled={loading}
                     style={submitBtnStyle}
                     whileHover={{ scale: 1.05, boxShadow: '0 6px 20px var(--accent-glow)' }}
@@ -474,9 +522,10 @@ function GreetingContent() {
             animate={{ opacity: 0.5 }}
             transition={{ delay: 0.8 }}
           >
-            Press <kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>Enter</kbd> to start your validation run
+            Press <kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>Enter</kbd> to begin — Forze will ask a few questions
           </motion.p>
         </motion.div>
+        )}
 
         {/* Bottom features */}
         <motion.div
