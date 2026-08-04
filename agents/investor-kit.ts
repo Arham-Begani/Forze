@@ -219,7 +219,7 @@ export async function runInvestorKitAgent(
     const contextParts: string[] = []
 
     if (venture.globalIdea) {
-        contextParts.push(`Venture Vision: ${sanitize(venture.globalIdea, 1000)}`)
+        contextParts.push(`Venture Vision: ${sanitize(venture.globalIdea, 6000)}`)
     }
 
     // Research — extract only investor-relevant metrics

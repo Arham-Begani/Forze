@@ -298,7 +298,7 @@ export async function runShadowBoard(
 
     const userMessage = `Convene the Shadow Board for the venture: "${sanitizeLabel(venture.name)}".
 
-Project Vision: ${venture.globalIdea ? sanitize(venture.globalIdea, 1000) : 'N/A'}
+Project Vision: ${venture.globalIdea ? sanitize(venture.globalIdea, 6000) : 'N/A'}
 
 Full Context:
 Research:

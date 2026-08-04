@@ -48,6 +48,11 @@ export interface Project {
   status: 'active' | 'archived'
   global_idea: string | null
   source_documents: SourceDocument[]
+  // ── Migration 047 additions ─────────────────────────────────────────────
+  // Optional so every code path still type-checks against a DB where 047 has
+  // not been applied (the columns simply come back undefined).
+  idea_brief?: Record<string, unknown> | null
+  idea_version?: number | null
   created_at: string
   updated_at: string
 }
@@ -83,6 +88,10 @@ export interface Conversation {
   status: 'running' | 'complete' | 'failed'
   stream_output: string[]
   result: Record<string, unknown>
+  // Migration 047. The idea version this run was built from — drives the
+  // "built on an older version of your idea" badge. Null on every conversation
+  // created before 047, which the staleness check reads as "not stale".
+  idea_version?: number | null
   created_at: string
 }
 
@@ -194,7 +203,7 @@ export async function getProject(id: string, userId: string): Promise<Project | 
 
 export async function updateProject(
   id: string,
-  updates: { name?: string; description?: string; icon?: string; status?: 'active' | 'archived'; global_idea?: string; source_documents?: SourceDocument[] }
+  updates: { name?: string; description?: string; icon?: string; status?: 'active' | 'archived'; global_idea?: string; source_documents?: SourceDocument[]; idea_brief?: Record<string, unknown> }
 ): Promise<void> {
   const db = await createDb()
   const { error } = await db
@@ -202,7 +211,23 @@ export async function updateProject(
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id)
 
-  if (error) throw new Error(`updateProject failed: ${error.message}`)
+  if (!error) return
+
+  // `idea_brief` arrived in migration 047. If this environment has not applied
+  // it yet, drop that one key and retry so the rest of the update (name,
+  // global_idea, docs) still lands — a half-applied migration must never block
+  // venture creation.
+  if (updates.idea_brief !== undefined && /idea_brief/i.test(error.message || '')) {
+    const { idea_brief: _dropped, ...rest } = updates
+    const retry = await db
+      .from('projects')
+      .update({ ...rest, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    if (retry.error) throw new Error(`updateProject failed: ${retry.error.message}`)
+    return
+  }
+
+  throw new Error(`updateProject failed: ${error.message}`)
 }
 
 export async function deleteProject(id: string): Promise<void> {
@@ -488,17 +513,38 @@ export async function deleteVenture(id: string): Promise<void> {
 export async function createConversation(
   ventureId: string,
   moduleId: Conversation['module_id'],
-  prompt: string
+  prompt: string,
+  ideaVersion?: number | null
 ): Promise<Conversation> {
   return withRetry(async () => {
     const db = await createDb()
     const storedModuleId = CONVERSATION_MODULE_FALLBACK[moduleId]
     const storedPrompt = encodeConversationPrompt(moduleId, prompt)
+    const insertData: Record<string, unknown> = {
+      venture_id: ventureId,
+      module_id: storedModuleId,
+      prompt: storedPrompt,
+      status: 'running',
+      stream_output: [],
+      result: {},
+    }
+    if (typeof ideaVersion === 'number') insertData.idea_version = ideaVersion
+
     const { data, error } = await db
       .from('conversations')
-      .insert({ venture_id: ventureId, module_id: storedModuleId, prompt: storedPrompt, status: 'running', stream_output: [], result: {} })
+      .insert(insertData)
       .select()
       .single()
+
+    // `idea_version` arrived in migration 047. Every agent run goes through
+    // here, so an unapplied migration must NOT break runs — drop the column
+    // and retry, exactly as createVenture does for `subdomain`.
+    if (error && /idea_version/i.test(error.message || '')) {
+      delete insertData.idea_version
+      const retry = await db.from('conversations').insert(insertData).select().single()
+      if (retry.error) throw new Error(`createConversation failed: ${retry.error.message}`)
+      return normalizeConversation(retry.data)
+    }
 
     if (error) throw new Error(`createConversation failed: ${error.message}`)
     return normalizeConversation(data)

@@ -72,7 +72,7 @@ function buildDeepContext(globalIdea: string | undefined, ctx: Record<string, un
     const sections: string[] = []
 
     if (globalIdea) {
-        sections.push(`## Venture Idea\n${sanitize(globalIdea, 1000)}`)
+        sections.push(`## Venture Idea\n${sanitize(globalIdea, 6000)}`)
     }
 
     // Module availability status (legacy keys included — older ventures may

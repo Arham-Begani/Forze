@@ -700,7 +700,10 @@ export async function runPipelineAgent(
 
     const contextParts: string[] = []
     if (venture.context?.architectPlan) contextParts.push(`## Architect's Plan\n${sanitize(venture.context.architectPlan, 3000)}`)
-    if (venture.globalIdea) contextParts.push(`## Global Startup Vision\n${sanitize(venture.globalIdea, 1000)}`)
+    // 6000, not 1000: the run route composes globalIdea from the founder's
+    // paragraph + the structured brief + any uploaded reference documents. At
+    // the old 1000-char cap the documents were being truncated away entirely.
+    if (venture.globalIdea) contextParts.push(`## Global Startup Vision\n${sanitize(venture.globalIdea, 6000)}`)
 
     // Research — extract structured design tokens instead of raw JSON dump
     if (hasResearch) {

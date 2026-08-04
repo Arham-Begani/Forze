@@ -25,6 +25,7 @@ import { listLandingAssets } from '@/lib/queries/landing-asset-queries'
 import { runGeneralAgent } from '@/agents/general'
 import { runShadowBoard } from '@/agents/shadow'
 import { runInvestorKitAgent } from '@/agents/investor-kit'
+import { renderBriefForPrompt } from '@/lib/idea-brief'
 import { evaluateModuleScope } from '@/lib/module-scope'
 import type { ScopeRefusalResult } from '@/lib/module-scope.shared'
 import { logError } from '@/lib/log'
@@ -103,8 +104,18 @@ async function runAgent(
         finalPrompt = "Continue from where you left off. Do not repeat anything already outputted. Complete the JSON object strictly."
     }
 
-    // Build globalIdea: raw idea + any uploaded source documents
+    // Build globalIdea: raw idea + structured founder brief + uploaded documents.
+    // Order matters — the founder's own paragraph leads, the structured brief
+    // sharpens it, documents are reference material at the end.
     let globalIdea = project?.global_idea ?? undefined
+
+    // Structured brief (migration 047). Returns '' for every project created
+    // before the intake chatbot existed, so this is a no-op for old ventures.
+    const briefBlock = renderBriefForPrompt(project?.idea_brief)
+    if (briefBlock) {
+        globalIdea = (globalIdea ?? '') + briefBlock
+    }
+
     const sourceDocs = (project?.source_documents ?? []) as Array<{ name: string; content: string }>
     if (sourceDocs.length > 0) {
         const docBlock = sourceDocs.map(d =>
@@ -266,7 +277,21 @@ export async function POST(
             mode: 'run',
         })
 
-        const conversation = await createConversation(id, moduleId, prompt)
+        // Stamp the run with the idea version it is being built from, so the UI
+        // can flag this output as stale after a later idea update. Best-effort:
+        // a failed lookup (or a project predating migration 047) just leaves the
+        // stamp null, which reads as "not stale" — never blocks the run.
+        let ideaVersion: number | null = null
+        if (venture.project_id) {
+            try {
+                const project = await getProject(venture.project_id, session.userId)
+                ideaVersion = typeof project?.idea_version === 'number' ? project.idea_version : null
+            } catch {
+                ideaVersion = null
+            }
+        }
+
+        const conversation = await createConversation(id, moduleId, prompt, ideaVersion)
         if (!scopeDecision.allowed) {
             await completeScopeRefusal(conversation.id, scopeDecision.refusal)
 

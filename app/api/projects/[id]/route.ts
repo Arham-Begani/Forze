@@ -7,6 +7,7 @@ import {
   getVenturesByProject,
 } from '@/lib/queries'
 import { getBillingSnapshot } from '@/lib/billing-queries'
+import { IdeaBriefSchema } from '@/lib/schemas/idea'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -23,6 +24,9 @@ const UpdateProjectSchema = z.object({
   status: z.enum(['active', 'archived']).optional(),
   global_idea: z.string().optional(),
   source_documents: z.array(SourceDocumentSchema).max(5).optional(),
+  // Structured brief from the intake chatbot (migration 047). Validated
+  // against the real shape rather than accepting arbitrary JSON.
+  idea_brief: IdeaBriefSchema.optional(),
 })
 
 export async function GET(
