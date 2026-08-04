@@ -82,6 +82,46 @@ export function buildEventKey(name: string, url: string | null | undefined): str
   return name.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 400)
 }
 
+// Admin-scoped mirror of updateVentureContext. The public helper builds a
+// cookie-scoped client, so calling it from the routines cron would be blocked
+// by RLS — the same trap PROGRESS.md records for appendStreamLine in the
+// sweep-stuck-runs cron. Falls back to read-modify-write if the RPC is absent.
+export async function mergeVentureContextAdmin(
+  ventureId: string,
+  contextKey: string,
+  value: unknown,
+  db?: DbClient
+): Promise<void> {
+  const client = resolveAdminDb(db)
+
+  const { error: rpcError } = await client.rpc('merge_venture_context', {
+    venture_id_val: ventureId,
+    context_key: contextKey,
+    context_value: value,
+  })
+  if (!rpcError) return
+
+  const { data, error } = await client
+    .from('ventures')
+    .select('context')
+    .eq('id', ventureId)
+    .maybeSingle()
+
+  if (error || !data) throw new Error('mergeVentureContextAdmin failed to read venture context')
+
+  const current =
+    data.context && typeof data.context === 'object' && !Array.isArray(data.context)
+      ? (data.context as Record<string, unknown>)
+      : {}
+
+  const { error: updateError } = await client
+    .from('ventures')
+    .update({ context: { ...current, [contextKey]: value } })
+    .eq('id', ventureId)
+
+  if (updateError) throw new Error(`mergeVentureContextAdmin failed: ${updateError.message}`)
+}
+
 export async function getRoutineApprovalWindowHours(
   routineId: string,
   db?: DbClient
@@ -364,6 +404,23 @@ export async function listRepliedCommentIds(
     return new Set((data ?? []).map((row: { comment_id: string }) => row.comment_id))
   } catch {
     return new Set()
+  }
+}
+
+export async function updateCommentReplyOutcome(
+  commentId: string,
+  outcome: 'replied' | 'escalated' | 'skipped' | 'failed',
+  errorMessage?: string | null,
+  db?: DbClient
+): Promise<void> {
+  try {
+    const client = resolveAdminDb(db)
+    await client
+      .from('instagram_comment_replies')
+      .update({ outcome, error_message: errorMessage ?? null })
+      .eq('comment_id', commentId)
+  } catch {
+    // the ledger row already exists and blocks a duplicate reply either way
   }
 }
 

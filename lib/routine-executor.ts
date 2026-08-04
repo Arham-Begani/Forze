@@ -33,7 +33,25 @@ import {
   getMarketingAssetByIdAdmin,
   updateMarketingAssetStatusAdmin,
 } from '@/lib/marketing-queries'
-import { getRoutineApprovalWindowHours } from '@/lib/queries/autopilot-queries'
+import { getSocialConnectionSecretByProviderAdmin } from '@/lib/marketing-queries'
+import { decryptSecret } from '@/lib/marketing-crypto'
+import {
+  classifyAndDraftReplies,
+  fetchCommentsForMedia,
+  fetchOwnUsername,
+  fetchRecentOwnMedia,
+  replyToComment,
+  type InstagramComment,
+} from '@/lib/instagram-comments'
+import {
+  createSuggestedAction,
+  getAutopilotSettings,
+  getRoutineApprovalWindowHours,
+  listRepliedCommentIds,
+  mergeVentureContextAdmin,
+  recordCommentReply,
+  updateCommentReplyOutcome,
+} from '@/lib/queries/autopilot-queries'
 import { dispatchDuePublishJobs } from '@/lib/marketing-dispatch'
 import {
   advanceRoutineNextRun,
@@ -42,6 +60,9 @@ import {
   recordRoutineRun,
   type ClaimedRoutine,
 } from '@/lib/queries/routine-queries'
+import { findCommentOpportunities } from '@/lib/comment-scout'
+import { buildWeeklyAgenda, summarizeAgenda } from '@/lib/weekly-agenda'
+import { sendWeeklyAgendaMail } from '@/lib/forze-mail'
 
 type DbClient = SupabaseClient<any, any, any>
 
@@ -609,6 +630,343 @@ async function executeLinkedInRoutine(
   }
 }
 
+// ─── Instagram comment reply branch ───────────────────────────────────────────
+
+async function executeInstagramCommentReplyRoutine(
+  routine: ClaimedRoutine,
+  ventureName: string,
+  context: Record<string, unknown>,
+  adminDb: DbClient
+): Promise<ExecuteRoutineResult> {
+  const fail = async (message: string): Promise<ExecuteRoutineResult> => {
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'failed',
+      channel: 'instagram_comment_reply',
+      errorMessage: message,
+    })
+    return { routineId: routine.id, status: 'failed', errorMessage: message }
+  }
+
+  try {
+    const connection = await getSocialConnectionSecretByProviderAdmin(
+      routine.user_id,
+      'instagram',
+      adminDb
+    )
+    if (!connection) return fail('Instagram is not connected')
+
+    const accessToken = decryptSecret(connection.access_token_encrypted)
+    if (!accessToken) return fail('Instagram needs to be reconnected')
+
+    const settings = await getAutopilotSettings(routine.venture_id, adminDb)
+    const cap = Math.min(Math.max(settings.max_comment_replies_per_run, 1), 25)
+
+    const [media, ownUsername] = await Promise.all([
+      fetchRecentOwnMedia(accessToken, 10),
+      fetchOwnUsername(accessToken),
+    ])
+
+    if (media.length === 0) {
+      await recordRoutineRun({
+        routineId: routine.id,
+        userId: routine.user_id,
+        status: 'skipped',
+        channel: 'instagram_comment_reply',
+        metadata: { reason: 'no_media' },
+      })
+      return { routineId: routine.id, status: 'skipped', errorMessage: 'No Instagram posts found' }
+    }
+
+    const collected: InstagramComment[] = []
+    for (const item of media) {
+      if (collected.length >= 60) break
+      try {
+        const comments = await fetchCommentsForMedia(item.id, accessToken, 25)
+        collected.push(...comments)
+      } catch {
+        // one unreadable post must not abort the whole pass
+      }
+    }
+
+    const candidates = collected.filter(
+      (comment) => !ownUsername || comment.username !== ownUsername
+    )
+
+    const alreadyHandled = await listRepliedCommentIds(
+      routine.venture_id,
+      candidates.map((comment) => comment.id),
+      adminDb
+    )
+    const fresh = candidates.filter((comment) => !alreadyHandled.has(comment.id)).slice(0, 40)
+
+    if (fresh.length === 0) {
+      await recordRoutineRun({
+        routineId: routine.id,
+        userId: routine.user_id,
+        status: 'skipped',
+        channel: 'instagram_comment_reply',
+        metadata: { reason: 'no_new_comments', scanned: candidates.length },
+      })
+      return { routineId: routine.id, status: 'skipped' }
+    }
+
+    const decisions = await classifyAndDraftReplies({
+      comments: fresh,
+      ventureName,
+      brief: buildOutreachBrief(ventureName, context),
+      brandVoiceBlock: buildBrandVoiceBlock(context),
+    })
+
+    let replied = 0
+    let escalated = 0
+    let failed = 0
+
+    for (const decision of decisions) {
+      const { comment } = decision
+
+      if (!decision.autoReply || !decision.reply) {
+        const claimed = await recordCommentReply(
+          {
+            userId: routine.user_id,
+            ventureId: routine.venture_id,
+            routineId: routine.id,
+            commentId: comment.id,
+            mediaId: comment.mediaId,
+            commentText: comment.text,
+            replyText: decision.reply,
+            classification: decision.classification,
+            outcome: 'escalated',
+          },
+          adminDb
+        )
+        if (!claimed) continue
+
+        await createSuggestedAction(
+          {
+            ventureId: routine.venture_id,
+            userId: routine.user_id,
+            routineId: routine.id,
+            kind: 'comment_escalation',
+            channel: 'instagram',
+            title: `Instagram comment needs you (${decision.escalationReason ?? decision.classification})`,
+            body: comment.text,
+            targetUrl: media.find((item) => item.id === comment.mediaId)?.permalink ?? null,
+            context: {
+              comment_id: comment.id,
+              username: comment.username,
+              classification: decision.classification,
+              suggested_reply: decision.reply,
+            },
+          },
+          adminDb
+        )
+        escalated += 1
+        continue
+      }
+
+      if (replied >= cap) break
+
+      // Claim the comment in the ledger BEFORE calling Meta. The unique index
+      // on comment_id makes this the lock: if the insert loses, another run
+      // already owns this comment and we skip it. A crash between claim and
+      // reply means we under-reply, never double-reply on a live account.
+      const claimed = await recordCommentReply(
+        {
+          userId: routine.user_id,
+          ventureId: routine.venture_id,
+          routineId: routine.id,
+          commentId: comment.id,
+          mediaId: comment.mediaId,
+          commentText: comment.text,
+          replyText: decision.reply,
+          classification: decision.classification,
+          outcome: 'replied',
+        },
+        adminDb
+      )
+      if (!claimed) continue
+
+      try {
+        await replyToComment(comment.id, decision.reply, accessToken)
+        replied += 1
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'reply failed'
+        await updateCommentReplyOutcome(comment.id, 'failed', message, adminDb)
+        failed += 1
+      }
+    }
+
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'success',
+      channel: 'instagram_comment_reply',
+      metadata: { scanned: fresh.length, replied, escalated, failed },
+    })
+    return { routineId: routine.id, status: 'success' }
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : 'unknown error')
+  }
+}
+
+// ─── Comment suggestions branch ───────────────────────────────────────────────
+
+async function executeCommentSuggestionsRoutine(
+  routine: ClaimedRoutine,
+  ventureName: string,
+  context: Record<string, unknown>,
+  adminDb: DbClient
+): Promise<ExecuteRoutineResult> {
+  try {
+    const opportunities = await findCommentOpportunities({
+      ventureName,
+      context,
+      brandVoiceBlock: buildBrandVoiceBlock(context),
+      angleHint: routine.angle_hint,
+    })
+
+    if (opportunities.length === 0) {
+      await recordRoutineRun({
+        routineId: routine.id,
+        userId: routine.user_id,
+        status: 'skipped',
+        channel: 'comment_suggestions',
+        metadata: { reason: 'no_opportunities' },
+      })
+      return { routineId: routine.id, status: 'skipped' }
+    }
+
+    for (const opportunity of opportunities) {
+      await createSuggestedAction(
+        {
+          ventureId: routine.venture_id,
+          userId: routine.user_id,
+          routineId: routine.id,
+          kind: 'comment_suggestion',
+          channel: opportunity.platform,
+          title: opportunity.title,
+          body: opportunity.draftComment,
+          targetUrl: opportunity.url,
+          context: { why: opportunity.why, platform: opportunity.platform },
+        },
+        adminDb
+      )
+    }
+
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'success',
+      channel: 'comment_suggestions',
+      metadata: { suggested: opportunities.length },
+    })
+    return { routineId: routine.id, status: 'success' }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error'
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'failed',
+      channel: 'comment_suggestions',
+      errorMessage: message,
+    })
+    return { routineId: routine.id, status: 'failed', errorMessage: message }
+  }
+}
+
+// ─── Weekly agenda branch ─────────────────────────────────────────────────────
+
+async function executeAgendaRoutine(
+  routine: ClaimedRoutine,
+  ventureName: string,
+  adminDb: DbClient
+): Promise<ExecuteRoutineResult> {
+  try {
+    const agenda = await buildWeeklyAgenda({
+      userId: routine.user_id,
+      ventureId: routine.venture_id,
+      adminDb,
+    })
+
+    await mergeVentureContextAdmin(routine.venture_id, 'weeklyAgenda', agenda, adminDb).catch(
+      () => {}
+    )
+
+    const summary = summarizeAgenda(agenda)
+    const highlights: string[] = []
+    for (const entry of agenda.pendingApproval.slice(0, 3)) {
+      highlights.push(`${entry.provider} post "${entry.title}" publishes unless you stop it`)
+    }
+    for (const event of agenda.events.slice(0, 3)) {
+      highlights.push(
+        `${event.name}${event.city ? ` in ${event.city}` : ''}${event.conflictCount > 0 ? ' (clashes with your calendar)' : ''}`
+      )
+    }
+
+    let emailed = false
+    try {
+      const owner = await getVentureOwnerEmail(routine.user_id, adminDb)
+      if (owner?.email) {
+        const result = await sendWeeklyAgendaMail({
+          to: owner.email,
+          ownerName: owner.name ?? '',
+          ventureName,
+          summary,
+          highlights,
+          ctaUrl: `${getBaseUrl()}/dashboard/venture/${routine.venture_id}/autopilot`,
+        })
+        emailed = result.sent
+      }
+    } catch {
+      // the agenda is already persisted; a failed email must not fail the run
+    }
+
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'success',
+      channel: 'agenda',
+      metadata: {
+        emailed,
+        calendar_connected: agenda.calendarConnected,
+        week_entries: agenda.week.length,
+        pending_approval: agenda.pendingApproval.length,
+        events: agenda.events.length,
+      },
+    })
+    return { routineId: routine.id, status: 'success' }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error'
+    await recordRoutineRun({
+      routineId: routine.id,
+      userId: routine.user_id,
+      status: 'failed',
+      channel: 'agenda',
+      errorMessage: message,
+    })
+    return { routineId: routine.id, status: 'failed', errorMessage: message }
+  }
+}
+
+async function getVentureOwnerEmail(
+  userId: string,
+  adminDb: DbClient
+): Promise<{ email: string | null; name: string | null } | null> {
+  try {
+    const { data, error } = await adminDb
+      .from('users')
+      .select('email, name')
+      .eq('id', userId)
+      .maybeSingle()
+    if (error || !data) return null
+    return { email: data.email ?? null, name: data.name ?? null }
+  } catch {
+    return null
+  }
+}
+
 // ─── Public entry ────────────────────────────────────────────────────────────
 
 export async function executeRoutine(
@@ -635,6 +993,22 @@ export async function executeRoutine(
       result = await executeGmailRoutine(routine, venture.name, venture.context ?? {})
     } else if (routine.channel === 'linkedin') {
       result = await executeLinkedInRoutine(routine, venture.name, venture.context ?? {}, adminDb)
+    } else if (routine.channel === 'instagram_comment_reply') {
+      result = await executeInstagramCommentReplyRoutine(
+        routine,
+        venture.name,
+        venture.context ?? {},
+        adminDb
+      )
+    } else if (routine.channel === 'comment_suggestions') {
+      result = await executeCommentSuggestionsRoutine(
+        routine,
+        venture.name,
+        venture.context ?? {},
+        adminDb
+      )
+    } else if (routine.channel === 'agenda') {
+      result = await executeAgendaRoutine(routine, venture.name, adminDb)
     } else {
       result = await executeInstagramRoutine(routine, venture.name, venture.context ?? {}, adminDb)
     }

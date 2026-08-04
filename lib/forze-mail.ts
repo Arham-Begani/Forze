@@ -230,6 +230,66 @@ export async function sendWeeklyDigestMail(context: ForzeDigestContext): Promise
   return { sent: true }
 }
 
+// ─── Weekly autopilot agenda ───────────────────────────────────────────────────
+//
+// The Monday chief-of-staff brief. Best-effort like every other alert here: a
+// failed send must never fail the routine that produced the agenda.
+
+type ForzeAgendaContext = {
+  to: string
+  ownerName: string
+  ventureName: string
+  summary: string
+  highlights: string[]
+  ctaUrl: string
+}
+
+export async function sendWeeklyAgendaMail(context: ForzeAgendaContext): Promise<ForzeMailResult> {
+  if (!RESEND_API_KEY) {
+    return { sent: false, reason: 'not_configured' }
+  }
+
+  const greetingName = context.ownerName.trim() || 'there'
+  const highlights = context.highlights.filter((line) => line.trim() !== '').slice(0, 8)
+  const highlightText = highlights.length > 0 ? `\n\n${highlights.map((line) => `- ${line}`).join('\n')}` : ''
+
+  // renderHtml escapes `message` itself, so this stays plain text. Passing
+  // markup here would be double-escaped and render as literal tags.
+  const message =
+    highlights.length > 0 ? `${context.summary} — ${highlights.join(' • ')}` : context.summary
+
+  const payload = {
+    from: FORZE_FROM_EMAIL,
+    to: [context.to],
+    subject: `${context.ventureName}: your week ahead`,
+    text: `Hi ${greetingName},\n\n${context.summary}${highlightText}\n\nOpen Autopilot: ${context.ctaUrl}\nThe Forze team`,
+    html: renderHtml({
+      title: 'Your week ahead on Forze',
+      headline: `${context.ventureName}: your week ahead`,
+      message,
+      ctaLabel: 'Open Autopilot',
+      ctaHref: context.ctaUrl,
+      footer: 'The Forze team',
+      greetingName: escapeHtml(greetingName),
+    }),
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    return { sent: false, reason: 'request_failed' }
+  }
+
+  return { sent: true }
+}
+
 function buildForzeMail(context: ForzeMailContext) {
   const greetingName = context.name.trim() || 'there'
   const subject = getSubject(context.event)
