@@ -5,6 +5,26 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { useDashboardCollections } from '@/components/dashboard/DashboardShellContext'
+import { IdeaIntakeChat, type IdeaBriefValue } from '@/components/dashboard/IdeaIntakeChat'
+
+function deriveNameFromIdea(idea: string): string {
+  const stop = new Set([
+    'the', 'a', 'an', 'and', 'for', 'to', 'of', 'that', 'this', 'with', 'app', 'apps',
+    'application', 'platform', 'tool', 'my', 'our', 'is', 'it', 'on', 'in', 'build',
+    'building', 'create', 'creating', 'make', 'making', 'startup', 'idea', 'want',
+    'need', 'using', 'via', 'by', 'into', 'from', 'their', 'your',
+  ])
+  const words = idea
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stop.has(w.toLowerCase()))
+    .slice(0, 3)
+  if (words.length === 0) return 'New Venture'
+  return words
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+    .slice(0, 40)
+}
 
 // ─── Module data ────────────────────────────────────────────────────────────
 
@@ -36,6 +56,7 @@ export default function DashboardPage() {
   const [ideaInput, setIdeaInput] = useState('')
   const [ideaSubmitting, setIdeaSubmitting] = useState(false)
   const [ideaError, setIdeaError] = useState(false)
+  const [ideaPhase, setIdeaPhase] = useState<'seed' | 'interview'>('seed')
   const [enhancing, setEnhancing] = useState(false)
   const [enhanced, setEnhanced] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -67,25 +88,60 @@ export default function DashboardPage() {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  async function handleIdeaSubmit() {
+  function handleStartInterview() {
     const trimmed = ideaInput.trim()
-    if (!trimmed || ideaSubmitting) return
+    if (trimmed.length <= 5 || ideaSubmitting) return
+    setIdeaError(false)
+    setIdeaPhase('interview')
+  }
+
+  async function handleIdeaSubmit(brief: IdeaBriefValue, suggestedName: string | null) {
+    if (ideaSubmitting) return
+    const rawIdea = ideaInput.trim()
+    const finalIdea = brief.summary.trim() || rawIdea
     setIdeaSubmitting(true)
     setIdeaError(false)
+
     try {
-      const res = await fetch('/api/user/idea', {
+      const instantName = (suggestedName || '').trim() || deriveNameFromIdea(rawIdea)
+
+      const projRes = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: trimmed }),
+        body: JSON.stringify({ name: instantName }),
       })
-      if (res.ok) {
-        setIdea(trimmed)
-      } else {
-        setIdeaError(true)
+      if (!projRes.ok) throw new Error('project')
+      const project = await projRes.json()
+
+      const [, ventureRes] = await Promise.all([
+        fetch(`/api/projects/${project.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ global_idea: finalIdea, idea_brief: brief }),
+        }).catch(() => null),
+        fetch('/api/ventures', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: `${instantName} - v1`, projectId: project.id }),
+        }).catch(() => null),
+      ])
+
+      if (ventureRes && ventureRes.ok) {
+        const newVenture = await ventureRes.json().catch(() => null)
+        if (newVenture) window.dispatchEvent(new CustomEvent('Forze:venture-added', { detail: newVenture }))
       }
+      window.dispatchEvent(new CustomEvent('Forze:refresh-projects'))
+
+      void fetch('/api/user/idea', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea: rawIdea }),
+      }).catch(() => null)
+
+      setIdea(rawIdea)
+      router.push(`/dashboard/project/${project.id}`)
     } catch {
       setIdeaError(true)
-    } finally {
       setIdeaSubmitting(false)
     }
   }
@@ -211,7 +267,7 @@ export default function DashboardPage() {
           transition={{ delay: 0.15, duration: 0.5 }}
           style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: '0 0 8px', letterSpacing: '-0.03em', textAlign: 'center' }}
         >
-          What do you want to build?
+          {ideaPhase === 'seed' ? 'What do you want to build?' : 'Let’s sharpen it'}
         </motion.h2>
         <motion.p
           initial={{ opacity: 0 }}
@@ -219,10 +275,28 @@ export default function DashboardPage() {
           transition={{ delay: 0.25 }}
           style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 32px', textAlign: 'center', maxWidth: 420 }}
         >
-          Tell us your big idea and our AI workforce will handle the rest.
+          {ideaPhase === 'seed'
+            ? 'Tell us your big idea and our AI workforce will handle the rest.'
+            : 'A few quick questions so every agent builds the right thing. Skip any of them.'}
         </motion.p>
 
-        {/* Input card */}
+        {ideaPhase === 'interview' && (
+          <div style={{ width: '100%', maxWidth: 620, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <IdeaIntakeChat
+              seed={ideaInput.trim()}
+              busy={ideaSubmitting}
+              onComplete={handleIdeaSubmit}
+              onBack={() => { setIdeaPhase('seed'); setIdeaError(false) }}
+            />
+            {ideaError && (
+              <p style={{ fontSize: 12, color: '#e05252', textAlign: 'center', margin: 0 }}>
+                Something went wrong creating your venture. Please try again.
+              </p>
+            )}
+          </div>
+        )}
+
+        {ideaPhase === 'seed' && (
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -258,7 +332,7 @@ export default function DashboardPage() {
               value={ideaInput}
               onChange={e => setIdeaInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleIdeaSubmit()
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleStartInterview()
               }}
               placeholder="Describe your startup idea in detail — the problem it solves, who it's for, and what makes it unique..."
               style={{
@@ -364,7 +438,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, scale: 0.8, x: 12 }}
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.8, x: 12 }}
-                    onClick={handleIdeaSubmit}
+                    onClick={handleStartInterview}
                     disabled={ideaSubmitting}
                     style={{
                       display: 'flex',
@@ -399,7 +473,7 @@ export default function DashboardPage() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                         </svg>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>Initialize</span>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>Start</span>
                       </>
                     )}
                   </motion.button>
@@ -408,7 +482,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Hint */}
           <motion.p
             style={{ marginTop: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center', opacity: 0.5 }}
             initial={{ opacity: 0 }}
@@ -417,10 +490,11 @@ export default function DashboardPage() {
           >
             {ideaError
               ? <span style={{ color: '#e05252', opacity: 1 }}>Something went wrong. Please try again.</span>
-              : <>Press <kbd style={{ background: 'var(--nav-active)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'system-ui', fontSize: 11 }}>Ctrl</kbd> + <kbd style={{ background: 'var(--nav-active)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'system-ui', fontSize: 11 }}>Enter</kbd> to initialize your vision</>
+              : <>Press <kbd style={{ background: 'var(--nav-active)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'system-ui', fontSize: 11 }}>Ctrl</kbd> + <kbd style={{ background: 'var(--nav-active)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'system-ui', fontSize: 11 }}>Enter</kbd> to begin — Forze will ask a few questions</>
             }
           </motion.p>
         </motion.div>
+        )}
       </motion.div>
     )
   }
