@@ -78,6 +78,8 @@ export interface WeeklyActionUsage {
   crmEmailsSent: number
   campaignsSent: number
   leadScoutRuns: number
+  eventRadarRuns: number
+  commentReplies: number
 }
 
 export interface BillingSnapshot {
@@ -277,6 +279,8 @@ export async function getBillingSnapshot(userId: string, db?: DbClient): Promise
           crmEmailsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
           campaignsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
           leadScoutRuns: UNLIMITED_WEEKLY_ACTION_LIMIT,
+          eventRadarRuns: UNLIMITED_WEEKLY_ACTION_LIMIT,
+          commentReplies: UNLIMITED_WEEKLY_ACTION_LIMIT,
         }
       : plan.weeklyActionLimits,
     weeklyActionUsage,
@@ -648,10 +652,24 @@ export async function getWeeklyActionUsage(userId: string, db?: DbClient): Promi
 
   if (error) {
     console.warn(`[billing] getWeeklyActionUsage failed for ${userId}: ${error.message}`)
-    return { inspirationAnalyses: 0, crmEmailsSent: 0, campaignsSent: 0, leadScoutRuns: 0 }
+    return {
+      inspirationAnalyses: 0,
+      crmEmailsSent: 0,
+      campaignsSent: 0,
+      leadScoutRuns: 0,
+      eventRadarRuns: 0,
+      commentReplies: 0,
+    }
   }
 
-  const usage: WeeklyActionUsage = { inspirationAnalyses: 0, crmEmailsSent: 0, campaignsSent: 0, leadScoutRuns: 0 }
+  const usage: WeeklyActionUsage = {
+    inspirationAnalyses: 0,
+    crmEmailsSent: 0,
+    campaignsSent: 0,
+    leadScoutRuns: 0,
+    eventRadarRuns: 0,
+    commentReplies: 0,
+  }
   for (const row of data ?? []) {
     const featureId = (row as { feature_id?: string }).feature_id
     const count = (row as { count?: number | null }).count ?? 0
@@ -659,6 +677,8 @@ export async function getWeeklyActionUsage(userId: string, db?: DbClient): Promi
     else if (featureId === 'crm_email_send') usage.crmEmailsSent = count
     else if (featureId === 'campaign_send') usage.campaignsSent = count
     else if (featureId === 'lead_scout') usage.leadScoutRuns = count
+    else if (featureId === 'event_radar') usage.eventRadarRuns = count
+    else if (featureId === 'comment_reply') usage.commentReplies = count
   }
   return usage
 }
@@ -779,6 +799,8 @@ function readActionUsage(snapshot: BillingSnapshot, actionId: ActionId): number 
     case 'crm_email_send':      return snapshot.weeklyActionUsage.crmEmailsSent
     case 'campaign_send':       return snapshot.weeklyActionUsage.campaignsSent
     case 'lead_scout':          return snapshot.weeklyActionUsage.leadScoutRuns
+    case 'event_radar':         return snapshot.weeklyActionUsage.eventRadarRuns
+    case 'comment_reply':       return snapshot.weeklyActionUsage.commentReplies
   }
 }
 
@@ -788,6 +810,8 @@ function humanizeAction(actionId: ActionId): string {
     case 'crm_email_send':      return 'CRM emails'
     case 'campaign_send':       return 'campaign sends'
     case 'lead_scout':          return 'AI lead scout runs'
+    case 'event_radar':         return 'event radar scans'
+    case 'comment_reply':       return 'comment replies'
   }
 }
 

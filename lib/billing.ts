@@ -11,12 +11,18 @@ export type TopupSlug = 'topup-50' | 'topup-175'
 // Gated non-credit features (CRM read/list, inspiration analyze list, etc).
 // Distinct from BillingModuleId because these aren't priced in credits — they
 // have per-week action ceilings on top of plan-level access gating.
-export type FeatureId = 'crm' | 'inspiration' | 'outreach'
+export type FeatureId = 'crm' | 'inspiration' | 'outreach' | 'autopilot'
 
 // Action-counter keys. Each maps to a feature_usage_counters row keyed by
 // (user_id, feature_id, period_start). The string values match the DB CHECK
 // constraint in migration 030 (widened by 042 for lead_scout).
-export type ActionId = 'inspiration_analyze' | 'crm_email_send' | 'campaign_send' | 'lead_scout'
+export type ActionId =
+  | 'inspiration_analyze'
+  | 'crm_email_send'
+  | 'campaign_send'
+  | 'lead_scout'
+  | 'event_radar'
+  | 'comment_reply'
 
 export const ALL_BILLING_MODULES: BillingModuleId[] = [
   'landing',
@@ -25,7 +31,7 @@ export const ALL_BILLING_MODULES: BillingModuleId[] = [
   'investor-kit',
 ]
 
-export const ALL_FEATURES: FeatureId[] = ['crm', 'inspiration', 'outreach']
+export const ALL_FEATURES: FeatureId[] = ['crm', 'inspiration', 'outreach', 'autopilot']
 
 // Core build modules every plan gets (Free + Starter included).
 export const CORE_BILLING_MODULES: BillingModuleId[] = [
@@ -52,6 +58,8 @@ export interface WeeklyActionLimits {
   // AI Lead Scout runs — each run is a web-search Gemini pass that returns a
   // batch of prospect candidates, so it's metered tightly.
   leadScoutRuns: number
+  eventRadarRuns: number
+  commentReplies: number
 }
 
 export interface BillingPlan {
@@ -106,6 +114,8 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       crmEmailsSent: 0,
       campaignsSent: 0,
       leadScoutRuns: 0,
+      eventRadarRuns: 0,
+      commentReplies: 0,
     },
     cta: 'Start free',
   },
@@ -124,6 +134,8 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       crmEmailsSent: 0,
       campaignsSent: 0,
       leadScoutRuns: 0,
+      eventRadarRuns: 0,
+      commentReplies: 0,
     },
     cta: 'Get Started',
   },
@@ -142,6 +154,8 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       crmEmailsSent: 50,
       campaignsSent: 3,
       leadScoutRuns: 2,
+      eventRadarRuns: 4,
+      commentReplies: 20,
     },
     cta: 'Upgrade to Builder',
   },
@@ -160,6 +174,8 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       crmEmailsSent: 250,
       campaignsSent: 15,
       leadScoutRuns: 10,
+      eventRadarRuns: 15,
+      commentReplies: 100,
     },
     cta: 'Go Pro',
     highlight: true,
@@ -179,6 +195,8 @@ export const BILLING_PLANS: Record<PlanSlug, BillingPlan> = {
       crmEmailsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
       campaignsSent: UNLIMITED_WEEKLY_ACTION_LIMIT,
       leadScoutRuns: 30,
+      eventRadarRuns: 40,
+      commentReplies: UNLIMITED_WEEKLY_ACTION_LIMIT,
     },
     cta: 'Scale with Studio',
   },
@@ -188,6 +206,7 @@ export const FEATURE_LABELS: Record<FeatureId, string> = {
   crm: 'CRM',
   inspiration: 'Inspiration',
   outreach: 'Outreach',
+  autopilot: 'Autopilot',
 }
 
 export const ACTION_TO_FEATURE: Record<ActionId, FeatureId> = {
@@ -195,6 +214,8 @@ export const ACTION_TO_FEATURE: Record<ActionId, FeatureId> = {
   crm_email_send: 'crm',
   campaign_send: 'outreach',
   lead_scout: 'outreach',
+  event_radar: 'autopilot',
+  comment_reply: 'autopilot',
 }
 
 export const TOPUP_PRODUCTS: Record<TopupSlug, TopupProduct> = {
@@ -243,6 +264,10 @@ export function getWeeklyActionLimit(planSlug: PlanSlug, actionId: ActionId): nu
       return limits.campaignsSent
     case 'lead_scout':
       return limits.leadScoutRuns
+    case 'event_radar':
+      return limits.eventRadarRuns
+    case 'comment_reply':
+      return limits.commentReplies
   }
 }
 
