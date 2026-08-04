@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/Toast'
+import { IdeaPanel } from '@/components/venture/IdeaPanel'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ interface Project {
   description: string
   icon: string
   status: string
+  global_idea: string | null
   created_at: string
   ventures: Venture[]
 }
@@ -281,6 +283,10 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* The living idea — current brief + "what changed" changelog. Self
+            contained: it renders its own empty/error states and never throws. */}
+        <IdeaPanel projectId={projectId} fallbackSummary={project.global_idea} />
 
         {/* Venture grid */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

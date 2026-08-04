@@ -102,6 +102,8 @@ interface ConversationEntry {
   result: Record<string, unknown> | null
   isRunning: boolean
   isError: boolean
+  /** Idea version this run was built from. Null for runs predating migration 047. */
+  ideaVersion?: number | null
 }
 
 interface BillingSummary {
@@ -460,6 +462,8 @@ export default function ModulePage() {
   const [ventureProjectId, setVentureProjectId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationEntry[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  // Project's current idea version. Null = no staleness info available.
+  const [currentIdeaVersion, setCurrentIdeaVersion] = useState<number | null>(null)
   const [mounted, setMounted] = useState(false)
 
   // Timeline state
@@ -678,6 +682,9 @@ export default function ModulePage() {
         setVentureName(data.name ?? 'Venture')
         setVentureProjectId(data.project_id ?? null)
         setVentureSubdomain(data.subdomain ?? null)
+        setCurrentIdeaVersion(
+          typeof data.currentIdeaVersion === 'number' ? data.currentIdeaVersion : null
+        )
 
         const moduleConvos: ConversationEntry[] = (
           data.conversations?.[activeModule] ?? []
@@ -687,6 +694,7 @@ export default function ModulePage() {
           stream_output?: string[]
           result?: Record<string, unknown>
           status?: string
+          idea_version?: number | null
         }) => ({
           conversationId: c.id,
           prompt: c.prompt,
@@ -695,6 +703,7 @@ export default function ModulePage() {
           result: c.result && Object.keys(c.result).length > 0 ? c.result : null,
           isRunning: false,
           isError: c.status === 'failed',
+          ideaVersion: typeof c.idea_version === 'number' ? c.idea_version : null,
         }))
         setConversations(moduleConvos.reverse())
       } finally {
@@ -993,10 +1002,19 @@ export default function ModulePage() {
   const nextStep = NEXT_STEP_MAP[activeModule] ?? null
 
   // Compute latest result for reading panel
-  const latestResult = [...conversations]
+  const latestResultEntry = [...conversations]
     .reverse()
     .find(c => c.result && Object.keys(c.result).length > 0 && !isScopeRefusalResult(c.result))
-    ?.result as Record<string, any> | null
+  const latestResult = (latestResultEntry?.result ?? null) as Record<string, any> | null
+
+  // Is the newest output for this module older than the current idea?
+  // Both versions must be known — a null on either side means "no info", which
+  // deliberately reads as NOT stale so legacy runs never show a false badge.
+  const staleAgainstIdea =
+    !isSubmitting &&
+    typeof currentIdeaVersion === 'number' &&
+    typeof latestResultEntry?.ideaVersion === 'number' &&
+    latestResultEntry.ideaVersion < currentIdeaVersion
   const latestLandingResult = latestResult ? (latestResult.landing || latestResult) as Record<string, any> : null
   const landingFullComponent = activeModule === 'landing' && latestResult
     ? resolveLandingComponent({
@@ -1727,6 +1745,73 @@ export default function ModulePage() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            )}
+
+            {/* ── Stale-idea banner ──
+                The newest output for this module was built from an older
+                version of the founder's idea. Never auto-reruns — re-running
+                spends credits, so it stays an explicit choice. */}
+            {mounted && staleAgainstIdea && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  padding: '11px 14px',
+                  marginBottom: 28,
+                  borderRadius: 12,
+                  background: 'var(--accent-soft)',
+                  border: '1px solid var(--accent-glow)',
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 650, color: 'var(--text)' }}>
+                    Built on an older version of your idea
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>
+                    This output is from idea v{latestResultEntry?.ideaVersion}; you&apos;re now on v{currentIdeaVersion}.
+                  </div>
+                </div>
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    const lastPrompt = latestResultEntry?.prompt?.trim()
+                    if (!lastPrompt || isSubmitting || !hasEnoughCredits) {
+                      // No prompt to replay, or the run would be blocked — drop
+                      // the founder into the composer instead of failing silently.
+                      if (lastPrompt) setPrompt(lastPrompt)
+                      textareaRef.current?.focus()
+                      return
+                    }
+                    void executeRun(lastPrompt)
+                  }}
+                  disabled={isSubmitting}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 9,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, var(--accent), #e8963a)',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 650,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    flexShrink: 0,
+                  }}
+                >
+                  Re-run with the new idea
+                </motion.button>
+              </motion.div>
             )}
 
             <div ref={chatEndRef} />

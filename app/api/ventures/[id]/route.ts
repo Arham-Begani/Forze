@@ -6,6 +6,7 @@ import {
     updateVentureName,
     deleteVenture,
     getConversationsByModule,
+    getProject,
 } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -43,8 +44,24 @@ export async function GET(
             requestedModules.map(m => getConversationsByModule(id, m))
         )
 
+        // Current idea version, so the client can flag module output that was
+        // built from an older one. Best-effort: null on any failure (or a
+        // project predating migration 047) means "no staleness info" and the
+        // UI simply shows no badge.
+        let currentIdeaVersion: number | null = null
+        if (venture.project_id) {
+            try {
+                const project = await getProject(venture.project_id, session.userId)
+                currentIdeaVersion =
+                    typeof project?.idea_version === 'number' ? project.idea_version : null
+            } catch {
+                currentIdeaVersion = null
+            }
+        }
+
         return NextResponse.json({
             ...venture,
+            currentIdeaVersion,
             conversations: Object.fromEntries(requestedModules.map((m, i) => [m, conversations[i]])),
         })
     } catch (e) {

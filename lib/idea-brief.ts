@@ -22,6 +22,16 @@ import { logError } from '@/lib/log'
 
 const FOLD_TIMEOUT_MS = 45_000
 
+// Hard ceiling on the rendered brief block.
+//
+// The agents clip the whole composed globalIdea at 6000 chars, and that budget
+// is shared: global_idea (<=900) leads, then this block, then any uploaded
+// reference documents. The Zod schema's per-field maximums multiply out to
+// ~6.2k in the worst case, which would swallow the entire budget on its own —
+// so the render is capped independently of the schema. A real brief lands
+// around 800-1500 chars and never reaches this.
+const BRIEF_BLOCK_MAX = 2500
+
 /**
  * Coerce anything read out of `projects.idea_brief` into a valid IdeaBrief.
  *
@@ -82,7 +92,13 @@ export function renderBriefForPrompt(value: unknown): string {
 
     if (lines.length === 0) return ''
 
-    return `\n\n=== Founder Brief (structured, v${brief.version}) ===\n${lines.join('\n')}`
+    const header = `\n\n=== Founder Brief (structured, v${brief.version}) ===\n`
+    let body = lines.join('\n')
+    if (header.length + body.length > BRIEF_BLOCK_MAX) {
+        body = body.slice(0, Math.max(0, BRIEF_BLOCK_MAX - header.length - 1)) + '…'
+    }
+
+    return header + body
 }
 
 /**
