@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { IdeaIntakeChat, type IdeaBriefValue } from '@/components/dashboard/IdeaIntakeChat'
 
 interface UploadedDoc {
@@ -108,17 +108,106 @@ async function saveFirstIdeaInBackground(idea: string): Promise<void> {
   }
 }
 
+function DocAttach({
+  docs,
+  parsing,
+  dragOver,
+  setDragOver,
+  fileInputRef,
+  handleFiles,
+  removeDoc,
+}: {
+  docs: UploadedDoc[]
+  parsing: boolean
+  dragOver: boolean
+  setDragOver: (v: boolean) => void
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  handleFiles: (files: FileList | File[]) => void
+  removeDoc: (index: number) => void
+}) {
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => {
+        e.preventDefault()
+        setDragOver(false)
+        if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
+      }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={docs.length >= 5}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: dragOver ? 'var(--accent-soft)' : 'transparent',
+            border: `1px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
+            color: 'var(--muted)',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: docs.length >= 5 ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+          {parsing ? 'Reading…' : 'Attach reference docs'}
+        </button>
+        {docs.map((d, i) => (
+          <span
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              padding: '3px 9px',
+              borderRadius: 999,
+              background: 'var(--nav-active)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-soft)',
+            }}
+          >
+            {d.name}
+            <button
+              type="button"
+              onClick={() => removeDoc(i)}
+              style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
+              aria-label={`Remove ${d.name}`}
+            >
+              &times;
+            </button>
+          </span>
+        ))}
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.txt,.md,.csv,.json"
+        multiple
+        style={{ display: 'none' }}
+        onChange={e => {
+          if (e.target.files?.length) handleFiles(e.target.files)
+          e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
 export default function NewProjectPage() {
   const router = useRouter()
 
   const [ideaInput, setIdeaInput] = useState('')
-  // 'seed' = the founder is typing their opening sentence.
-  // 'interview' = the intake chatbot is asking follow-ups. Nothing is written
-  // to the DB until they confirm the brief at the end of the interview.
-  const [phase, setPhase] = useState<'seed' | 'interview'>('seed')
   const [submitting, setSubmitting] = useState(false)
-  const [enhancing, setEnhancing] = useState(false)
-  const [enhanced, setEnhanced] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [mounted, setMounted] = useState(false)
@@ -126,8 +215,6 @@ export default function NewProjectPage() {
   const [parsing, setParsing] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const canUploadDocs = true // Enable document upload for all users
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files).slice(0, 5 - docs.length) // max 5 docs
@@ -158,44 +245,6 @@ export default function NewProjectPage() {
     setMounted(true)
   }, [])
 
-  const canSubmit = ideaInput.trim().length > 5 && !submitting && phase === 'seed'
-  const canEnhance = ideaInput.trim().length >= 5 && !enhancing && !submitting && phase === 'seed'
-
-  async function handleEnhance() {
-    if (!canEnhance) return
-    setEnhancing(true)
-    try {
-      const res = await fetch('/api/enhance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: ideaInput.trim() }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.enhanced) {
-          setIdeaInput(data.enhanced)
-          setEnhanced(true)
-          setTimeout(() => setEnhanced(false), 3000)
-        }
-      }
-    } catch (err) {
-      console.error('Failed to enhance:', err)
-    } finally {
-      setEnhancing(false)
-    }
-  }
-
-  // Start the interview. Deliberately does NOT touch the DB — an abandoned
-  // interview must leave no orphan project behind.
-  function handleStartInterview() {
-    if (!canSubmit) return
-    setError('')
-    setPhase('interview')
-  }
-
-  // Called once the founder confirms their brief at the end of the interview.
-  // The creation sequence below is unchanged from the pre-chatbot flow apart
-  // from carrying the structured brief alongside global_idea.
   async function handleSubmit(brief: IdeaBriefValue, suggestedName: string | null) {
     if (submitting) return
     const rawIdea = ideaInput.trim()
@@ -287,10 +336,9 @@ export default function NewProjectPage() {
       animate={mounted ? { opacity: 1 } : false}
       transition={{ duration: 0.5 }}
     >
-      {/* Ambient glow */}
       <div style={glowStyle} />
 
-      {/* Logo */}
+
       <motion.div
         style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 52 }}
         initial={mounted ? { opacity: 0, y: -20 } : false}
@@ -305,14 +353,13 @@ export default function NewProjectPage() {
         <span style={wordmarkStyle}>Forze</span>
       </motion.div>
 
-      {/* Heading */}
       <motion.h2
         initial={mounted ? { opacity: 0, y: 12 } : false}
         animate={mounted ? { opacity: 1, y: 0 } : false}
         transition={{ delay: 0.15, duration: 0.5 }}
         style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: '0 0 8px', letterSpacing: '-0.03em', textAlign: 'center' }}
       >
-        {phase === 'seed' ? 'What do you want to build?' : 'Let’s sharpen it'}
+        Start a new venture
       </motion.h2>
       <motion.p
         initial={mounted ? { opacity: 0 } : false}
@@ -320,356 +367,27 @@ export default function NewProjectPage() {
         transition={{ delay: 0.25 }}
         style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 32px', textAlign: 'center', maxWidth: 420 }}
       >
-        {phase === 'seed'
-          ? 'Tell us your big idea and our AI workforce will handle the rest.'
-          : 'A few quick questions so every agent builds the right thing. Skip any of them.'}
+        Forze will interview you about your idea, then build from what you tell it.
       </motion.p>
 
-      {/* Interview — the founder's opening line seeds a short adaptive
-          Q&A. Nothing is saved until they confirm the brief. */}
-      {phase === 'interview' && (
+      <div style={{ width: '100%', maxWidth: 640 }}>
         <IdeaIntakeChat
-          seed={ideaInput.trim()}
           docNames={docs.map(d => d.name)}
           busy={submitting}
           onComplete={handleSubmit}
-          onBack={() => { setPhase('seed'); setError(''); setStatus('') }}
+          onSeedCaptured={setIdeaInput}
+          attachSlot={<DocAttach
+            docs={docs}
+            parsing={parsing}
+            dragOver={dragOver}
+            setDragOver={setDragOver}
+            fileInputRef={fileInputRef}
+            handleFiles={handleFiles}
+            removeDoc={(i: number) => setDocs(prev => prev.filter((_, idx) => idx !== i))}
+          />}
         />
-      )}
+      </div>
 
-      {/* Input card */}
-      {phase === 'seed' && (
-      <motion.div
-        initial={mounted ? { opacity: 0, y: 20, scale: 0.97 } : false}
-        animate={mounted ? { opacity: 1, y: 0, scale: 1 } : false}
-        transition={{ duration: 0.5, delay: 0.2, type: 'spring', stiffness: 300, damping: 24 }}
-        style={{ width: '100%', maxWidth: 620 }}
-      >
-        <div
-          className="glass-card"
-          style={{
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Gradient top accent */}
-          <motion.div
-            style={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0,
-              height: 2,
-              background: 'linear-gradient(90deg, var(--accent), #e8a04e, var(--accent))',
-              backgroundSize: '200% 100%',
-              borderRadius: '16px 16px 0 0',
-            }}
-            animate={ideaInput.trim() ? { backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] } : {}}
-            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-          />
-
-          <textarea
-            value={ideaInput}
-            onChange={e => setIdeaInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleStartInterview()
-            }}
-            placeholder="Describe your startup idea in detail — the problem it solves, who it's for, and what makes it unique..."
-            style={{
-              width: '100%',
-              minHeight: 100,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: 'var(--text)',
-              fontSize: 15,
-              lineHeight: 1.7,
-              resize: 'none',
-              fontFamily: 'inherit',
-            }}
-            autoFocus
-            maxLength={2000}
-            disabled={submitting}
-            aria-label="Describe your startup idea"
-          />
-
-          {/* Document upload section */}
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-            {/* Section label */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
-                </svg>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-soft)' }}>
-                  Reference Documents
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--muted)', padding: '1px 7px', borderRadius: 999, background: 'var(--nav-active)', border: '1px solid var(--border)' }}>
-                  optional
-                </span>
-              </div>
-              {docs.length > 0 && (
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{docs.length}/5 files</span>
-              )}
-            </div>
-
-            {/* Drop zone */}
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOver(false)
-                if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
-              }}
-              style={{
-                border: `1.5px dashed ${dragOver ? 'var(--accent)' : 'hsla(28,62%,42%,0.35)'}`,
-                borderRadius: 10,
-                padding: docs.length > 0 ? '10px 12px' : '18px 16px',
-                background: dragOver ? 'var(--accent-soft)' : 'hsla(28,62%,42%,0.04)',
-                transition: 'all 200ms',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                cursor: docs.length === 0 ? 'pointer' : 'default',
-              }}
-              onClick={docs.length === 0 ? () => fileInputRef.current?.click() : undefined}
-            >
-              {docs.length === 0 && !parsing && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    width: 36, height: 36,
-                    borderRadius: 10,
-                    background: 'var(--accent-soft)',
-                    border: '1px solid hsla(28,62%,42%,0.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginBottom: 2 }}>
-                      Drop files here, or <span style={{ color: 'var(--accent)', textDecoration: 'underline' }}>click to browse</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                      PDF, TXT, MD, CSV, JSON · Up to 5 files · Agents will read these for context
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {parsing && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 12, color: 'var(--accent)' }}>
-                  <motion.div
-                    style={{ width: 12, height: 12, border: '2px solid var(--accent-glow)', borderTopColor: 'var(--accent)', borderRadius: '50%' }}
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                  />
-                  Extracting text from document...
-                </div>
-              )}
-
-              {docs.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {docs.map((doc, i) => (
-                    <div key={i} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '7px 10px',
-                      background: 'var(--nav-active)',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      border: '1px solid var(--border)',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                        </svg>
-                        <span style={{ color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {doc.name}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                        <span style={{ color: 'var(--muted)', fontSize: 11 }}>
-                          {Math.round(doc.content.length / 1000)}k chars
-                        </span>
-                        <button
-                          onClick={() => setDocs(prev => prev.filter((_, idx) => idx !== i))}
-                          style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 2, fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center' }}
-                          title="Remove"
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {docs.length < 5 && (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, fontWeight: 600, textAlign: 'left', padding: '4px 0', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}
-                    >
-                      <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add another file
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.txt,.md,.csv,.json"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  if (e.target.files?.length) handleFiles(e.target.files)
-                  e.target.value = ''
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Action bar */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderTop: '1px solid var(--border)',
-            paddingTop: 12,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{
-                fontSize: 11,
-                color: ideaInput.length > 1800 ? '#e05252' : 'var(--muted)',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontWeight: 500,
-                transition: 'color 200ms',
-              }}>
-                {ideaInput.length}/2000
-              </span>
-
-              {/* AI Enhance button */}
-              {mounted && (
-                <AnimatePresence>
-                  {ideaInput.trim().length >= 5 && !submitting && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      onClick={handleEnhance}
-                      disabled={!canEnhance}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '5px 14px',
-                        borderRadius: 20,
-                        background: enhanced ? 'rgba(90, 140, 110, 0.12)' : 'var(--accent-soft)',
-                        border: `1px solid ${enhanced ? 'rgba(90, 140, 110, 0.3)' : 'var(--accent-glow)'}`,
-                        color: enhanced ? '#5A8C6E' : 'var(--accent)',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: enhancing ? 'wait' : 'pointer',
-                        fontFamily: 'inherit',
-                        transition: 'all 200ms',
-                      }}
-                      whileHover={canEnhance ? { scale: 1.04, boxShadow: '0 2px 12px var(--accent-glow)' } : {}}
-                      whileTap={canEnhance ? { scale: 0.96 } : {}}
-                    >
-                      {enhancing ? (
-                        <>
-                          <motion.div
-                            style={{
-                              width: 12, height: 12,
-                              border: '2px solid var(--accent-glow)',
-                              borderTopColor: 'var(--accent)',
-                              borderRadius: '50%',
-                            }}
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                          />
-                          <span>Enhancing...</span>
-                        </>
-                      ) : enhanced ? (
-                        <>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          <span>Enhanced</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                          </svg>
-                          <span>Enhance with AI</span>
-                        </>
-                      )}
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-              )}
-            </div>
-
-            {mounted && (
-              <AnimatePresence>
-                {canSubmit && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.8, x: 12 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.8, x: 12 }}
-                    onClick={handleStartInterview}
-                    disabled={submitting}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 20px',
-                      borderRadius: 12,
-                      background: 'linear-gradient(135deg, var(--accent), #e8963a)',
-                      border: 'none',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      boxShadow: '0 4px 14px var(--accent-glow)',
-                      transition: 'box-shadow 200ms',
-                    }}
-                    whileHover={!submitting ? { scale: 1.05, boxShadow: '0 6px 20px var(--accent-glow)' } : {}}
-                    whileTap={!submitting ? { scale: 0.95 } : {}}
-                  >
-                    {submitting ? (
-                      <motion.div
-                        style={{
-                          width: 16, height: 16,
-                          border: '2px solid rgba(255,255,255,0.3)',
-                          borderTopColor: '#fff',
-                          borderRadius: '50%',
-                        }}
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                      />
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>Start</span>
-                      </>
-                    )}
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            )}
-          </div>
-        </div>
-      </motion.div>
-      )}
-
-      {/* Status / hint — rendered in BOTH phases so a creation error raised
-          after the interview is never swallowed. */}
       <motion.p
         style={{ marginTop: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center', opacity: 0.5, minHeight: 20, maxWidth: 620 }}
         initial={mounted ? { opacity: 0 } : false}
@@ -686,8 +404,6 @@ export default function NewProjectPage() {
           >
             {status}
           </motion.span>
-        ) : phase === 'seed' ? (
-          <>Press <kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>Enter</kbd> to begin — Forze will ask a few questions</>
         ) : null}
       </motion.p>
     </motion.div>

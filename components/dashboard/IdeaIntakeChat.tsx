@@ -52,15 +52,16 @@ interface Answer {
 }
 
 interface Props {
-    seed: string
+    seed?: string
     docNames?: string[]
-    /** Called when the founder confirms. Receives the (possibly edited) brief. */
     onComplete: (brief: IdeaBriefValue, suggestedName: string | null) => void | Promise<void>
     onBack?: () => void
-    /** Label for the final confirm button. */
     confirmLabel?: string
-    /** Disables input while the parent is creating the venture. */
     busy?: boolean
+    openingLine?: string
+    placeholder?: string
+    attachSlot?: React.ReactNode
+    onSeedCaptured?: (seed: string) => void
 }
 
 type Bubble =
@@ -116,18 +117,30 @@ function coerceBrief(raw: unknown, seed: string): IdeaBriefValue {
     }
 }
 
+const MIN_SEED_LEN = 6
+
 export function IdeaIntakeChat({
-    seed,
+    seed: seedProp,
     docNames = [],
     onComplete,
     onBack,
     confirmLabel = 'Create my venture',
     busy = false,
+    openingLine = 'What do you want to build? Give me a sentence or two — I’ll ask the rest.',
+    placeholder = 'Describe your idea…',
+    attachSlot,
+    onSeedCaptured,
 }: Props) {
-    const [bubbles, setBubbles] = useState<Bubble[]>([{ kind: 'founder', text: seed }])
+    const hasInitialSeed = !!seedProp && seedProp.trim().length >= MIN_SEED_LEN
+    const [seed, setSeed] = useState(hasInitialSeed ? seedProp!.trim() : '')
+    const [bubbles, setBubbles] = useState<Bubble[]>(
+        hasInitialSeed
+            ? [{ kind: 'founder', text: seedProp!.trim() }]
+            : [{ kind: 'forze', text: openingLine }]
+    )
     const [answers, setAnswers] = useState<Answer[]>([])
     const [question, setQuestion] = useState<InterviewQuestion | null>(null)
-    const [thinking, setThinking] = useState(true)
+    const [thinking, setThinking] = useState(hasInitialSeed)
     const [freeText, setFreeText] = useState('')
     const [brief, setBrief] = useState<IdeaBriefValue | null>(null)
     const [suggestedName, setSuggestedName] = useState<string | null>(null)
@@ -135,8 +148,8 @@ export function IdeaIntakeChat({
     const [notice, setNotice] = useState('')
 
     const scrollRef = useRef<HTMLDivElement>(null)
-    // Guards against a late response from an abandoned turn overwriting state.
     const turnRef = useRef(0)
+    const awaitingSeed = !seed
 
     const scrollToBottom = useCallback(() => {
         requestAnimationFrame(() => {
@@ -147,7 +160,7 @@ export function IdeaIntakeChat({
     useEffect(scrollToBottom, [bubbles, question, brief, scrollToBottom])
 
     const runTurn = useCallback(
-        async (nextAnswers: Answer[], finalize: boolean) => {
+        async (activeSeed: string, nextAnswers: Answer[], finalize: boolean) => {
             const turn = ++turnRef.current
             setThinking(true)
             setQuestion(null)
@@ -157,14 +170,14 @@ export function IdeaIntakeChat({
                 const res = await fetch('/api/idea/interview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seed, answers: nextAnswers, docNames, finalize }),
+                    body: JSON.stringify({ seed: activeSeed, answers: nextAnswers, docNames, finalize }),
                 })
 
-                if (turn !== turnRef.current) return // superseded
+                if (turn !== turnRef.current) return
 
                 if (res.status === 429) {
                     setNotice('Slow down a moment — too many questions too quickly.')
-                    setBrief(coerceBrief(null, seed))
+                    setBrief(coerceBrief(null, activeSeed))
                     setDegraded(true)
                     return
                 }
@@ -172,7 +185,7 @@ export function IdeaIntakeChat({
                 const data = res.ok ? await res.json().catch(() => null) : null
 
                 if (!data) {
-                    setBrief(coerceBrief(null, seed))
+                    setBrief(coerceBrief(null, activeSeed))
                     setDegraded(true)
                     return
                 }
@@ -180,14 +193,14 @@ export function IdeaIntakeChat({
                 if (data.aiApplied === false) setDegraded(true)
 
                 if (data.done) {
-                    setBrief(coerceBrief(data.brief, seed))
+                    setBrief(coerceBrief(data.brief, activeSeed))
                     setSuggestedName(typeof data.suggestedName === 'string' ? data.suggestedName : null)
                     return
                 }
 
                 const q = data.question
                 if (!q || typeof q.question !== 'string') {
-                    setBrief(coerceBrief(data.brief, seed))
+                    setBrief(coerceBrief(data.brief, activeSeed))
                     setDegraded(true)
                     return
                 }
@@ -218,20 +231,29 @@ export function IdeaIntakeChat({
                 ])
             } catch {
                 if (turn !== turnRef.current) return
-                setBrief(coerceBrief(null, seed))
+                setBrief(coerceBrief(null, activeSeed))
                 setDegraded(true)
             } finally {
                 if (turn === turnRef.current) setThinking(false)
             }
         },
-        [seed, docNames]
+        [docNames]
     )
 
-    // Kick off the first question on mount.
     useEffect(() => {
-        void runTurn([], false)
+        if (hasInitialSeed) void runTurn(seedProp!.trim(), [], false)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    function submitSeed(text: string) {
+        const value = text.trim().slice(0, 2000)
+        if (value.length < MIN_SEED_LEN || thinking) return
+        setSeed(value)
+        setBubbles(prev => [...prev, { kind: 'founder', text: value }])
+        setFreeText('')
+        onSeedCaptured?.(value)
+        void runTurn(value, [], false)
+    }
 
     function submitAnswer(text: string, skipped = false) {
         if (!question || thinking) return
@@ -240,12 +262,12 @@ export function IdeaIntakeChat({
         setAnswers(next)
         setBubbles(prev => [...prev, { kind: 'founder', text: skipped ? 'Skip' : value }])
         setFreeText('')
-        void runTurn(next, false)
+        void runTurn(seed, next, false)
     }
 
     function finishEarly() {
         if (thinking) return
-        void runTurn(answers, true)
+        void runTurn(seed, answers, true)
     }
 
     // ── Review step ───────────────────────────────────────────────────────────
@@ -343,6 +365,70 @@ export function IdeaIntakeChat({
 
             {notice && (
                 <div style={{ fontSize: 12, color: '#e05252', textAlign: 'center' }}>{notice}</div>
+            )}
+
+            {awaitingSeed && !thinking && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="glass-card"
+                    style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}
+                >
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                        <textarea
+                            value={freeText}
+                            onChange={e => setFreeText(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    submitSeed(freeText)
+                                }
+                            }}
+                            placeholder={placeholder}
+                            maxLength={2000}
+                            rows={2}
+                            autoFocus
+                            style={{
+                                flex: 1,
+                                minHeight: 56,
+                                maxHeight: 160,
+                                resize: 'vertical',
+                                padding: '10px 12px',
+                                borderRadius: 10,
+                                background: 'var(--bg)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text)',
+                                fontSize: 14,
+                                lineHeight: 1.6,
+                                fontFamily: 'inherit',
+                                outline: 'none',
+                            }}
+                            aria-label="Describe your idea"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => submitSeed(freeText)}
+                            disabled={freeText.trim().length < MIN_SEED_LEN}
+                            style={{
+                                padding: '10px 18px',
+                                borderRadius: 10,
+                                border: 'none',
+                                background: freeText.trim().length >= MIN_SEED_LEN
+                                    ? 'linear-gradient(135deg, var(--accent), #e8963a)'
+                                    : 'var(--nav-active)',
+                                color: freeText.trim().length >= MIN_SEED_LEN ? '#fff' : 'var(--muted)',
+                                fontSize: 13,
+                                fontWeight: 650,
+                                cursor: freeText.trim().length >= MIN_SEED_LEN ? 'pointer' : 'not-allowed',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            Send
+                        </button>
+                    </div>
+                    {attachSlot}
+                </motion.div>
             )}
 
             <AnimatePresence mode="wait">

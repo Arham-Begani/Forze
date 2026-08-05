@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { IdeaIntakeChat, type IdeaBriefValue } from '@/components/dashboard/IdeaIntakeChat'
 
 // ─── Smart emoji picker ────────────────────────────────────────────────────���──
@@ -108,12 +108,6 @@ function pickEmojiForIdea(idea: string): string {
   return fallbacks[hash % fallbacks.length]
 }
 
-const SUGGESTIONS = [
-  'An AI-powered meal planning app for busy professionals',
-  'A marketplace connecting local farmers with restaurants',
-  'A SaaS tool for managing freelance client contracts',
-  'A platform for peer-to-peer language exchange',
-]
 
 function GreetingContent() {
   const router = useRouter()
@@ -124,17 +118,10 @@ function GreetingContent() {
   // 'seed' = typing the opening sentence; 'interview' = the intake chatbot is
   // asking follow-ups. The project already exists here, but global_idea is not
   // written until the founder confirms their brief.
-  const [phase, setPhase] = useState<'seed' | 'interview'>('seed')
   const [loading, setLoading] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [projectName, setProjectName] = useState('')
-  const [isFocused, setIsFocused] = useState(false)
-  const [charCount, setCharCount] = useState(0)
-  const [showSuggestions, setShowSuggestions] = useState(true)
-  const [enhancing, setEnhancing] = useState(false)
-  const [enhanced, setEnhanced] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -165,18 +152,7 @@ function GreetingContent() {
     loadProject()
   }, [projectId, router])
 
-  useEffect(() => {
-    setCharCount(idea.length)
-    if (idea.length > 0) setShowSuggestions(false)
-  }, [idea])
-
   // Start the interview — no DB write yet.
-  function handleStartInterview() {
-    if (!idea.trim() || loading) return
-    setPhase('interview')
-  }
-
-  // Called once the founder confirms the brief the interview produced.
   async function handleSubmit(brief: IdeaBriefValue, suggestedName: string | null) {
     if (loading) return
     const rawIdea = idea.trim()
@@ -235,38 +211,6 @@ function GreetingContent() {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleStartInterview()
-    }
-  }
-
-  async function handleEnhance() {
-    if (!idea.trim() || enhancing || idea.trim().length < 5) return
-    setEnhancing(true)
-    try {
-      const res = await fetch('/api/enhance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: idea.trim() }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.enhanced) {
-          setIdea(data.enhanced)
-          setEnhanced(true)
-          setTimeout(() => setEnhanced(false), 3000)
-        }
-      }
-    } catch (err) {
-      console.error('Failed to enhance:', err)
-    } finally {
-      setEnhancing(false)
-    }
-  }
-
-  const canSubmit = idea.trim().length > 5 && phase === 'seed'
-
   if (!mounted) return (
     <div className="ambient-page" style={containerStyle}>
       <div style={contentStyle}>
@@ -297,7 +241,7 @@ function GreetingContent() {
           />
           <div style={{ textAlign: 'center' }}>
             <h1 style={titleStyle}>
-              {phase === 'seed' ? 'Describe what you want to validate' : 'Let’s sharpen it'}
+              Describe what you want to validate
             </h1>
             {projectName && (
               <motion.p
@@ -312,220 +256,17 @@ function GreetingContent() {
           </div>
         </motion.div>
 
-        {/* Interview — a few adaptive questions before the idea is saved. */}
-        {phase === 'interview' && (
-          <div style={{ width: '100%', maxWidth: 680, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <IdeaIntakeChat
-              seed={idea.trim()}
-              busy={loading}
-              onComplete={handleSubmit}
-              onBack={() => { setPhase('seed'); setSaveError('') }}
-              confirmLabel="Save my idea"
-            />
-            {saveError && (
-              <p style={{ fontSize: 12, color: '#e05252', textAlign: 'center', margin: 0 }}>{saveError}</p>
-            )}
-          </div>
-        )}
-
-        {/* Input card */}
-        {phase === 'seed' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.15, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          style={{ width: '100%', maxWidth: 680 }}
-        >
-          <div
-            className="glass-card"
-            style={{
-              ...inputCardStyle,
-              borderColor: isFocused ? 'var(--accent-glow)' : 'var(--glass-border)',
-              boxShadow: isFocused
-                ? 'var(--shadow-lg), 0 0 0 2px var(--accent-glow)'
-                : 'var(--shadow-md)',
-            }}
-          >
-            {/* Gradient top accent */}
-            <motion.div
-              style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0,
-                height: 2,
-                background: 'linear-gradient(90deg, var(--accent), #e8a04e, var(--accent))',
-                backgroundSize: '200% 100%',
-                borderRadius: '16px 16px 0 0',
-              }}
-              animate={isFocused ? { backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] } : {}}
-              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-            />
-
-            <textarea
-              ref={textareaRef}
-              value={idea}
-              onChange={(e) => setIdea(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              onKeyDown={handleKeyDown}
-              placeholder="Describe the startup idea, customer, and core assumption you want Forze to validate..."
-              style={textareaStyle}
-              rows={5}
-              maxLength={2000}
-              aria-label="Describe your startup idea"
-            />
-
-            {/* Suggestions */}
-            <AnimatePresence>
-              {showSuggestions && idea.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
-                  style={{ overflow: 'hidden' }}
-                >
-                  <p style={suggestionLabel}>Try one of these</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
-                    {SUGGESTIONS.map((s, i) => (
-                      <motion.button
-                        key={i}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 + i * 0.08 }}
-                        onClick={() => { setIdea(s); textareaRef.current?.focus() }}
-                        style={suggestionChipStyle}
-                        whileHover={{ scale: 1.02, borderColor: 'var(--accent-glow)' }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        {s}
-                      </motion.button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Action bar */}
-            <div style={actionsBar}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{
-                  fontSize: 11,
-                  color: charCount > 1800 ? '#e05252' : 'var(--muted)',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: 500,
-                  transition: 'color 200ms',
-                }}>
-                  {charCount}/2000
-                </span>
-
-                {/* AI Enhance button */}
-                <AnimatePresence>
-                  {idea.trim().length >= 5 && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      onClick={handleEnhance}
-                      disabled={enhancing}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '5px 14px',
-                        borderRadius: 20,
-                        background: enhanced ? 'rgba(90, 140, 110, 0.12)' : 'var(--accent-soft)',
-                        border: `1px solid ${enhanced ? 'rgba(90, 140, 110, 0.3)' : 'var(--accent-glow)'}`,
-                        color: enhanced ? '#5A8C6E' : 'var(--accent)',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: enhancing ? 'wait' : 'pointer',
-                        fontFamily: 'inherit',
-                        transition: 'all 200ms',
-                      }}
-                      whileHover={!enhancing ? { scale: 1.04, boxShadow: '0 2px 12px var(--accent-glow)' } : {}}
-                      whileTap={!enhancing ? { scale: 0.96 } : {}}
-                    >
-                      {enhancing ? (
-                        <>
-                          <motion.div
-                            style={{
-                              width: 12, height: 12,
-                              border: '2px solid var(--accent-glow)',
-                              borderTopColor: 'var(--accent)',
-                              borderRadius: '50%',
-                            }}
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                          />
-                          <span>Enhancing...</span>
-                        </>
-                      ) : enhanced ? (
-                        <>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          <span>Enhanced</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                          </svg>
-                          <span>Enhance with AI</span>
-                        </>
-                      )}
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <AnimatePresence>
-                {canSubmit && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.8, x: 12 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.8, x: 12 }}
-                    onClick={handleStartInterview}
-                    disabled={loading}
-                    style={submitBtnStyle}
-                    whileHover={{ scale: 1.05, boxShadow: '0 6px 20px var(--accent-glow)' }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {loading ? (
-                      <motion.div
-                        style={{
-                          width: 16, height: 16,
-                          border: '2px solid rgba(255,255,255,0.3)',
-                          borderTopColor: '#fff',
-                          borderRadius: '50%',
-                        }}
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                      />
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>Start Validation</span>
-                      </>
-                    )}
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          <motion.p
-            style={hintStyle}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.5 }}
-            transition={{ delay: 0.8 }}
-          >
-            Press <kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>Enter</kbd> to begin — Forze will ask a few questions
-          </motion.p>
-        </motion.div>
-        )}
+        <div style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 40 }}>
+          <IdeaIntakeChat
+            busy={loading}
+            onComplete={handleSubmit}
+            onSeedCaptured={setIdea}
+            confirmLabel="Save my idea"
+          />
+          {saveError && (
+            <p style={{ fontSize: 12, color: '#e05252', textAlign: 'center', margin: 0 }}>{saveError}</p>
+          )}
+        </div>
 
         {/* Bottom features */}
         <motion.div
