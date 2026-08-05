@@ -7,7 +7,18 @@ import type {
   RoutineCadence,
   RoutineChannel,
 } from '@/lib/schemas/routine'
-import { TIMEZONE_OPTIONS } from '@/lib/schemas/routine'
+import {
+  DEFAULT_APPROVAL_WINDOW_HOURS,
+  PUBLISHING_ROUTINE_CHANNELS,
+  TIMEZONE_OPTIONS,
+} from '@/lib/schemas/routine'
+
+const APPROVAL_WINDOW_OPTIONS = [
+  { value: 0, label: 'Publish immediately' },
+  { value: 3, label: 'Wait 3h' },
+  { value: 12, label: 'Wait 12h' },
+  { value: 24, label: 'Wait 24h' },
+] as const
 import type { Campaign } from '@/lib/schemas/campaign'
 
 interface RoutinesPanelProps {
@@ -334,6 +345,9 @@ function CreateRoutineForm({
 }) {
   const [name, setName] = useState('')
   const [channel, setChannel] = useState<RoutineChannel>('gmail')
+  const [approvalWindowHours, setApprovalWindowHours] = useState<number>(
+    DEFAULT_APPROVAL_WINDOW_HOURS
+  )
   const [cadence, setCadence] = useState<RoutineCadence>('weekly')
   const [campaignId, setCampaignId] = useState<string>('')
   const [angleHint, setAngleHint] = useState('')
@@ -373,6 +387,11 @@ function CreateRoutineForm({
     [campaigns]
   )
 
+  const isPublishingChannel = useMemo(
+    () => (PUBLISHING_ROUTINE_CHANNELS as readonly string[]).includes(channel),
+    [channel]
+  )
+
   // Default the campaign picker to the first eligible campaign once we know
   // the user picked the gmail channel and we have options.
   useEffect(() => {
@@ -408,6 +427,7 @@ function CreateRoutineForm({
           name: trimmedName,
           channel,
           cadence,
+          approval_window_hours: isPublishingChannel ? approvalWindowHours : 0,
           campaign_id: channel === 'gmail' ? campaignId : null,
           angle_hint: angleHint.trim() || null,
           send_hour: sendHour,
@@ -481,7 +501,53 @@ function CreateRoutineForm({
             sub="Publishes a fresh founder-voice post to your connected LinkedIn."
           />
         </div>
+        <div className="mt-2 flex gap-2">
+          <ChannelChip
+            active={channel === 'instagram_comment_reply'}
+            onClick={() => setChannel('instagram_comment_reply')}
+            label="IG replies"
+            sub="Answers friendly comments on your own posts. Anything negative or link-bearing is escalated to you instead."
+          />
+          <ChannelChip
+            active={channel === 'comment_suggestions'}
+            onClick={() => setChannel('comment_suggestions')}
+            label="Comment ideas"
+            sub="Finds relevant discussions and drafts a comment. Never posts on its own."
+          />
+          <ChannelChip
+            active={channel === 'agenda'}
+            onClick={() => setChannel('agenda')}
+            label="Weekly agenda"
+            sub="Emails your week: calendar, events worth attending, posts awaiting veto, new leads."
+          />
+        </div>
       </Field>
+
+      {isPublishingChannel && (
+        <Field label="Before it goes live">
+          <div className="flex flex-wrap gap-2">
+            {APPROVAL_WINDOW_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setApprovalWindowHours(option.value)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  approvalWindowHours === option.value
+                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                    : 'border-[var(--border)] text-[var(--text-soft)] hover:text-[var(--text)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            {approvalWindowHours === 0
+              ? 'Posts publish the moment they are written, with no chance to stop them.'
+              : `Forze writes and schedules the post, then waits ${approvalWindowHours}h. It publishes unless you veto it in Autopilot.`}
+          </p>
+        </Field>
+      )}
 
       {channel === 'gmail' && (
         <Field label="Linked campaign">
