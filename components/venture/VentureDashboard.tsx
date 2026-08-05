@@ -53,10 +53,10 @@ export function VentureDashboard({ venture }: VentureDashboardProps) {
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     setIsExporting(true);
     try {
-      downloadPDFFromResult(
+      await downloadPDFFromResult(
         `${venture.name} — Venture Dossier`,
         venture.context,
         `${venture.name.replace(/\s+/g, "_")}_Dossier`

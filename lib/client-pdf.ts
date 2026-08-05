@@ -1,7 +1,13 @@
-import { jsPDF } from 'jspdf'
-import { buildSectionsFromResult, PDFSection, renderStyledPDFDocument } from '@/lib/pdf-document'
+import type { PDFSection } from '@/lib/pdf-document'
 
-export function downloadPDF(title: string, sections: PDFSection[], filename?: string) {
+export type { PDFSection }
+
+export async function downloadPDF(title: string, sections: PDFSection[], filename?: string) {
+  const [{ jsPDF }, { renderStyledPDFDocument }] = await Promise.all([
+    import('jspdf'),
+    import('@/lib/pdf-document'),
+  ])
+
   const doc = new jsPDF()
   renderStyledPDFDocument(doc, title, sections)
 
@@ -9,7 +15,7 @@ export function downloadPDF(title: string, sections: PDFSection[], filename?: st
   doc.save(`${safeName}.pdf`)
 }
 
-export function downloadPDFFromElement(title: string, element: HTMLElement, filename?: string) {
+export async function downloadPDFFromElement(title: string, element: HTMLElement, filename?: string) {
   const text = element.innerText || ''
   const sections: PDFSection[] = []
   const parts = text.split(/\n(?=[A-Z][A-Z\s&()]+\n)/)
@@ -27,10 +33,11 @@ export function downloadPDFFromElement(title: string, element: HTMLElement, file
     }
   }
 
-  downloadPDF(title, sections, filename)
+  await downloadPDF(title, sections, filename)
 }
 
-export function downloadPDFFromResult(title: string, result: Record<string, any>, filename?: string) {
+export async function downloadPDFFromResult(title: string, result: Record<string, any>, filename?: string) {
+  const { buildSectionsFromResult } = await import('@/lib/pdf-document')
   const sections = buildSectionsFromResult(title, result)
-  downloadPDF(title, sections, filename)
+  await downloadPDF(title, sections, filename)
 }

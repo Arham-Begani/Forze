@@ -247,8 +247,12 @@ export const ResultCard = React.memo(function ResultCard({ moduleId, result, dep
                 <ActionButton
                   label="Export PDF"
                   icon={<FileText size={12} />}
-                  onClick={() => {
-                    downloadPDFFromResult(`${label} Report`, result, `${label}_Report`)
+                  onClick={async () => {
+                    try {
+                      await downloadPDFFromResult(`${label} Report`, result, `${label}_Report`)
+                    } catch (err) {
+                      console.error('Export failed:', err)
+                    }
                   }}
                 />
                 <ActionButton

@@ -2631,11 +2631,15 @@ function ReadingPanel({ moduleId, result, accent, onClose }: {
     } catch { /* fallback */ }
   }
 
-  function handleExportPDF() {
-    if (result && typeof result === 'object') {
-      downloadPDFFromResult(title, result as Record<string, any>, title.replace(/\s+/g, '_'))
-    } else if (contentRef.current) {
-      downloadPDFFromElement(title, contentRef.current, title.replace(/\s+/g, '_'))
+  async function handleExportPDF() {
+    try {
+      if (result && typeof result === 'object') {
+        await downloadPDFFromResult(title, result as Record<string, any>, title.replace(/\s+/g, '_'))
+      } else if (contentRef.current) {
+        await downloadPDFFromElement(title, contentRef.current, title.replace(/\s+/g, '_'))
+      }
+    } catch (err) {
+      console.error('Export failed:', err)
     }
   }
 

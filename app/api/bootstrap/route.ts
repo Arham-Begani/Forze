@@ -14,22 +14,8 @@
 import { requireAuth, isAdmin, isAuthError } from '@/lib/auth'
 import { getBillingSnapshot } from '@/lib/billing-queries'
 import { getProjectsByUser, getVenturesByUser } from '@/lib/queries'
+import { toVentureSummary } from '@/lib/venture-summary'
 import { NextResponse } from 'next/server'
-
-const COMPLETED_MODULE_MAP = [
-  { contextKey: 'landing', moduleId: 'landing' },
-  { contextKey: 'shadowBoard', moduleId: 'shadow-board' },
-  { contextKey: 'investorKit', moduleId: 'investor-kit' },
-  { contextKey: 'launchAutopilot', moduleId: 'launch-autopilot' },
-  { contextKey: 'mvpScalpel', moduleId: 'mvp-scalpel' },
-] as const
-
-function getCompletedModules(context: Record<string, unknown> | null | undefined): string[] {
-  if (!context) return []
-  return COMPLETED_MODULE_MAP
-    .filter(({ contextKey }) => context[contextKey] != null)
-    .map(({ moduleId }) => moduleId)
-}
 
 export async function GET() {
   try {
@@ -58,12 +44,7 @@ export async function GET() {
         isAdmin: isAdmin(session),
       },
       projects,
-      ventures: ventures.map((venture) => ({
-        ...venture,
-        completedModules: getCompletedModules(
-          venture.context as unknown as Record<string, unknown> | null | undefined
-        ),
-      })),
+      ventures: ventures.map(toVentureSummary),
     })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()

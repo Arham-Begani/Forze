@@ -23,7 +23,7 @@ interface Venture {
   id: string
   name: string
   created_at: string
-  context: Record<string, unknown>
+  completedModules?: string[]
 }
 
 const MODULES = [
@@ -147,14 +147,11 @@ export default function ProjectDetailPage() {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
+  const PROJECT_CARD_MODULES = ['landing', 'shadow-board']
+
   function getCompletedModules(venture: Venture): string[] {
-    const ctx = (venture.context || {}) as Record<string, unknown>
-    return [
-      { key: 'landing', id: 'landing' },
-      { key: 'shadowBoard', id: 'shadow-board' },
-    ]
-      .filter(({ key }) => ctx[key] !== null && ctx[key] !== undefined)
-      .map(({ id }) => id)
+    const completed = Array.isArray(venture.completedModules) ? venture.completedModules : []
+    return PROJECT_CARD_MODULES.filter(id => completed.includes(id))
   }
 
   if (!mounted) {

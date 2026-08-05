@@ -8,6 +8,7 @@ import {
 } from '@/lib/queries'
 import { getBillingSnapshot } from '@/lib/billing-queries'
 import { IdeaBriefSchema } from '@/lib/schemas/idea'
+import { toVentureSummary } from '@/lib/venture-summary'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -43,7 +44,7 @@ export async function GET(
 
     const ventures = await getVenturesByProject(id)
 
-    return NextResponse.json({ ...project, ventures })
+    return NextResponse.json({ ...project, ventures: ventures.map(toVentureSummary) })
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

@@ -367,7 +367,7 @@ export function ReportModal({ isOpen, onClose, title, content, accentColor, onSu
                   if (sections.length === 0) {
                     sections.push({ title, content })
                   }
-                  downloadPDF(title, sections)
+                  void downloadPDF(title, sections).catch(err => console.error('Export failed:', err))
                 }}
                 style={{
                   padding: "8px 20px",
