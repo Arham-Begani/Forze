@@ -1,6 +1,6 @@
 // app/api/projects/route.ts
 import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
-import { getProjectsByUser, createProject } from '@/lib/queries'
+import { getProjectSummariesByUser, createProject } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { logError } from '@/lib/log'
@@ -17,7 +17,9 @@ export async function GET() {
     step = 'auth'
     const session = await requireAuth()
     step = 'query'
-    const projects = await getProjectsByUser(session.userId)
+    // Summary shape: the list never needs source_documents (up to 250KB of
+    // uploaded reference text per project) or the idea_brief JSONB.
+    const projects = await getProjectSummariesByUser(session.userId)
     return NextResponse.json(projects)
   } catch (e) {
     if (isAuthError(e)) return e.toResponse()

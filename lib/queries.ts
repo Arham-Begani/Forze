@@ -188,6 +188,47 @@ export async function getProjectsByUser(userId: string): Promise<Project[]> {
   return data ?? []
 }
 
+/** Everything the project list renders, and nothing else. */
+export type ProjectSummary = Pick<
+  Project,
+  'id' | 'user_id' | 'name' | 'description' | 'icon' | 'status' | 'global_idea' | 'created_at' | 'updated_at'
+> & { idea_version?: number | null }
+
+const PROJECT_SUMMARY_COLUMNS =
+  'id, user_id, name, description, icon, status, global_idea, created_at, updated_at'
+
+/**
+ * The list variant of getProjectsByUser.
+ *
+ * The full row carries source_documents — up to five uploaded reference
+ * documents at 50k characters each — plus the whole idea_brief JSONB. Nothing
+ * on the client reads either; source_documents is consumed server-side by the
+ * run route alone. Selecting them meant every dashboard load serialised up to a
+ * quarter of a megabyte of document text per project for a sidebar icon and a
+ * name.
+ *
+ * idea_version is requested separately so a database without migration 047
+ * still answers: the retry below drops it rather than failing the whole list.
+ */
+export async function getProjectSummariesByUser(userId: string): Promise<ProjectSummary[]> {
+  const db = await createDb()
+
+  const run = (columns: string) =>
+    db
+      .from('projects')
+      .select(columns)
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+
+  const { data, error } = await run(`${PROJECT_SUMMARY_COLUMNS}, idea_version`)
+  if (!error) return (data ?? []) as unknown as ProjectSummary[]
+
+  const { data: legacy, error: legacyError } = await run(PROJECT_SUMMARY_COLUMNS)
+  if (legacyError) throw new Error(`getProjectSummariesByUser failed: ${legacyError.message}`)
+  return (legacy ?? []) as unknown as ProjectSummary[]
+}
+
 export async function getProject(id: string, userId: string): Promise<Project | null> {
   const db = await createDb()
   const { data, error } = await db

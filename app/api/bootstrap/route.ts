@@ -13,7 +13,7 @@
 // fallback, so if this endpoint ever fails nothing regresses.
 import { requireAuth, isAdmin, isAuthError } from '@/lib/auth'
 import { getBillingSnapshot } from '@/lib/billing-queries'
-import { getProjectsByUser, getVenturesByUser } from '@/lib/queries'
+import { getProjectSummariesByUser, getVenturesByUser } from '@/lib/queries'
 import { toVentureSummary } from '@/lib/venture-summary'
 import { NextResponse } from 'next/server'
 
@@ -24,7 +24,7 @@ export async function GET() {
     // requireAuth already resolved the user; fan out the three reads in parallel.
     const [billing, projects, ventures] = await Promise.all([
       getBillingSnapshot(session.userId),
-      getProjectsByUser(session.userId),
+      getProjectSummariesByUser(session.userId),
       getVenturesByUser(session.userId),
     ])
 
