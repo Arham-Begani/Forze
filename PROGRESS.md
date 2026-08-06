@@ -1006,3 +1006,62 @@ Founder asked for max scope. Worked lowest-risk → highest-risk, verifying at e
 **Not yet done (requires the user):**
 1. Apply `db/migrations/047_idea_brief_and_updates.sql` in the Supabase SQL editor. Until then the app runs unchanged: no brief is stored, no versions are stamped, and no stale badges appear — every fallback path was written and type-checked for exactly this state, but the *applied*-migration path has not been exercised against a live DB.
 2. An authenticated click-through of the full flow (interview → create → run a module → log an update → see the badge → re-run). Everything below the UI is verified; the browser flow itself is not.
+
+### Day 25 — August 6, 2026
+**Goal:** Make the platform fast. Not one slow function — the whole app felt slow on first load, on every navigation, and while scrolling and typing.
+
+**Why:** Four structural costs compounded on every page. (1) Auth was a network call made 4–8x per page view: `proxy.ts` called `supabase.auth.getUser()` on every request its matcher touched, and every API route then called `requireAuth()` → `getUser()` again. (2) Nothing was server-rendered — the shell downloaded, hydrated, *then* fetched `/api/bootstrap`, with the whole app held at `opacity: 0` behind a loading overlay for that entire round trip. (3) The hottest endpoint shipped the largest payload. (4) Large blurred layers and JS-driven animations ran forever on every page.
+
+**Built (6 commits, one per phase):**
+
+**Phase 1 — auth off the network (`883342f`)**
+- `lib/auth.ts` and `proxy.ts` now call `supabase.auth.getClaims()`, which verifies the access token signature locally against the cached JWKS. `getClaims` falls back to `getUser` internally for symmetric HS256 secrets, so behaviour is identical until the Supabase project migrates to an asymmetric key — this was safe to ship first.
+- Narrowed the proxy matcher: it ran on every `_next` asset and on public/cron/webhook API routes that never read a session. `api/track/pixel` fires on every email open and was paying for a Supabase client plus a session read for nothing. `api/download` and `api/invites` deliberately stay in — they DO read the session cookie.
+
+**Phase 2 — hot endpoint payload (`4e87182`)**
+- `/api/ventures/[id]` no longer returns `venture.context`. Commit `76afed0` removed that blob from the venture LIST endpoints; the DETAIL endpoint, hit on every module page load, was missed. New `toVentureDetail()` sits beside `toVentureSummary()` in `lib/venture-summary.ts`.
+- **Bug found and fixed:** the inspiration studio deployment poll read `data.venture.context.landing` — a path this route has NEVER returned (it spreads venture fields at the top level). The poll could only ever run out its 120s and give up. It now reads the `landingDeploymentUrl` / `hasLandingComponent` scalars the route derives.
+- Module page no longer fetches `/api/billing/me`. It needed two numbers and was calling an endpoint that rebuilds the whole billing snapshot (6+ queries plus a conditional write). Both come from the shell. The run route now returns the post-charge balance on its 202 so refreshing the counter costs no request either.
+- Bounded `getConversationsByModule` at 30 — it had no limit, so a heavily-iterated venture shipped every past run's full `stream_output` and `result` forever.
+
+**Phase 3 — server-rendered shell (`1b18349`)**
+- `app/dashboard/layout.tsx` became a server component; its client body moved verbatim to `components/dashboard/DashboardShellClient.tsx`, seeded from `initialData`. `/api/bootstrap` is untouched and still serves the fallback path, so a failed server read degrades to the old behaviour rather than a broken dashboard.
+- Removed the whole-app opacity gate.
+- Two things the build surfaced: the catch now rethrows Next control-flow errors (`NEXT_` digest) instead of swallowing a framework signal, and the segment is `force-dynamic` since every dashboard route reads cookies and could never prerender.
+- Added `getProjectSummariesByUser()`. `getProjectsByUser` does `select('*')`, which carries `source_documents` — **up to five uploaded documents at 50k chars each** — plus the whole `idea_brief`. Nothing on the client reads either. Every dashboard load was serialising up to a quarter of a megabyte of document text per project to render a sidebar icon and a name.
+- `loading.tsx` for the module, CRM and campaigns segments.
+
+**Phase 4 — redundant round-trips (`7650e59`)**
+- `getVenture()` fetches first and authorises second: one query instead of three. The ownership assertion is unchanged — `getVentureAccess` grants `owner` exactly when `ventures.user_id` matches the caller, which is the check now made against the row just read.
+- `getBillingSnapshot` is two stages deep instead of three; the weekly credit refresh joined the batch and reports whether it actually granted, so the balance is only re-read on the rare week it did.
+- The dashboard saved idea comes from the server render instead of a third-level `/api/user/idea` fetch that made returning users see the intake prompt flash first.
+
+**Phase 5 — navigation and paint (`36aeea0`)**
+- Dropped `mode="wait"` from the page `AnimatePresence`. By definition it held the incoming page until the outgoing one finished its 180ms exit — **every navigation in the app paid that** before the new route could paint.
+- Removed `filter: blur()` from the ambient blobs (`.ambient-page`, dashboard, settings, module, and the three auth pages). Fixed, 300-640px, animating forever — the browser re-rasterised several large blurred layers every frame, including on the page where people type.
+- Moved the infinite hex-mark rotations from framer-motion to CSS (compositor instead of React-per-frame).
+- Dropped `backdrop-filter` from `.glass-sidebar` — full-height, always mounted, on an opaque background, so it blurred nothing while forcing a permanent viewport-height compositing layer.
+- Added a `prefers-reduced-motion: reduce` block.
+
+**Phase 6 — bundle (`584ea95`)**
+- `next/dynamic` for `LandingPreviewPanel` (678 lines), `LandingAssetsPopover` (499), `LandingDoc` (199) and `react-markdown` — none render on first paint. `buildVentureSiteUrl` moved to `lib/landing-page.ts` so importing it would not drag the panel back in.
+- Removed `recharts` from `optimizePackageImports` — not a dependency, so the entry did nothing.
+
+**Verification:** `npx tsc --noEmit` 0 errors, `npm run build` clean, `npm run test` **98 passed** (6 new locking that the detail projection never leaks `context`). After every phase, against a dev server: `/api/bootstrap`, `/api/ventures`, `/api/projects`, `/api/campaigns`, `/api/billing/me`, `/api/user/idea` all 401 unauthenticated; `/dashboard` 307s to `/signin`; `/pricing`, `/signin`, `/` and `/blog` 200; a tenant `Host` header still rewrites to `/sites/[subdomain]` (verified by page title, not just status code).
+
+**Measured:** total client JS 3.51 → 3.52 MB, chunks 68 → 72 — i.e. the four new lazy chunks. Total bytes is the wrong metric for code splitting (it defers, it does not remove); this Turbopack build emits no per-route manifest, so there is no first-load figure for the module route specifically.
+
+**Not verified:**
+- **No authenticated click-through.** Every guard was checked unauthenticated. The logged-in path — server-rendered shell with real data, module page reading credits from the shell, lazily-loaded panels, run → credits-changed event — has not been exercised in a browser.
+- **No visual check.** The dev server runs `--experimental-https` with a self-signed cert Chrome refuses, so no screenshots. Phases 1-4 and 6 are visually neutral; in Phase 5 the de-blurred blobs are an APPROXIMATION of an 80px Gaussian, not a reproduction, and may read slightly differently. That change is self-contained and revertible on its own.
+
+**Deliberately not done:**
+- `getVenturesByUser` still does two queries. Collapsing them needs an embedded `venture_members` join, and `ventures` RLS is owner-scoped, so the join behaviour under RLS is not verifiable without a live authenticated session. The saving is one round-trip; the risk is the venture list.
+- `getBillingSnapshot` is **not** wrapped in `cache()`. Several callers mutate then re-read within one request (`billing/portal` cancels a subscription and reads the snapshot on the next line) and a request-scoped cache would hand them pre-mutation state.
+- Lazy `stream_output` was dropped from the plan: `showThoughtProcess` defaults **on**, so deferring it would trade one payload for N round-trips plus visible loading states on every past run.
+- `getVenturesByUser` still selects `context` — `toVentureSummary` needs to know which keys are non-null. Stripping it properly needs a generated column or view, i.e. a migration.
+
+**Next (requires the user):**
+1. **Supabase dashboard → Project Settings → JWT Keys → migrate to an asymmetric (ECC P-256) signing key.** This is what turns Phase 1 from a no-op into the largest single win — until it is done, `getClaims` still falls through to a network `getUser` call.
+2. Authenticated click-through of the dashboard, a module run, CRM and Campaigns.
+3. Confirm the Supabase project region and consider pinning `regions` in `vercel.json` to match — functions default to `iad1`, and this codebase makes many DB round-trips per request. Potentially a large win for zero code change, but it needs the region confirmed first.
