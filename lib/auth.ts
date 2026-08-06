@@ -47,16 +47,28 @@ const ensuredUserIds = new Set<string>()
 // Wrapped in React cache() so repeated requireAuth()/getSession() calls within a
 // single server render (e.g. a layout + page + nested server components) share one
 // auth round-trip instead of each hitting Supabase Auth again.
+//
+// getClaims() verifies the access token's signature locally against the project's
+// cached JWKS, so an authenticated request costs no network call at all. getUser()
+// — what this used to call — is an HTTP round-trip to the Auth server on EVERY
+// invocation, and this function runs on essentially every page load and API call.
+// When the project still signs with a symmetric HS256 secret, getClaims falls back
+// to getUser internally, so behaviour is identical until the project migrates to an
+// asymmetric (ECC/RSA) signing key — at which point it simply gets faster.
 export const getSession = cache(async function getSession(): Promise<Session | null> {
   const supabase = await createClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const { data, error } = await supabase.auth.getClaims()
 
-  if (error || !user) return null
+  const claims = data?.claims
+  if (error || !claims?.sub) return null
+
+  const email = typeof claims.email === 'string' ? claims.email : ''
+  const metadataName = claims.user_metadata?.name
 
   const session = {
-    userId: user.id,
-    email: user.email ?? '',
-    name: user.user_metadata?.name ?? user.email ?? '',
+    userId: claims.sub,
+    email,
+    name: typeof metadataName === 'string' && metadataName ? metadataName : email,
   }
 
   // Lazy sync: ensure the user exists in public.users to satisfy foreign key

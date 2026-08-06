@@ -94,11 +94,20 @@ export async function proxy(request: NextRequest) {
   )
 
   // Refresh session — required for Server Components to stay in sync.
-  // getUser() returns an error (rather than throwing) when the stored refresh
-  // token is invalid/expired/rotated ("refresh_token_not_found"). In that case
+  //
+  // getClaims() reads the session from the cookies (refreshing it when the access
+  // token has expired, which is what keeps Server Components in sync) and then
+  // verifies the token's signature locally against the cached JWKS. getUser(),
+  // which this replaced, made an HTTP round-trip to the Auth server on every
+  // single request the matcher below touches. All the middleware needs here is
+  // whether a valid user exists, to run the redirect guards.
+  //
+  // It returns an error (rather than throwing) when the stored refresh token is
+  // invalid/expired/rotated ("refresh_token_not_found"). In that case
   // @supabase/ssr clears the stale auth cookies via the setAll callback above,
   // writing the removal Set-Cookie headers onto supabaseResponse.
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const user = claimsData?.claims?.sub ? claimsData.claims : null
 
   const { pathname } = request.nextUrl
 
@@ -129,8 +138,25 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse
 }
 
+// Everything excluded below either cannot carry a session or must never depend on
+// one. Running the proxy on them cost a Supabase client construction and a session
+// read per request for nothing — /api/track/pixel alone fires on every email open.
+//
+//   _next/*                   build assets and HMR
+//   api/track/*               public tracking pixels, click and unsubscribe links
+//   api/cron/*                shared-secret cron endpoints
+//   api/marketing/publish/*   cron dispatch
+//   api/billing/webhook       Razorpay signature-verified webhook
+//   api/sites/*, api/og       public landing-page preview and OG image
+//   api/investor-kit/*        public share-code lookup
+//   api/blog/*                public blog reads
+//   api/update/*              IDE auto-updater manifest
+//
+// NOT excluded, because they DO read the session cookie: api/download/[platform]
+// (requireAuth) and api/invites/[token] (getSession). Every other /api route stays
+// in the matcher so session-cookie refresh behaviour is unchanged.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/|favicon.ico|api/(?:track|cron|sites|investor-kit|blog|update|marketing/publish)/|api/(?:og|billing/webhook)$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
