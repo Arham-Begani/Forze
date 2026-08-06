@@ -7,9 +7,9 @@ const STEPS = [
     number: '01',
     icon: 'V',
     accent: '#6B8F71',
-    title: 'Describe The Venture',
-    description: 'One paragraph. The problem, the customer, the angle. Forze takes it from there.',
-    detail: 'Example: "AI scheduling for insurance agents"',
+    title: 'Get Interviewed',
+    description: 'Start with one sentence. Forze interviews you — a handful of sharp questions about the customer, the money, and the edge, each with a suggested answer you can accept or rewrite.',
+    detail: 'One sentence in · a real brief out',
   },
   {
     number: '02',

@@ -18,6 +18,13 @@ const FEATURED = {
 
 const AGENTS = [
   {
+    icon: 'IV',
+    accent: '#5A6E8C',
+    title: 'Idea Interview',
+    description: 'No blank page. Forze interviews you about the idea, suggests an answer to every question, and keeps the brief current as the idea changes.',
+    outputs: ['Structured founder brief', 'A suggested answer per question', 'Flags work built on an old version'],
+  },
+  {
     icon: 'SB',
     accent: '#E04848',
     title: 'Shadow Board',

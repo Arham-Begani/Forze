@@ -13,7 +13,7 @@ const FAQS = [
   },
   {
     q: 'Do I need technical skills to use Forze?',
-    a: 'None. You describe your idea in plain English. Forze handles the deployed landing page, CRM, outreach campaigns, and investor materials. If you can explain the problem clearly, you can run a venture on Forze.',
+    a: 'None. You start with one sentence and Forze interviews you from there — it asks the questions and suggests an answer to each, so you never face a blank page. From that brief it handles the deployed landing page, CRM, outreach campaigns, and investor materials.',
   },
   {
     q: 'How fast is a landing page live?',

@@ -306,7 +306,7 @@ export function Hero() {
             color: 'var(--muted)',
             fontFamily: 'var(--font-dm-sans), sans-serif',
           }}>
-            <strong style={{ color: 'var(--text-soft)' }}>100+ founders</strong> are running real ventures on Forze — not just decks
+            <strong style={{ color: 'var(--text-soft)' }}>200+ founders</strong> are running real ventures on Forze — not just decks
           </span>
         </div>
 
