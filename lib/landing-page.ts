@@ -1218,3 +1218,24 @@ function extractPalette(colorPalette: unknown): [string, string, string] {
     colors[2] ?? FALLBACK_COLORS[2],
   ]
 }
+
+/**
+ * Public URL of a venture's published site — its subdomain when it has one,
+ * otherwise the internal /v/[id] preview route.
+ *
+ * Lives here rather than in _LandingPreviewPanel because the module page needs
+ * the URL on first paint while the preview panel itself is lazily loaded, and a
+ * static import of the helper would have pulled the whole 678-line panel back
+ * into the initial bundle.
+ */
+export function buildVentureSiteUrl(subdomain: string | null, ventureId: string): string {
+  if (!subdomain) return `/v/${ventureId}`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  try {
+    const url = new URL(appUrl)
+    const host = url.host.startsWith('www.') ? url.host.slice(4) : url.host
+    return `${url.protocol}//${subdomain}.${host}`
+  } catch {
+    return `/v/${ventureId}`
+  }
+}

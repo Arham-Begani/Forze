@@ -18,17 +18,12 @@ import { stripGeneratedCodeFences, LANDING_RUNTIME_SHIM } from '@/lib/landing-pa
 // Build the public URL for a venture's published landing page.
 // Prefers the subdomain form (https://<subdomain>.<host>) using
 // NEXT_PUBLIC_APP_URL as the base; falls back to the legacy /v/[id] path.
-export function buildVentureSiteUrl(subdomain: string | null, ventureId: string): string {
-  if (!subdomain) return `/v/${ventureId}`
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
-  try {
-    const url = new URL(appUrl)
-    const host = url.host.startsWith('www.') ? url.host.slice(4) : url.host
-    return `${url.protocol}//${subdomain}.${host}`
-  } catch {
-    return `/v/${ventureId}`
-  }
-}
+// buildVentureSiteUrl moved to lib/landing-page.ts. The module page needs it on
+// first paint but loads this panel lazily, and importing it from here would have
+// dragged the whole panel back into the initial bundle. Re-exported so any other
+// caller of this module keeps working.
+import { buildVentureSiteUrl } from '@/lib/landing-page'
+export { buildVentureSiteUrl }
 
 function escapeHtmlForPreview(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

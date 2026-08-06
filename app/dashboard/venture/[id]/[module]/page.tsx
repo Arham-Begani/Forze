@@ -10,15 +10,14 @@ import {
   type FormEvent,
 } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useDashboardShell } from '@/components/dashboard/DashboardShellContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ResultCard } from '@/components/ui/ResultCard'
-import ReactMarkdown from 'react-markdown'
 import { getModuleCost } from '@/lib/billing'
 import { downloadPDFFromResult, downloadPDFFromElement } from '@/lib/client-pdf'
-import { resolveLandingComponent } from '@/lib/landing-page'
+import { resolveLandingComponent, buildVentureSiteUrl } from '@/lib/landing-page'
 import { isScopeRefusalResult, type ScopeRefusalResult } from '@/lib/module-scope.shared'
-import { LandingAssetsPopover } from '@/components/venture/LandingAssetsPopover'
 import {
   panelActionBtnStyle,
   headerStyle,
@@ -41,8 +40,27 @@ import {
   sendBtnStyle,
   kbdStyle,
 } from './_styles'
-import { LandingDoc } from './_LandingDoc'
-import { LandingPreviewPanel, buildVentureSiteUrl } from './_LandingPreviewPanel'
+// ─── Lazily-loaded surfaces ─────────────────────────────────────────────────
+// None of these render on first paint, and together they were a large part of
+// what every visitor to this route downloaded before seeing anything. They are
+// ssr: false because each is client-only and none contributes to the initial
+// server-rendered markup.
+//
+//   LandingPreviewPanel  678 lines, landing module only, and only once open
+//   LandingAssetsPopover 499 lines, behind a popover trigger
+//   LandingDoc           199 lines, landing module only
+//   ReactMarkdown        pulls the whole unified/remark pipeline, and only the
+//                        co-pilot module ever renders markdown
+const LandingDoc = dynamic(() => import('./_LandingDoc').then(m => m.LandingDoc), { ssr: false })
+const LandingPreviewPanel = dynamic(
+  () => import('./_LandingPreviewPanel').then(m => m.LandingPreviewPanel),
+  { ssr: false }
+)
+const LandingAssetsPopover = dynamic(
+  () => import('@/components/venture/LandingAssetsPopover').then(m => m.LandingAssetsPopover),
+  { ssr: false }
+)
+const ReactMarkdown = dynamic(() => import('react-markdown'), { ssr: false })
 
 // ─── Module metadata (mirrors ModulePicker) ──────────────────────────────────
 

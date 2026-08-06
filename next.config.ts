@@ -39,11 +39,12 @@ const nextConfig: NextConfig = {
     // Tree-shake the heavy UI libraries so only the icons/components actually used
     // ship to the client — meaningfully smaller dashboard bundles = faster loads.
     experimental: {
+        // recharts was listed here but is not a dependency — the entry did
+        // nothing. react-markdown is now dynamically imported on the only route
+        // that renders markdown, so it no longer needs the hint either.
         optimizePackageImports: [
             "framer-motion",
             "lucide-react",
-            "recharts",
-            "react-markdown",
         ],
     },
     async headers() {
