@@ -26,6 +26,7 @@ export function NavigationProgress() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const failsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deferRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const runningRef = useRef(false)
   const prevPathname = useRef(pathname)
 
@@ -37,41 +38,48 @@ export function NavigationProgress() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     if (settleRef.current) { clearTimeout(settleRef.current); settleRef.current = null }
     if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null }
+    if (deferRef.current) { clearTimeout(deferRef.current); deferRef.current = null }
   }, [])
 
   const completeBar = useCallback(() => {
     if (!runningRef.current) return
     runningRef.current = false
     clearTimers()
-    setWidth(100)
-    settleRef.current = setTimeout(() => {
-      setVisible(false)
-      setWidth(0)
-    }, SETTLE_MS)
+    deferRef.current = setTimeout(() => {
+      setWidth(100)
+      settleRef.current = setTimeout(() => {
+        setVisible(false)
+        setWidth(0)
+      }, SETTLE_MS)
+    }, 0)
   }, [clearTimers])
 
   const startBar = useCallback(() => {
     clearTimers()
     runningRef.current = true
-    setVisible(true)
-    setWidth(0)
 
-    requestAnimationFrame(() => {
+    deferRef.current = setTimeout(() => {
       if (!runningRef.current) return
-      setWidth(15)
-      intervalRef.current = setInterval(() => {
-        setWidth(prev => {
-          if (prev >= CREEP_CEILING) {
-            if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
-            return prev
-          }
-          const increment = (CREEP_CEILING - prev) * 0.12 + 0.5
-          return Math.min(prev + increment, CREEP_CEILING)
-        })
-      }, CREEP_INTERVAL_MS)
-    })
+      setVisible(true)
+      setWidth(0)
 
-    failsafeRef.current = setTimeout(completeBar, FAILSAFE_MS)
+      requestAnimationFrame(() => {
+        if (!runningRef.current) return
+        setWidth(15)
+        intervalRef.current = setInterval(() => {
+          setWidth(prev => {
+            if (prev >= CREEP_CEILING) {
+              if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+              return prev
+            }
+            const increment = (CREEP_CEILING - prev) * 0.12 + 0.5
+            return Math.min(prev + increment, CREEP_CEILING)
+          })
+        }, CREEP_INTERVAL_MS)
+      })
+
+      failsafeRef.current = setTimeout(completeBar, FAILSAFE_MS)
+    }, 0)
   }, [clearTimers, completeBar])
 
   useEffect(() => {

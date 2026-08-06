@@ -73,19 +73,11 @@ export const IdeaBriefDraftSchema = IdeaBriefSchema.partial({
 // decision UI.
 // ──────────────────────────────────────────────────────────────────────────────
 
-export const InterviewOptionSchema = z.object({
-    label: z.string().max(80),
-    description: z.string().max(200).default(''),
-    recommended: z.boolean().optional(),
-})
-export type InterviewOption = z.infer<typeof InterviewOptionSchema>
-
 export const InterviewQuestionSchema = z.object({
     id: z.string().max(40),
     category: z.string().max(60),
     question: z.string().max(300),
-    options: z.array(InterviewOptionSchema).max(4).default([]),
-    allowFreeText: z.boolean().default(true),
+    suggestion: z.string().max(240).default(''),
 })
 export type InterviewQuestion = z.infer<typeof InterviewQuestionSchema>
 

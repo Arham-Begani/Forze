@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 export interface IdeaBriefValue {
     version: number
@@ -18,18 +18,11 @@ export interface IdeaBriefValue {
     updatedAt: string
 }
 
-interface InterviewOption {
-    label: string
-    description: string
-    recommended?: boolean
-}
-
 interface InterviewQuestion {
     id: string
     category: string
     question: string
-    options: InterviewOption[]
-    allowFreeText: boolean
+    suggestion: string
 }
 
 interface Answer {
@@ -152,6 +145,7 @@ export function IdeaIntakeChat({
     const [totalSteps, setTotalSteps] = useState(8)
 
     const scrollRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLTextAreaElement>(null)
     const turnRef = useRef(0)
     const awaitingSeed = !seed
 
@@ -162,6 +156,10 @@ export function IdeaIntakeChat({
     }, [])
 
     useEffect(scrollToBottom, [bubbles, question, brief, thinking, scrollToBottom])
+
+    useEffect(() => {
+        if (question && !thinking) inputRef.current?.focus()
+    }, [question, thinking])
 
     const runTurn = useCallback(
         async (activeSeed: string, nextAnswers: Answer[], finalize: boolean) => {
@@ -214,19 +212,7 @@ export function IdeaIntakeChat({
                     id: typeof q.id === 'string' ? q.id : `q${nextAnswers.length + 1}`,
                     category: typeof q.category === 'string' ? q.category : '',
                     question: q.question,
-                    options: Array.isArray(q.options)
-                        ? q.options
-                              .filter((o: unknown): o is InterviewOption =>
-                                  !!o && typeof (o as InterviewOption).label === 'string'
-                              )
-                              .slice(0, 4)
-                              .map((o: InterviewOption) => ({
-                                  label: o.label,
-                                  description: typeof o.description === 'string' ? o.description : '',
-                                  recommended: o.recommended === true,
-                              }))
-                        : [],
-                    allowFreeText: true,
+                    suggestion: typeof q.suggestion === 'string' ? q.suggestion.slice(0, 240) : '',
                 }
 
                 setQuestion(safeQuestion)
@@ -291,6 +277,7 @@ export function IdeaIntakeChat({
     }
 
     const answered = answers.length
+    const suggestion = question?.suggestion?.trim() ?? ''
     const canSendFree = freeText.trim().length >= (awaitingSeed ? MIN_SEED_LEN : 1)
     const composerOpen = (awaitingSeed || !!question) && !thinking
 
@@ -518,35 +505,6 @@ export function IdeaIntakeChat({
                     </div>
                 )}
 
-                <AnimatePresence mode="wait">
-                    {question && !thinking && question.options.length > 0 && (
-                        <motion.div
-                            key={question.id}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.28 }}
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: question.options.length % 2 === 0 ? 'repeat(auto-fit, minmax(238px, 1fr))' : '1fr',
-                                gap: 8,
-                                padding: '10px 18px 0',
-                            }}
-                        >
-                            {question.options.map((opt, i) => (
-                                <OptionCard
-                                    key={i}
-                                    option={opt}
-                                    index={i}
-                                    onSelect={() =>
-                                        submitAnswer(opt.description ? `${opt.label} — ${opt.description}` : opt.label)
-                                    }
-                                />
-                            ))}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
                 <div style={{ padding: '12px 18px 14px' }}>
                     <div
                         style={{
@@ -562,9 +520,15 @@ export function IdeaIntakeChat({
                         }}
                     >
                         <textarea
+                            ref={inputRef}
                             value={freeText}
                             onChange={e => setFreeText(e.target.value)}
                             onKeyDown={e => {
+                                if (e.key === 'Tab' && suggestion && !freeText.trim()) {
+                                    e.preventDefault()
+                                    setFreeText(suggestion)
+                                    return
+                                }
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault()
                                     if (!canSendFree) return
@@ -572,14 +536,14 @@ export function IdeaIntakeChat({
                                     else submitAnswer(freeText.trim())
                                 }
                             }}
-                            placeholder={awaitingSeed ? placeholder : 'Or answer in your own words…'}
+                            placeholder={awaitingSeed ? placeholder : suggestion || 'Answer in your own words…'}
                             maxLength={awaitingSeed ? 2000 : MAX_ANSWER_LEN}
-                            rows={awaitingSeed ? 2 : 1}
+                            rows={awaitingSeed || suggestion ? 3 : 1}
                             disabled={!composerOpen}
                             autoFocus={awaitingSeed}
                             style={{
                                 flex: 1,
-                                minHeight: awaitingSeed ? 52 : 34,
+                                minHeight: awaitingSeed || suggestion ? 62 : 34,
                                 maxHeight: 150,
                                 resize: 'none',
                                 padding: '8px 10px',
@@ -640,11 +604,36 @@ export function IdeaIntakeChat({
                                 justifyContent: 'space-between',
                                 marginTop: 10,
                                 gap: 12,
+                                flexWrap: 'wrap',
                             }}
                         >
-                            <button type="button" onClick={() => submitAnswer('', true)} disabled={!composerOpen} style={quietButton}>
-                                Skip this question
-                            </button>
+                            {suggestion && !freeText.trim() && composerOpen ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setFreeText(suggestion)}
+                                    style={{ ...quietButton, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)' }}
+                                >
+                                    <kbd
+                                        style={{
+                                            fontFamily: MONO,
+                                            fontSize: 9,
+                                            fontWeight: 700,
+                                            padding: '2px 5px',
+                                            borderRadius: 4,
+                                            border: '1px solid var(--accent-glow)',
+                                            background: 'var(--accent-soft)',
+                                            lineHeight: 1,
+                                        }}
+                                    >
+                                        Tab
+                                    </kbd>
+                                    use this answer
+                                </button>
+                            ) : (
+                                <button type="button" onClick={() => submitAnswer('', true)} disabled={!composerOpen} style={quietButton}>
+                                    Skip this question
+                                </button>
+                            )}
                             <button type="button" onClick={finishEarly} disabled={thinking} style={{ ...quietButton, color: 'var(--accent)' }}>
                                 I’m done — build it →
                             </button>
@@ -653,76 +642,6 @@ export function IdeaIntakeChat({
                 </div>
             </motion.div>
         </div>
-    )
-}
-
-function OptionCard({ option, index, onSelect }: { option: InterviewOption; index: number; onSelect: () => void }) {
-    const [hovered, setHovered] = useState(false)
-    const lit = hovered || option.recommended
-
-    return (
-        <motion.button
-            type="button"
-            onClick={onSelect}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, delay: index * 0.05 }}
-            whileTap={{ scale: 0.985 }}
-            style={{
-                position: 'relative',
-                overflow: 'hidden',
-                textAlign: 'left',
-                padding: '11px 13px 11px 16px',
-                borderRadius: 11,
-                background: hovered ? 'var(--accent-soft)' : 'var(--glass-bg-strong)',
-                border: `1px solid ${lit ? 'var(--accent-glow)' : 'var(--border)'}`,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                color: 'var(--text)',
-                transition: 'background 180ms, border-color 180ms',
-            }}
-        >
-            <motion.span
-                aria-hidden
-                initial={false}
-                animate={{ scaleY: lit ? 1 : 0 }}
-                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 8,
-                    bottom: 8,
-                    width: 3,
-                    borderRadius: 3,
-                    background: 'linear-gradient(180deg, var(--accent), #e8a04e)',
-                    transformOrigin: 'center',
-                }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: option.description ? 3 : 0 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 650, letterSpacing: '-0.01em' }}>{option.label}</span>
-                {option.recommended && (
-                    <span
-                        style={{
-                            fontFamily: MONO,
-                            fontSize: 8.5,
-                            fontWeight: 700,
-                            letterSpacing: '0.1em',
-                            color: 'var(--accent)',
-                            border: '1px solid var(--accent-glow)',
-                            borderRadius: 999,
-                            padding: '1px 6px',
-                        }}
-                    >
-                        PICK
-                    </span>
-                )}
-            </div>
-            {option.description && (
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>{option.description}</div>
-            )}
-        </motion.button>
     )
 }
 
