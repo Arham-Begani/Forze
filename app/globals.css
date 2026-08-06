@@ -328,10 +328,13 @@ body {
   transform: translateY(-2px);
 }
 
+/* No backdrop-filter here. The sidebar is full-height, always mounted, and sits
+   on the opaque page background — there is never anything behind it to blur, so
+   the filter bought nothing while forcing a permanent compositing layer for the
+   entire height of the viewport. backdrop-filter stays on the surfaces that
+   genuinely overlap content: dropdowns, modals, popovers, the mobile overlay. */
 .glass-sidebar {
   background: var(--sidebar);
-  backdrop-filter: blur(var(--glass-blur-strong));
-  -webkit-backdrop-filter: blur(var(--glass-blur-strong));
   border-right: 1px solid var(--border-strong);
 }
 
@@ -362,20 +365,27 @@ body {
   overflow: hidden;
 }
 
+/* Ambient background glow.
+   These used to carry `filter: blur(80px)` on a 560-640px fixed element that
+   animates forever, which makes the browser re-rasterise a huge blurred layer
+   on every frame of every page — one of the more expensive things a page can
+   do while the user is trying to scroll or type. The blur is gone; the gradient
+   stops were softened to reproduce the same falloff, and `will-change: transform`
+   keeps the float on the compositor. */
 .ambient-page::before,
 .ambient-page::after {
   content: '';
   position: fixed;
   border-radius: 50%;
-  filter: blur(80px);
   pointer-events: none;
+  will-change: transform;
   z-index: 0;
 }
 
 .ambient-page::before {
   width: 560px;
   height: 560px;
-  background: radial-gradient(circle, rgba(192, 122, 58, 0.22) 0%, rgba(192, 122, 58, 0.06) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(192, 122, 58, 0.20) 0%, rgba(192, 122, 58, 0.10) 35%, rgba(192, 122, 58, 0.03) 62%, transparent 82%);
   top: -120px;
   right: -120px;
   opacity: var(--blob-opacity);
@@ -385,7 +395,7 @@ body {
 .ambient-page::after {
   width: 640px;
   height: 640px;
-  background: radial-gradient(circle, rgba(90, 110, 140, 0.18) 0%, rgba(90, 110, 140, 0.05) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(90, 110, 140, 0.16) 0%, rgba(90, 110, 140, 0.08) 35%, rgba(90, 110, 140, 0.025) 62%, transparent 82%);
   bottom: -180px;
   left: -180px;
   opacity: var(--blob-opacity);
@@ -607,6 +617,14 @@ body {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin-slow 0.8s linear infinite;
+}
+
+/* The Forze hex mark, rotating forever.
+   As a framer-motion `animate={{ rotate: 360 }} repeat: Infinity` this ran
+   through React on every frame for as long as the dashboard was open. As a CSS
+   animation it lives on the compositor and costs the main thread nothing. */
+.hex-mark-spin {
+  animation: spin-slow 25s linear infinite;
 }
 
 /* Smooth transitions for interactive elements */
@@ -1497,3 +1515,32 @@ button, a {
   border-top: 1px solid #e8e4dc;
 }
 .dark .blog-content hr { border-top-color: #272523; }
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────────
+   Several decorative animations run forever on every page — the ambient blobs,
+   the hex mark, the glow and shimmer effects. Honour the OS setting and stop
+   them, which is both an accessibility requirement and, for anyone who has it
+   on, the end of all always-on compositor work. One-shot entrance animations
+   are collapsed to near-instant rather than removed, so nothing that fades in
+   is left stuck at opacity 0. */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-page::before,
+  .ambient-page::after,
+  .hex-mark-spin,
+  .float,
+  .glow-pulse,
+  .gradient-text,
+  .accent-shimmer,
+  .skeleton {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

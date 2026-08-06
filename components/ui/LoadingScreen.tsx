@@ -112,16 +112,18 @@ export function LoadingScreen({
             transition={{ duration: 0.8, type: 'spring', stiffness: 200, damping: 15 }}
             style={{ position: 'relative', zIndex: 1 }}
           >
-            <motion.div
+            {/* CSS animation, not framer-motion: this spins while the app is
+                loading, which is exactly when the main thread is busiest. */}
+            <div
+              className="hex-mark-spin"
               style={{
                 width: 52,
                 height: 52,
                 background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
                 clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
                 boxShadow: '0 0 40px var(--accent-glow)',
+                animationDuration: '10s',
               }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
             />
           </motion.div>
 

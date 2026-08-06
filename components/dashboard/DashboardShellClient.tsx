@@ -483,7 +483,8 @@ function DashboardLayoutContent({
               width: '100%',
               gap: 6,
             }}>
-              <motion.div
+              <div
+                className="hex-mark-spin"
                 style={{
                   width: 22, height: 22,
                   background: 'linear-gradient(135deg, var(--accent), #e8a04e)',
@@ -492,8 +493,6 @@ function DashboardLayoutContent({
                   boxShadow: '0 0 12px var(--accent-glow)',
                   cursor: 'pointer',
                 }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
                 onClick={() => router.push('/dashboard')}
                 role="button"
                 aria-label="Go to dashboard"
@@ -1129,18 +1128,21 @@ function DashboardLayoutContent({
         {/* ─── Main Content ─── */}
         <main className="flex-1 overflow-y-auto" style={{ background: 'var(--bg)', position: 'relative' }}>
           {mounted ? (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -3 }}
-                transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
-                style={{ height: '100%' }}
-              >
-                {shellChildren}
-              </motion.div>
-            </AnimatePresence>
+            // No AnimatePresence here on purpose. mode="wait" held the incoming
+            // page until the outgoing one finished its 180ms exit, so every
+            // single navigation in the app paid that delay before the new route
+            // was allowed to paint. The key still remounts this on a route
+            // change, so the enter animation is unchanged — the exit, which
+            // nobody was waiting to watch, is what has gone.
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+              style={{ height: '100%' }}
+            >
+              {shellChildren}
+            </motion.div>
           ) : (
             shellChildren
           )}

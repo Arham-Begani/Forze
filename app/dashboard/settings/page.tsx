@@ -461,11 +461,11 @@ export default function SettingsPage() {
         width: 500,
         height: 500,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.12) 0%, transparent 70%)',
-        filter: 'blur(80px)',
+        background: 'radial-gradient(circle, hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.12) 0%, hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.06) 35%, hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.02) 62%, transparent 82%)',
         top: -150,
         right: -100,
         pointerEvents: 'none',
+        willChange: 'transform',
         zIndex: 0,
         animation: 'blob-float 18s ease-in-out infinite',
       }} />

@@ -597,16 +597,20 @@ const pageStyle: React.CSSProperties = {
   paddingRight: '32px',
 }
 
+// No filter: blur() on either of these. They are fixed, several hundred pixels
+// across, and animate for as long as the page is open — so the blur was being
+// re-rasterised every frame behind everything else. The extra gradient stops
+// reproduce the falloff at no cost.
 const ambientBlob1: React.CSSProperties = {
   position: 'fixed',
   width: 400,
   height: 400,
   borderRadius: '50%',
-  background: 'radial-gradient(circle, rgba(192,122,58,0.12) 0%, transparent 70%)',
-  filter: 'blur(70px)',
+  background: 'radial-gradient(circle, rgba(192,122,58,0.12) 0%, rgba(192,122,58,0.06) 35%, rgba(192,122,58,0.02) 62%, transparent 82%)',
   top: -100,
   right: -50,
   pointerEvents: 'none',
+  willChange: 'transform',
   zIndex: 0,
   animation: 'blob-float 16s ease-in-out infinite',
 }
@@ -616,11 +620,11 @@ const ambientBlob2: React.CSSProperties = {
   width: 360,
   height: 360,
   borderRadius: '50%',
-  background: 'radial-gradient(circle, rgba(90,110,140,0.1) 0%, transparent 70%)',
-  filter: 'blur(80px)',
+  background: 'radial-gradient(circle, rgba(90,110,140,0.10) 0%, rgba(90,110,140,0.05) 35%, rgba(90,110,140,0.018) 62%, transparent 82%)',
   bottom: -80,
   left: '20%',
   pointerEvents: 'none',
+  willChange: 'transform',
   zIndex: 0,
   animation: 'blob-float 20s ease-in-out infinite reverse',
 }

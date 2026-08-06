@@ -1038,17 +1038,20 @@ export default function ModulePage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', position: 'relative' }}>
 
-      {/* Ambient background orb */}
+      {/* Ambient background orb.
+          No filter: blur() — a 400px blurred layer animating forever forces a
+          full re-rasterisation every frame, on the page where people type. The
+          softened gradient stops give the same falloff for free. */}
       <div style={{
         position: 'fixed',
         width: 400,
         height: 400,
         borderRadius: '50%',
-        background: `radial-gradient(circle, ${mod.accent}18 0%, transparent 70%)`,
-        filter: 'blur(80px)',
+        background: `radial-gradient(circle, ${mod.accent}18 0%, ${mod.accent}0D 35%, ${mod.accent}04 62%, transparent 82%)`,
         top: -100,
         right: -80,
         pointerEvents: 'none',
+        willChange: 'transform',
         zIndex: 0,
         animation: 'blob-float 18s ease-in-out infinite',
       }} />
