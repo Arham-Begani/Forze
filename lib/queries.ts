@@ -448,18 +448,30 @@ export async function getVenturesByProject(projectId: string): Promise<Venture[]
 export async function getVenture(id: string, userId: string): Promise<Venture | null> {
   const db = await createDb()
 
-  // Verify access via venture_members (with legacy fallback to ventures.user_id)
-  const role = await getVentureAccess(id, userId)
-  if (!role) return null
-
-  const { data, error } = await db
+  // Fetch first, then authorise — one round trip instead of two or three.
+  //
+  // This used to call getVentureAccess() and only then select the row. For an
+  // owner that meant a venture_members lookup that usually misses (createVenture
+  // historically wrote no owner row — see getVentureAccess below), a ventures
+  // select for the owner fallback, and then a third select for the row itself.
+  // Three queries to answer a question the row itself answers, on a function
+  // that runs on nearly every venture page and API call.
+  //
+  // The ownership assertion is unchanged: getVentureAccess grants 'owner'
+  // exactly when ventures.user_id matches the caller, which is the same check
+  // made here against the row that was just read. Any other role still has to
+  // come from a membership row, so that path is untouched below.
+  const { data: venture, error } = await db
     .from('ventures')
     .select('*')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
-  if (error) return null
-  return data
+  if (error || !venture) return null
+  if (venture.user_id === userId) return venture
+
+  const role = await getVentureAccess(id, userId)
+  return role ? venture : null
 }
 
 export async function getVentureAccess(ventureId: string, userId: string): Promise<'owner' | 'admin' | 'editor' | 'viewer' | null> {

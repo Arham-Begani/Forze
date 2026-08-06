@@ -58,6 +58,14 @@ export interface DashboardShellValue {
   ventures: DashboardVenture[]
   /** True until the shell's bootstrap request settles. */
   loading: boolean
+  /**
+   * The user's saved raw idea, resolved during the server render.
+   *
+   * `undefined` means the shell does not know — the client fallback path never
+   * loads it — and tells the page to fetch /api/user/idea for itself. `null`
+   * means the shell looked and there is none.
+   */
+  userIdea?: string | null
 }
 
 // `null` means "no shell above me" — the signal to fall back to fetching.

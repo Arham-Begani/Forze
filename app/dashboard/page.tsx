@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
-import { useDashboardCollections } from '@/components/dashboard/DashboardShellContext'
+import { useDashboardCollections, useDashboardShell } from '@/components/dashboard/DashboardShellContext'
 import { IdeaIntakeChat, type IdeaBriefValue } from '@/components/dashboard/IdeaIntakeChat'
 
 function deriveNameFromIdea(idea: string): string {
@@ -52,7 +52,11 @@ export default function DashboardPage() {
   const [hoveredProject, setHoveredProject] = useState<string | null>(null)
 
   // ── Idea intake ──────────────────────────────────────────────────────────
-  const [idea, setIdea] = useState<string | null>(null)
+  // The shell resolves this during the server render. undefined means it does
+  // not know (the client fallback path never loads it), which is the only case
+  // that still needs the fetch below.
+  const shellUserIdea = useDashboardShell()?.userIdea
+  const [idea, setIdea] = useState<string | null>(shellUserIdea ?? null)
   const [ideaInput, setIdeaInput] = useState('')
   const [ideaSubmitting, setIdeaSubmitting] = useState(false)
   const [ideaError, setIdeaError] = useState(false)
@@ -62,8 +66,11 @@ export default function DashboardPage() {
     setMounted(true)
   }, [])
 
-  // Only the idea is page-specific now; the collections arrive from the shell.
+  // Fallback only. When the shell supplied the idea this never runs, so the
+  // page no longer renders its "no idea yet" branch and then flips once a
+  // third-level request lands.
   useEffect(() => {
+    if (shellUserIdea !== undefined) return
     let cancelled = false
     async function loadIdea() {
       const data = await fetch('/api/user/idea')
@@ -75,7 +82,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [shellUserIdea])
 
   function getVentureCount(projectId: string) {
     return ventures.filter(v => v.project_id === projectId).length

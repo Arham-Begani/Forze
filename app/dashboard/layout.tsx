@@ -14,7 +14,7 @@
 
 import { getSession, isAdmin } from '@/lib/auth'
 import { getBillingSnapshot } from '@/lib/billing-queries'
-import { getProjectSummariesByUser, getVenturesByUser } from '@/lib/queries'
+import { getProjectSummariesByUser, getUserIdea, getVenturesByUser } from '@/lib/queries'
 import { toVentureSummary } from '@/lib/venture-summary'
 import { logWarn } from '@/lib/log'
 import {
@@ -49,10 +49,14 @@ async function loadShellData(): Promise<DashboardShellInitialData | null> {
     const session = await getSession()
     if (!session) return null
 
-    const [billing, projects, ventures] = await Promise.all([
+    // userIdea joins this wave rather than being a third-level request from
+    // /dashboard, which used to render its "no idea yet" branch and then flip
+    // once the fetch landed.
+    const [billing, projects, ventures, userIdea] = await Promise.all([
       getBillingSnapshot(session.userId),
       getProjectSummariesByUser(session.userId),
       getVenturesByUser(session.userId),
+      getUserIdea(session.userId).catch(() => null),
     ])
 
     return {
@@ -70,6 +74,7 @@ async function loadShellData(): Promise<DashboardShellInitialData | null> {
       },
       projects,
       ventures: ventures.map(toVentureSummary),
+      userIdea,
     }
   } catch (err) {
     if (isNextControlFlowError(err)) throw err

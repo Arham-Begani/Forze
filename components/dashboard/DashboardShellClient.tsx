@@ -64,6 +64,7 @@ export interface DashboardShellInitialData {
   session: SessionData | null
   projects: ProjectItem[]
   ventures: VentureItem[]
+  userIdea: string | null
 }
 
 export function DashboardShellClient({
@@ -393,8 +394,8 @@ function DashboardLayoutContent({
   // Publish what the shell already fetched so pages don't re-request it.
   // Memoized: a fresh object each render would restart consumers' effects.
   const shellValue = useMemo<DashboardShellValue>(
-    () => ({ session, projects, ventures, loading }),
-    [session, projects, ventures, loading]
+    () => ({ session, projects, ventures, loading, userIdea: initialData?.userIdea }),
+    [session, projects, ventures, loading, initialData?.userIdea]
   )
   // Built once per render and reused in both branches below, so switching
   // between them never remounts the page subtree.

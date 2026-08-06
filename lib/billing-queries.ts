@@ -247,17 +247,27 @@ export async function getBillingSnapshot(userId: string, db?: DbClient): Promise
   const plan = getPlanConfig(planSlug)
   const hasUnlimitedAccess = hasUnlimitedBillingOverride(email)
 
-  // Lazy weekly refresh — fires inside snapshot read so no cron required.
-  // Unlimited-override users skip this; their balance is virtual.
-  if (!hasUnlimitedAccess) {
-    await refreshWeeklyCreditsIfDue(userId, planSlug, client)
-  }
-
-  const [creditsRemaining, activeVentureCount, weeklyActionUsage] = await Promise.all([
+  // Lazy weekly refresh — fires inside the snapshot read so no cron is required.
+  // Unlimited-override users skip it; their balance is virtual.
+  //
+  // This used to be awaited on its own before the batch below, which made the
+  // snapshot three sequential stages deep. Almost every call finds the period
+  // unchanged and does nothing but one read, so it now joins the batch and the
+  // snapshot is two stages instead of three. It returns whether it actually
+  // granted credits; on the rare week that it did, the balance read below raced
+  // the grant and is re-read.
+  const [rawCredits, activeVentureCount, weeklyActionUsage, weeklyGrantApplied] = await Promise.all([
     getCreditBalance(userId, client),
     getActiveVentureCount(userId, client),
     getWeeklyActionUsage(userId, client),
+    hasUnlimitedAccess
+      ? Promise.resolve(false)
+      : refreshWeeklyCreditsIfDue(userId, planSlug, client),
   ])
+
+  const creditsRemaining = weeklyGrantApplied
+    ? await getCreditBalance(userId, client)
+    : rawCredits
 
   const weeklyPeriodStart = getCurrentWeeklyPeriodStart()
   const weeklyPeriodEnd = getCurrentWeeklyPeriodEnd()
@@ -555,7 +565,10 @@ async function grantCreditsIfNeeded(input: {
 // concurrent reads: the column update is atomic; if two requests race, both
 // resolve to the same period_start so the unique anchoring keeps the ledger
 // from double-granting.
-async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db: DbClient): Promise<void> {
+// Returns true only when it actually granted credits, so the caller knows its
+// concurrently-read balance is stale and needs re-reading. Every early exit —
+// not due, or a failed step — returns false and leaves the balance alone.
+async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db: DbClient): Promise<boolean> {
   const currentPeriodStart = getCurrentWeeklyPeriodStart()
   const currentPeriodEnd = getCurrentWeeklyPeriodEnd()
 
@@ -567,12 +580,12 @@ async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db:
 
   if (userErr) {
     console.warn(`[billing] weekly refresh: user lookup failed for ${userId}: ${userErr.message}`)
-    return
+    return false
   }
 
   const lastPeriodStart = userRow?.weekly_credit_period_start as string | null | undefined
   const needsRefresh = !lastPeriodStart || new Date(lastPeriodStart).getTime() < new Date(currentPeriodStart).getTime()
-  if (!needsRefresh) return
+  if (!needsRefresh) return false
 
   const weeklyGrant = BILLING_PLANS[planSlug].weeklyCredits
 
@@ -587,7 +600,7 @@ async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db:
 
   if (drainErr) {
     console.warn(`[billing] weekly refresh: ledger read failed for ${userId}: ${drainErr.message}`)
-    return
+    return false
   }
 
   const nonTopupBalance = (drainRows ?? []).reduce((sum, row: { credits?: number | null; kind?: string | null }) => {
@@ -609,7 +622,7 @@ async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db:
     })
     if (expiryErr) {
       console.warn(`[billing] weekly refresh: expiry insert failed for ${userId}: ${expiryErr.message}`)
-      return
+      return false
     }
   }
 
@@ -626,7 +639,7 @@ async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db:
     })
     if (grantErr) {
       console.warn(`[billing] weekly refresh: grant insert failed for ${userId}: ${grantErr.message}`)
-      return
+      return false
     }
   }
 
@@ -638,6 +651,8 @@ async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db:
   if (updateErr) {
     console.warn(`[billing] weekly refresh: anchor update failed for ${userId}: ${updateErr.message}`)
   }
+
+  return true
 }
 
 export async function getWeeklyActionUsage(userId: string, db?: DbClient): Promise<WeeklyActionUsage> {
