@@ -3,12 +3,14 @@
 import {
   useState,
   useEffect,
+  useMemo,
   useRef,
   useCallback,
   type KeyboardEvent,
   type FormEvent,
 } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useDashboardShell } from '@/components/dashboard/DashboardShellContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ResultCard } from '@/components/ui/ResultCard'
 import ReactMarkdown from 'react-markdown'
@@ -476,38 +478,41 @@ export default function ModulePage() {
   const [investorKit, setInvestorKit] = useState<any>(null)
   const [generatingKit, setGeneratingKit] = useState(false)
   const [kitError, setKitError] = useState<string | null>(null)
-  const [billing, setBilling] = useState<BillingSummary | null>(null)
-  const [billingLoaded, setBillingLoaded] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const loadBilling = useCallback(async () => {
-    try {
-      const res = await fetch('/api/billing/me')
-      if (!res.ok) return
-      const data = await res.json()
-      setBilling({
-        planSlug: data.planSlug,
-        planLabel: data.planLabel,
-        creditsRemaining: data.creditsRemaining,
-        allowedModules: data.allowedModules ?? [],
-        nextRenewalAt: data.nextRenewalAt ?? null,
-        hasUnlimitedAccess: !!data.hasUnlimitedAccess,
-      })
-      window.dispatchEvent(new CustomEvent('Forze:credits-changed', { detail: { creditsRemaining: data.creditsRemaining } }))
-    } catch {
-      // Ignore local billing fetch issues here; the server still enforces access.
-    } finally {
-      setBillingLoaded(true)
+  // Credits come from the shell, which already has them: /api/bootstrap returns
+  // creditsRemaining and hasUnlimitedAccess. This page used to fetch
+  // /api/billing/me on mount, which rebuilds the entire billing snapshot (6+
+  // queries plus a conditional write) to read the two numbers below.
+  //
+  // Null when rendered outside the dashboard layout — the same state the old
+  // code landed in whenever that fetch failed. The guard below reads null as
+  // "unknown, allow", and the server still enforces access in the run route.
+  const shell = useDashboardShell()
+  const billing = useMemo<BillingSummary | null>(() => {
+    const s = shell?.session
+    if (!s || typeof s.creditsRemaining !== 'number') return null
+    return {
+      planSlug: s.plan,
+      planLabel: s.planLabel ?? s.plan,
+      creditsRemaining: s.creditsRemaining,
+      allowedModules: s.allowedModules ?? [],
+      nextRenewalAt: s.nextRenewalAt ?? null,
+      hasUnlimitedAccess: !!s.hasUnlimitedAccess,
     }
-  }, [])
+  }, [shell?.session])
 
-  useEffect(() => {
-    void loadBilling()
-  }, [loadBilling])
+  // The shell owns the credit counter and updates itself from this event, which
+  // flows straight back down through the context — so publishing the balance the
+  // run route just returned is all this page has to do.
+  const publishCredits = useCallback((creditsRemaining: unknown) => {
+    if (typeof creditsRemaining !== 'number') return
+    window.dispatchEvent(new CustomEvent('Forze:credits-changed', { detail: { creditsRemaining } }))
+  }, [])
 
   const [depth, setDepth] = useState<'brief' | 'medium' | 'detailed'>(() => {
     if (typeof window === 'undefined') return 'medium'
@@ -828,11 +833,9 @@ export default function ModulePage() {
         const errorData = await runRes.json().catch(() => null)
         throw new Error(errorData?.error || 'Failed to start run')
       }
-      const { conversationId: serverConversationId } = await runRes.json()
+      const { conversationId: serverConversationId, creditsRemaining } = await runRes.json()
       setPrompt('')
-      if (!isContinuation) {
-        void loadBilling()
-      }
+      publishCredits(creditsRemaining)
 
       function updateEntry(patch: Partial<ConversationEntry> | ((e: ConversationEntry) => Partial<ConversationEntry>)) {
         setConversations(prev => prev.map(c => {
@@ -916,7 +919,10 @@ export default function ModulePage() {
         return { ...c, isRunning: false, isError: true, lines: message ? [message] : c.lines }
       }))
       setIsSubmitting(false)
-      void loadBilling()
+      // No credit refresh here on purpose. Every path into this catch means the
+      // run never started — a non-ok response (billing and rate-limit errors
+      // both return before recordUsageCharge) or a network failure — so no
+      // credits were spent and the counter is already correct.
     }
   }
 

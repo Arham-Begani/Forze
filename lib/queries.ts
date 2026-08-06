@@ -660,9 +660,19 @@ export async function patchConversationResult(
   return result
 }
 
+/**
+ * Newest-first run history for one module.
+ *
+ * Bounded on purpose. Every row carries the run's full stream_output array and
+ * its result JSONB — for the landing module that result holds an entire
+ * generated React component — and this is fetched on every module page load. An
+ * unbounded history meant the payload grew without limit as a venture was
+ * iterated on. 30 is far more than the chat view meaningfully shows.
+ */
 export async function getConversationsByModule(
   ventureId: string,
-  moduleId: Conversation['module_id']
+  moduleId: Conversation['module_id'],
+  limit = 30
 ): Promise<Conversation[]> {
   const db = await createDb()
   const storedModuleId = CONVERSATION_MODULE_FALLBACK[moduleId]
@@ -672,6 +682,7 @@ export async function getConversationsByModule(
     .eq('venture_id', ventureId)
     .eq('module_id', storedModuleId)
     .order('created_at', { ascending: false })
+    .limit(limit)
 
   if (error) throw new Error(`getConversationsByModule failed: ${error.message}`)
   return (data ?? []).map(normalizeConversation).filter(conversation => conversation.module_id === moduleId)

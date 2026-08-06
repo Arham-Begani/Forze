@@ -6,8 +6,9 @@ import {
     updateVentureName,
     deleteVenture,
     getConversationsByModule,
-    getProject,
 } from '@/lib/queries'
+import { getProjectIdeaVersion } from '@/lib/queries/idea-queries'
+import { toVentureDetail } from '@/lib/venture-summary'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -51,16 +52,17 @@ export async function GET(
         let currentIdeaVersion: number | null = null
         if (venture.project_id) {
             try {
-                const project = await getProject(venture.project_id, session.userId)
-                currentIdeaVersion =
-                    typeof project?.idea_version === 'number' ? project.idea_version : null
+                currentIdeaVersion = await getProjectIdeaVersion(venture.project_id, session.userId)
             } catch {
                 currentIdeaVersion = null
             }
         }
 
+        // toVentureDetail drops `context` — see that function for why. Commit
+        // 76afed0 removed the blob from the venture LIST endpoints; this detail
+        // endpoint, which the module page hits on every load, was missed.
         return NextResponse.json({
-            ...venture,
+            ...toVentureDetail(venture),
             currentIdeaVersion,
             conversations: Object.fromEntries(requestedModules.map((m, i) => [m, conversations[i]])),
         })

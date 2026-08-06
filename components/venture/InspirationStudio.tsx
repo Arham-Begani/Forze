@@ -1814,11 +1814,14 @@ async function pollForDeployment(
       const res = await fetch(`/api/ventures/${ventureId}`)
       if (res.ok) {
         const data = await res.json()
-        const landing = data?.venture?.context?.landing as
-          | { deploymentUrl?: string; fullComponent?: string }
-          | undefined
-        if (landing?.deploymentUrl) return landing.deploymentUrl
-        if (landing?.fullComponent && landing.fullComponent.length > 200) {
+        // These two scalars replaced reading the whole context blob. The old
+        // code read `data.venture.context.landing`, a path this endpoint has
+        // never returned (it spreads venture fields at the top level), so this
+        // poll could only ever run out its full 120s and give up.
+        if (typeof data?.landingDeploymentUrl === 'string' && data.landingDeploymentUrl) {
+          return data.landingDeploymentUrl
+        }
+        if (data?.hasLandingComponent) {
           // Pipeline finished but deployment URL not surfaced — fall back to
           // the venture's own subdomain via the preview route.
           return `/v/${ventureId}`

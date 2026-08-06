@@ -26,6 +26,43 @@ function isMissingSchemaError(err: { code?: string; message?: string } | null | 
     )
 }
 
+/**
+ * Just the project's current idea version, scoped to its owner.
+ *
+ * The venture detail route wanted this one integer and was calling getProject(),
+ * which does `select('*')` — pulling global_idea and the whole idea_brief JSONB
+ * on every module page load to read a number off the result.
+ *
+ * Returns null (never throws) when the project isn't the user's, or when
+ * migration 047 hasn't been applied — both mean "no staleness info", which the
+ * UI already renders as no badge.
+ */
+export async function getProjectIdeaVersion(
+    projectId: string,
+    userId: string
+): Promise<number | null> {
+    try {
+        const db = await createDb()
+        const { data, error } = await db
+            .from('projects')
+            .select('idea_version')
+            .eq('id', projectId)
+            .eq('user_id', userId)
+            .maybeSingle()
+
+        if (error) {
+            if (isMissingSchemaError(error)) return null
+            throw new Error(`getProjectIdeaVersion failed: ${error.message}`)
+        }
+        return typeof data?.idea_version === 'number' ? data.idea_version : null
+    } catch (err) {
+        logWarn('idea-queries', 'getProjectIdeaVersion degraded to null', {
+            message: err instanceof Error ? err.message : String(err),
+        })
+        return null
+    }
+}
+
 export interface IdeaUpdateInsert {
     projectId: string
     userId: string

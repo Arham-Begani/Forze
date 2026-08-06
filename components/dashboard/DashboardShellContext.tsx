@@ -27,6 +27,8 @@ export interface DashboardSession {
   planLabel?: string
   creditsRemaining?: number
   allowedModules?: string[]
+  /** Already returned by /api/bootstrap; declared so pages can read it off the shell. */
+  nextRenewalAt?: string | null
   hasUnlimitedAccess?: boolean
   isAdmin?: boolean
 }

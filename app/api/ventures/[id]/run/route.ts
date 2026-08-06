@@ -4,7 +4,7 @@ export const maxDuration = 300
 
 import { requireAuth, AuthError, isAuthError } from '@/lib/auth'
 import { sanitizeLabel } from '@/lib/sanitize'
-import { type BillingModuleId } from '@/lib/billing'
+import { type BillingModuleId, getModuleCost } from '@/lib/billing'
 import { BillingError, assertCanRunModule, assertHourlyRateLimit, recordUsageCharge } from '@/lib/billing-queries'
 import {
     getVenture,
@@ -310,6 +310,17 @@ export async function POST(
             })
         }
 
+        // Post-charge balance, so the client can refresh its credit counter from
+        // this response instead of firing a separate /api/billing/me request —
+        // that endpoint rebuilds the whole billing snapshot (6+ queries) purely
+        // to read one number we already have here. Undefined for continuations,
+        // which are never charged, so the client leaves its counter alone.
+        const creditsRemaining = billingCheck
+            ? billingCheck.snapshot.hasUnlimitedAccess
+                ? billingCheck.snapshot.creditsRemaining
+                : Math.max(0, billingCheck.snapshot.creditsRemaining - getModuleCost(moduleId as BillingModuleId))
+            : undefined
+
         // Use after() to run agent after response is sent — must be a callback, not a pre-executed Promise
         after(async () => {
             try {
@@ -320,7 +331,7 @@ export async function POST(
         })
 
         return NextResponse.json(
-            { conversationId: conversation.id, status: 'running' },
+            { conversationId: conversation.id, status: 'running', creditsRemaining },
             { status: 202 }
         )
     } catch (e) {

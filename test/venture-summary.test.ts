@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getCompletedModules, toVentureSummary } from '@/lib/venture-summary'
+import { getCompletedModules, toVentureDetail, toVentureSummary } from '@/lib/venture-summary'
 import type { Venture } from '@/lib/queries'
 
 const VENTURE = {
@@ -62,5 +62,56 @@ describe('toVentureSummary', () => {
     it('survives a venture with no context at all', () => {
         const bare = { ...VENTURE, context: null } as unknown as Venture
         expect(toVentureSummary(bare).completedModules).toEqual([])
+    })
+})
+
+describe('toVentureDetail', () => {
+    it('never leaks the context blob', () => {
+        // Same contract as toVentureSummary, for the DETAIL endpoint — which the
+        // module page hits on every load and which used to spread the whole row.
+        const detail = toVentureDetail(VENTURE)
+        expect('context' in detail).toBe(false)
+        expect(JSON.stringify(detail)).not.toContain('fullComponent')
+        expect(JSON.stringify(detail)).not.toContain('verdict')
+    })
+
+    it('keeps every field the venture pages actually render', () => {
+        const detail = toVentureDetail(VENTURE)
+        expect(detail.id).toBe('v1')
+        expect(detail.name).toBe('Acme')
+        expect(detail.project_id).toBe('p1')
+        expect(detail.subdomain).toBe('acme')
+        expect(detail.user_id).toBe('u1')
+        expect(detail.updated_at).toBe(VENTURE.updated_at)
+    })
+
+    it('surfaces a real landing component as a boolean, not the component', () => {
+        const detail = toVentureDetail(VENTURE)
+        expect(detail.hasLandingComponent).toBe(true)
+        expect(detail.landingDeploymentUrl).toBeNull()
+    })
+
+    it('surfaces the deployment url when the landing page is live', () => {
+        const deployed = {
+            ...VENTURE,
+            context: { landing: { deploymentUrl: 'https://acme.forze.in', fullComponent: 'x' } },
+        } as unknown as Venture
+        expect(toVentureDetail(deployed).landingDeploymentUrl).toBe('https://acme.forze.in')
+    })
+
+    it('treats a stub component as not built', () => {
+        // The inspiration poll's 200-char floor: an empty-ish placeholder must
+        // not read as a finished landing page.
+        const stub = { ...VENTURE, context: { landing: { fullComponent: 'x'.repeat(50) } } } as unknown as Venture
+        expect(toVentureDetail(stub).hasLandingComponent).toBe(false)
+    })
+
+    it('survives null, empty and malformed context', () => {
+        for (const context of [null, {}, { landing: null }, { landing: { deploymentUrl: 42 } }]) {
+            const v = { ...VENTURE, context } as unknown as Venture
+            const detail = toVentureDetail(v)
+            expect(detail.landingDeploymentUrl).toBeNull()
+            expect(detail.hasLandingComponent).toBe(false)
+        }
     })
 })
