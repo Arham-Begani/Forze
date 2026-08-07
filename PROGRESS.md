@@ -1065,3 +1065,47 @@ Founder asked for max scope. Worked lowest-risk → highest-risk, verifying at e
 1. **Supabase dashboard → Project Settings → JWT Keys → migrate to an asymmetric (ECC P-256) signing key.** This is what turns Phase 1 from a no-op into the largest single win — until it is done, `getClaims` still falls through to a network `getUser` call.
 2. Authenticated click-through of the dashboard, a module run, CRM and Campaigns.
 3. Confirm the Supabase project region and consider pinning `regions` in `vercel.json` to match — functions default to `iad1`, and this codebase makes many DB round-trips per request. Potentially a large win for zero code change, but it needs the region confirmed first.
+
+### Day 26 — August 7, 2026
+**Goal:** Finish the performance work — close the gap the Day 25 entry left open, now that the Supabase region is known.
+
+**The dominant finding: geography.** Supabase is in `ap-southeast-1` (Singapore). `vercel.json` set no `regions`, so functions defaulted to `iad1` (US East) — roughly **230ms across the Pacific, per query**, and the dashboard shell makes nine of them. Pinned to `sin1`. No code change comes close to this.
+
+**Built (2 commits):**
+
+**`ad904e8` — hover-prefetch, and a bug I introduced**
+- **Sidebar navigation had no prefetching at all.** Every destination uses `router.push()`, which unlike `<Link>` prefetches nothing — clicking a module was the first moment the browser requested that route, cold. All seven destinations now warm on hover via `router.prefetch`. You cannot click one without hovering it first, so this buys a head start of however long the pointer takes to land.
+- **Fixed a regression from `4e87182`.** Capping `getConversationsByModule` at 30 applied the limit *before* the module filter. Several logical modules share one stored `module_id` (shadow-board and mvp-scalpel both store `feasibility`) with the real id encoded as a prompt prefix. Ask for the 30 newest `feasibility` rows, get 30 mvp-scalpel ones, filter them all out, and **shadow-board renders as empty history.** The filter moved into SQL. Verified against the live database: all 100 venture/module pairs return byte-identical id sets to the old fetch-then-filter approach.
+
+**`9435599` — region pin + flattened query waves**
+- `vercel.json` → `"regions": ["sin1"]`.
+- **`getBillingSnapshot` is one wave instead of two.** It was subscription + email, and only then balance, venture count, usage counters and the weekly-refresh probe — but nothing in the second group depended on the first. Split the refresh into a pure `isWeeklyRefreshDue()` predicate and `applyWeeklyCreditRefresh()`, so the probe read joins the batch. Also merged `email` and `weekly_credit_period_start`, which were two queries against the same row of the same table.
+- **`getVenturesByUser` is one query instead of two**, via an inner join on `venture_members`, with the old two-step path kept intact as the fallback on any error.
+
+**Measured (from this machine, India→Singapore, ~50ms RTT):**
+| | before | after |
+|---|---|---|
+| `getBillingSnapshot` | 211ms | 116ms |
+| full shell server load | 265ms | 191ms (28% faster) |
+
+This *understates* the production win: the saving is one whole round trip, so from `iad1` it is closer to 230ms per collapsed wave. Combined with the region pin, the shell load should land near **30–50ms** rather than the 800ms+ it costs today.
+
+**Ruled out while diagnosing "clicking a module takes minutes":**
+- Not payload — 51 conversations exist in total, largest 60KB.
+- Not a stuck run or hanging SSE — every conversation is `complete` or `failed`; the page only opens an EventSource *after* a run starts.
+- Not DB latency alone — 150–200ms/query from here.
+- The dev log's last entry was `○ Compiling /dashboard/venture/[id] ...`, and this project takes ~90s just to write its filesystem cache on boot. On-demand Turbopack compilation is the likely bulk of a multi-minute wait **in dev**.
+
+**Deliberately not done:**
+- **Lazy `ResultCard`.** 1618 lines, pulls `ReportModal` and `SurgicalEditPopover` with it — but unlike the four surfaces deferred in `584ea95`, it renders on first paint, and its children are either always mounted (the modal self-gates internally) or inlined around individual values. Deferring means a visible gap where results belong, or restructuring their mount lifecycle. Real regression risk for a modest bundle win next to what the region change buys.
+- `getVenturesByUser` still selects `context` — `toVentureSummary` needs to know which keys are non-null, and stripping it properly needs a generated column or view (a migration). Much cheaper now that it is an in-region transfer.
+- No response caching anywhere. Nearly every route is per-user; the genuinely cacheable surface is small.
+
+**Verification:** `tsc` 0 errors, `build` clean, **98 tests pass**. Both query rewrites checked against the live database for row-identical results *before* shipping. Unauthenticated smoke test after each commit: all authed endpoints 401, `/dashboard` 307s to `/signin`, `/pricing` `/signin` `/` `/blog` all 200, tenant `Host` header still rewrites to `/sites/[subdomain]`.
+
+**Still not verified:** no authenticated click-through, and no end-to-end production measurement. Every number above is a synthetic query timing from a dev machine, **not** a real LCP or TTFB from the deployed site.
+
+**Next (requires the user):**
+1. **Push and deploy.** None of Day 25 or Day 26 is live — the branch is 40+ commits ahead of `origin/main`. The region pin in particular does nothing until a deploy applies it.
+2. **Confirm the function region actually moved** after deploying — Vercel project → Functions → Region should read Singapore. A single region works on any plan; if `vercel.json` is ignored, set it in project settings instead.
+3. **Then measure for real**: DevTools on a deployed module page, TTFB and LCP. That replaces every synthetic number above.
