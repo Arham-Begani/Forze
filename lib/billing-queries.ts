@@ -121,19 +121,33 @@ async function resolveDb(db?: DbClient): Promise<DbClient> {
   return db ?? (await createDb())
 }
 
-async function getUserEmail(userId: string, db: DbClient): Promise<string | null> {
+/**
+ * The two `users` columns the snapshot needs, in one read.
+ *
+ * These used to be fetched separately — `email` up front, and
+ * `weekly_credit_period_start` inside the weekly refresh — which meant two
+ * queries against the same row of the same table, in two different round trips.
+ */
+async function getUserBillingRow(
+  userId: string,
+  db: DbClient
+): Promise<{ email: string | null; weeklyPeriodStart: string | null }> {
   const { data, error } = await db
     .from('users')
-    .select('email')
+    .select('email, weekly_credit_period_start')
     .eq('id', userId)
     .maybeSingle()
 
   if (error) {
-    console.warn(`[billing] Failed to resolve email for ${userId}: ${error.message}`)
-    return null
+    console.warn(`[billing] Failed to resolve billing row for ${userId}: ${error.message}`)
+    return { email: null, weeklyPeriodStart: null }
   }
 
-  return typeof data?.email === 'string' ? data.email : null
+  return {
+    email: typeof data?.email === 'string' ? data.email : null,
+    weeklyPeriodStart:
+      typeof data?.weekly_credit_period_start === 'string' ? data.weekly_credit_period_start : null,
+  }
 }
 
 function addBillingPeriod(dateIso: string, period: BillingPeriod): string {
@@ -238,33 +252,43 @@ export async function getRecentPayments(userId: string, limit = 12, db?: DbClien
 
 export async function getBillingSnapshot(userId: string, db?: DbClient): Promise<BillingSnapshot> {
   const client = await resolveDb(db)
-  const [subscription, email] = await Promise.all([
-    getCurrentSubscription(userId, client),
-    getUserEmail(userId, client),
-  ])
+
+  // ONE round trip for the whole snapshot.
+  //
+  // This was two sequential stages: subscription + email, and only then the
+  // balance, venture count, usage counters and weekly-refresh probe. But
+  // nothing in the second group actually depended on the first — the balance,
+  // the venture count and the usage counters are all keyed on userId alone.
+  // Only the weekly refresh needs the plan, and only to size a grant it almost
+  // never has to make. So everything reads at once and the decisions happen
+  // afterwards, in memory.
+  //
+  // On a cross-region deployment each stage was a full RTT, so this is the
+  // difference between one and two of them on every dashboard load.
+  const [subscription, userRow, rawCredits, activeVentureCount, weeklyActionUsage] =
+    await Promise.all([
+      getCurrentSubscription(userId, client),
+      getUserBillingRow(userId, client),
+      getCreditBalance(userId, client),
+      getActiveVentureCount(userId, client),
+      getWeeklyActionUsage(userId, client),
+    ])
 
   const planSlug = subscription?.plan_slug ?? 'free'
   const plan = getPlanConfig(planSlug)
-  const hasUnlimitedAccess = hasUnlimitedBillingOverride(email)
+  const hasUnlimitedAccess = hasUnlimitedBillingOverride(userRow.email)
 
-  // Lazy weekly refresh — fires inside the snapshot read so no cron is required.
-  // Unlimited-override users skip it; their balance is virtual.
-  //
-  // This used to be awaited on its own before the batch below, which made the
-  // snapshot three sequential stages deep. Almost every call finds the period
-  // unchanged and does nothing but one read, so it now joins the batch and the
-  // snapshot is two stages instead of three. It returns whether it actually
-  // granted credits; on the rare week that it did, the balance read below raced
-  // the grant and is re-read.
-  const [rawCredits, activeVentureCount, weeklyActionUsage, weeklyGrantApplied] = await Promise.all([
-    getCreditBalance(userId, client),
-    getActiveVentureCount(userId, client),
-    getWeeklyActionUsage(userId, client),
-    hasUnlimitedAccess
-      ? Promise.resolve(false)
-      : refreshWeeklyCreditsIfDue(userId, planSlug, client),
-  ])
+  // Lazy weekly refresh — keeps the no-cron-required behaviour. The probe read
+  // it used to make is already in the batch above, so on the overwhelmingly
+  // common path (period unchanged) this costs nothing at all. Unlimited-override
+  // users skip it entirely; their balance is virtual.
+  const weeklyGrantApplied =
+    !hasUnlimitedAccess && isWeeklyRefreshDue(userRow.weeklyPeriodStart)
+      ? await applyWeeklyCreditRefresh(userId, planSlug, userRow.weeklyPeriodStart, client)
+      : false
 
+  // The balance above was read before any grant landed, so re-read it on the
+  // one call per user per week that actually granted.
   const creditsRemaining = weeklyGrantApplied
     ? await getCreditBalance(userId, client)
     : rawCredits
@@ -565,27 +589,26 @@ async function grantCreditsIfNeeded(input: {
 // concurrent reads: the column update is atomic; if two requests race, both
 // resolve to the same period_start so the unique anchoring keeps the ledger
 // from double-granting.
+// Pure predicate, split out of the refresh so the anchor it reads can be
+// fetched in the snapshot's single batch instead of costing its own round trip.
+// A missing anchor means the user has never been granted and is always due.
+function isWeeklyRefreshDue(lastPeriodStart: string | null | undefined): boolean {
+  if (!lastPeriodStart) return true
+  return new Date(lastPeriodStart).getTime() < new Date(getCurrentWeeklyPeriodStart()).getTime()
+}
+
 // Returns true only when it actually granted credits, so the caller knows its
 // concurrently-read balance is stale and needs re-reading. Every early exit —
-// not due, or a failed step — returns false and leaves the balance alone.
-async function refreshWeeklyCreditsIfDue(userId: string, planSlug: PlanSlug, db: DbClient): Promise<boolean> {
+// a failed step — returns false and leaves the balance alone. Callers must
+// check isWeeklyRefreshDue() first; this does the work unconditionally.
+async function applyWeeklyCreditRefresh(
+  userId: string,
+  planSlug: PlanSlug,
+  lastPeriodStart: string | null,
+  db: DbClient
+): Promise<boolean> {
   const currentPeriodStart = getCurrentWeeklyPeriodStart()
   const currentPeriodEnd = getCurrentWeeklyPeriodEnd()
-
-  const { data: userRow, error: userErr } = await db
-    .from('users')
-    .select('weekly_credit_period_start')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (userErr) {
-    console.warn(`[billing] weekly refresh: user lookup failed for ${userId}: ${userErr.message}`)
-    return false
-  }
-
-  const lastPeriodStart = userRow?.weekly_credit_period_start as string | null | undefined
-  const needsRefresh = !lastPeriodStart || new Date(lastPeriodStart).getTime() < new Date(currentPeriodStart).getTime()
-  if (!needsRefresh) return false
 
   const weeklyGrant = BILLING_PLANS[planSlug].weeklyCredits
 

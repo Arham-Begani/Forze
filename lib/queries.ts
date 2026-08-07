@@ -403,7 +403,12 @@ async function getVenturesByUserLegacy(userId: string): Promise<Venture[]> {
   return data ?? []
 }
 
-export async function getVenturesByUser(userId: string): Promise<Venture[]> {
+/**
+ * The original shape: read the membership rows, then read the ventures they
+ * point at. Two sequential round trips. Kept as the fallback for the join
+ * below, so nothing depends on that join's behaviour under RLS being right.
+ */
+async function getVenturesByUserTwoStep(userId: string): Promise<Venture[]> {
   const db = await createDb()
 
   // Get all venture IDs the user is a member of
@@ -431,6 +436,31 @@ export async function getVenturesByUser(userId: string): Promise<Venture[]> {
 
   if (error) throw new Error(`getVenturesByUser failed: ${error.message}`)
   return data ?? []
+}
+
+export async function getVenturesByUser(userId: string): Promise<Venture[]> {
+  const db = await createDb()
+
+  // One round trip: an inner join on venture_members expresses in a single
+  // query what the two-step version above did in two sequential ones. This runs
+  // on every dashboard load, where a saved round trip is a saved round trip.
+  //
+  // Any error at all falls through to the two-step path rather than surfacing.
+  // The join was verified to return identical rows to the two-step version for
+  // every user in the database, but that check ran through the service-role
+  // client, which bypasses RLS — so the behaviour of the embedded select under
+  // the cookie-scoped client is the one thing not proven, and it degrades to
+  // the known-good path instead of to an empty venture list.
+  const { data, error } = await db
+    .from('ventures')
+    .select('*, venture_members!inner(user_id)')
+    .eq('venture_members.user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return getVenturesByUserTwoStep(userId)
+
+  // Drop the join artefact so callers get a clean Venture.
+  return data.map(({ venture_members, ...venture }) => venture as Venture)
 }
 
 export async function getVenturesByProject(projectId: string): Promise<Venture[]> {
