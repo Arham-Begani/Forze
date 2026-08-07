@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useMemo, type ReactNode } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -332,6 +332,29 @@ function DashboardLayoutContent({
   }, [activeVentureId])
 
   // ─── CRUD handlers ────────────────────────────────────────────────────────
+
+  // ─── Route warming ────────────────────────────────────────────────────────
+  // Every sidebar destination navigates with router.push(), and unlike <Link>
+  // that does NO prefetching whatsoever — so clicking a module was the first
+  // moment the browser asked for that route's RSC payload and JS chunks, from
+  // completely cold. In dev it is also the first moment Turbopack compiles the
+  // route, which on the module workspace (the largest client route in the app)
+  // is the difference between a snappy click and staring at the old page.
+  //
+  // You cannot click a sidebar button without hovering it first, so warming on
+  // hover buys a head start of however long the pointer takes to land — which
+  // is usually the whole perceived wait. Each href is warmed once; router
+  // .prefetch is a no-op if the route is already in the router cache.
+  const warmedRoutes = useRef<Set<string>>(new Set())
+  const warmRoute = useCallback((href: string) => {
+    if (!href || warmedRoutes.current.has(href)) return
+    warmedRoutes.current.add(href)
+    try {
+      router.prefetch(href)
+    } catch {
+      // Best-effort only — a failed prefetch must never break navigation.
+    }
+  }, [router])
 
   function moduleHref(ventureId: string, moduleId: string): string {
     // Campaigns lives under its own section (list + detail pages) — not the
@@ -849,6 +872,7 @@ function DashboardLayoutContent({
                       <motion.button
                         whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                         onClick={() => router.push(`/dashboard/venture/${activeVenture.id}`)}
+                        onMouseEnter={() => warmRoute(`/dashboard/venture/${activeVenture.id}`)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '0 8px', height: 36,
@@ -894,6 +918,7 @@ function DashboardLayoutContent({
                                   transition={{ delay: idx * 0.02 }}
                                   whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                                   onClick={() => router.push(moduleHref(activeVenture.id, m.id))}
+                                  onMouseEnter={() => warmRoute(moduleHref(activeVenture.id, m.id))}
                                   aria-label={`Open ${m.label} module`}
                                   aria-current={active ? 'page' : undefined}
                                   style={sectionButtonStyle(active, m.accent)}
@@ -928,6 +953,7 @@ function DashboardLayoutContent({
                             <motion.button
                               whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                               onClick={() => router.push(moduleHref(activeVenture.id, 'campaigns'))}
+                              onMouseEnter={() => warmRoute(moduleHref(activeVenture.id, 'campaigns'))}
                               aria-label="Open Outreach"
                               aria-current={outreachActive ? 'page' : undefined}
                               style={sectionButtonStyle(outreachActive, campaignsModule.accent)}
@@ -940,6 +966,7 @@ function DashboardLayoutContent({
                             <motion.button
                               whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                               onClick={() => router.push(moduleHref(activeVenture.id, 'crm'))}
+                              onMouseEnter={() => warmRoute(moduleHref(activeVenture.id, 'crm'))}
                               aria-label="Open CRM"
                               aria-current={crmActive ? 'page' : undefined}
                               style={sectionButtonStyle(crmActive, crmModule.accent)}
@@ -956,6 +983,7 @@ function DashboardLayoutContent({
                                 <motion.button
                                   whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                                   onClick={() => router.push(moduleHref(activeVenture.id, 'autopilot'))}
+                                  onMouseEnter={() => warmRoute(moduleHref(activeVenture.id, 'autopilot'))}
                                   aria-label="Open Autopilot"
                                   aria-current={autopilotActive ? 'page' : undefined}
                                   style={sectionButtonStyle(autopilotActive, autopilotAccent)}
@@ -974,6 +1002,7 @@ function DashboardLayoutContent({
                                 <motion.button
                                   whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                                   onClick={() => router.push(moduleHref(activeVenture.id, 'testimonials'))}
+                                  onMouseEnter={() => warmRoute(moduleHref(activeVenture.id, 'testimonials'))}
                                   aria-label="Open Testimonials"
                                   aria-current={testimonialsActive ? 'page' : undefined}
                                   style={sectionButtonStyle(testimonialsActive, testimonialsAccent)}
@@ -994,6 +1023,7 @@ function DashboardLayoutContent({
                                 <motion.button
                                   whileHover={{ backgroundColor: 'var(--nav-active)', x: 1 }}
                                   onClick={() => router.push(moduleHref(activeVenture.id, 'inspiration'))}
+                                  onMouseEnter={() => warmRoute(moduleHref(activeVenture.id, 'inspiration'))}
                                   aria-label="Open Inspiration Studio"
                                   aria-current={inspirationActive ? 'page' : undefined}
                                   style={sectionButtonStyle(inspirationActive, inspirationAccent)}

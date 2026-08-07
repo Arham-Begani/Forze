@@ -729,13 +729,28 @@ export async function getConversationsByModule(
 ): Promise<Conversation[]> {
   const db = await createDb()
   const storedModuleId = CONVERSATION_MODULE_FALLBACK[moduleId]
-  const { data, error } = await db
+
+  let query = db
     .from('conversations')
     .select('*')
     .eq('venture_id', ventureId)
     .eq('module_id', storedModuleId)
-    .order('created_at', { ascending: false })
-    .limit(limit)
+
+  // Several logical modules share one stored module_id — shadow-board and
+  // mvp-scalpel both store 'feasibility', landing and launch-autopilot both
+  // store 'landing' — with the real id encoded as a prompt prefix. Narrow on
+  // that prefix in SQL so the limit below counts THIS module's rows.
+  //
+  // This has to happen in the query, not after it. Filtering a limited result
+  // set in JS silently drops real history the moment a sibling module has
+  // newer runs: ask for the 30 newest 'feasibility' rows, get 30 mvp-scalpel
+  // ones, filter them all out, and shadow-board renders as empty.
+  const escapedPrefix = CONVERSATION_MODULE_PREFIX.replace(/[_%]/g, '\\$&')
+  query = LEGACY_CONVERSATION_MODULE_IDS.has(moduleId)
+    ? query.not('prompt', 'like', `${escapedPrefix}%`)
+    : query.like('prompt', `${escapedPrefix}${moduleId}%`)
+
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(limit)
 
   if (error) throw new Error(`getConversationsByModule failed: ${error.message}`)
   return (data ?? []).map(normalizeConversation).filter(conversation => conversation.module_id === moduleId)
