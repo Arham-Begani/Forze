@@ -2,6 +2,11 @@
   "name": "Forze",
   "version": "0.1.0",
   "private": true,
+  "overrides": {
+    "dompurify": "^3.4.14",
+    "nanoid": "^3.3.18",
+    "ws": "^8.21.3"
+  },
   "scripts": {
     "dev": "next dev --experimental-https",
     "build": "next build",
@@ -15,10 +20,10 @@
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.0",
     "framer-motion": "^12.36.0",
-    "jspdf": "^4.2.0",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.577.0",
-    "next": "^16.2.0",
+    "next": "^16.3.1",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
