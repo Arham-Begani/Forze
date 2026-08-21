@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createDb } from '@/lib/db'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   ALL_BILLING_MODULES,
   ALL_FEATURES,
@@ -105,6 +106,22 @@ export interface BillingSnapshot {
   hasUnlimitedAccess: boolean
 }
 
+export interface BillingCheckoutIntent {
+  id: string
+  user_id: string
+  kind: 'subscription' | 'topup'
+  product_slug: string
+  billing_period: BillingPeriod | null
+  provider_id: string
+  provider_plan_id: string | null
+  amount_inr: number
+  currency: string
+  status: 'pending' | 'confirmed' | 'expired'
+  created_at: string
+  confirmed_at: string | null
+  expires_at: string
+}
+
 export class BillingError extends Error {
   status: number
   code: string
@@ -119,6 +136,10 @@ export class BillingError extends Error {
 
 async function resolveDb(db?: DbClient): Promise<DbClient> {
   return db ?? (await createDb())
+}
+
+function resolveWriteDb(db?: DbClient): DbClient {
+  return db ?? createAdminClient()
 }
 
 /**
@@ -188,7 +209,7 @@ function isSubscriptionEntitled(subscription: BillingSubscription, now = new Dat
 }
 
 export async function syncUserPlan(userId: string, planSlug: PlanSlug, db?: DbClient): Promise<void> {
-  const client = await resolveDb(db)
+  const client = resolveWriteDb(db)
   const { error } = await client.from('users').update({ plan: planSlug }).eq('id', userId)
   if (error) throw new Error(`syncUserPlan failed: ${error.message}`)
 }
@@ -330,7 +351,7 @@ export async function getBillingSnapshot(userId: string, db?: DbClient): Promise
 }
 
 export async function ensureBillingCustomer(userId: string, providerCustomerId?: string | null, db?: DbClient) {
-  const client = await resolveDb(db)
+  const client = resolveWriteDb(db)
   const payload = {
     user_id: userId,
     provider: 'razorpay',
@@ -354,7 +375,7 @@ export async function createPendingSubscriptionRecord(input: {
   providerSubscriptionId: string
   providerPlanId: string
 }, db?: DbClient) {
-  const client = await resolveDb(db)
+  const client = resolveWriteDb(db)
   const plan = getPlanConfig(input.planSlug)
   const payload = {
     user_id: input.userId,
@@ -375,6 +396,74 @@ export async function createPendingSubscriptionRecord(input: {
 
   if (error) throw new Error(`createPendingSubscriptionRecord failed: ${error.message}`)
   return data as BillingSubscription
+}
+
+export async function createBillingCheckoutIntent(input: {
+  userId: string
+  kind: 'subscription' | 'topup'
+  productSlug: string
+  billingPeriod?: BillingPeriod | null
+  providerId: string
+  providerPlanId?: string | null
+  amountInr: number
+}, db?: DbClient): Promise<BillingCheckoutIntent> {
+  const client = resolveWriteDb(db)
+  const { data, error } = await client
+    .from('billing_checkout_intents')
+    .insert({
+      user_id: input.userId,
+      kind: input.kind,
+      product_slug: input.productSlug,
+      billing_period: input.billingPeriod ?? null,
+      provider_id: input.providerId,
+      provider_plan_id: input.providerPlanId ?? null,
+      amount_inr: input.amountInr,
+      currency: 'INR',
+      status: 'pending',
+    })
+    .select('*')
+    .single()
+
+  if (error) throw new Error(`createBillingCheckoutIntent failed: ${error.message}`)
+  return data as BillingCheckoutIntent
+}
+
+export async function getBillingCheckoutIntent(input: {
+  userId: string
+  kind: 'subscription' | 'topup'
+  providerId: string
+}, db?: DbClient): Promise<BillingCheckoutIntent | null> {
+  const client = resolveWriteDb(db)
+  const { data, error } = await client
+    .from('billing_checkout_intents')
+    .select('*')
+    .eq('user_id', input.userId)
+    .eq('kind', input.kind)
+    .eq('provider_id', input.providerId)
+    .in('status', ['pending', 'confirmed'])
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
+
+  if (error) throw new Error(`getBillingCheckoutIntent failed: ${error.message}`)
+  return (data as BillingCheckoutIntent | null) ?? null
+}
+
+export async function confirmBillingCheckoutIntent(
+  userId: string,
+  kind: 'subscription' | 'topup',
+  providerId: string,
+  db?: DbClient,
+): Promise<void> {
+  const client = resolveWriteDb(db)
+  const { error } = await client
+    .from('billing_checkout_intents')
+    .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('kind', kind)
+    .eq('provider_id', providerId)
+    .eq('status', 'pending')
+
+  if (error) throw new Error(`confirmBillingCheckoutIntent failed: ${error.message}`)
 }
 
 async function expireOtherSubscriptions(userId: string, keepSubscriptionId: string, db: DbClient) {
@@ -402,7 +491,7 @@ export async function finalizeSubscriptionPurchase(input: {
   currentPeriodStart?: string | null
   currentPeriodEnd?: string | null
 }, db?: DbClient) {
-  const client = await resolveDb(db)
+  const client = resolveWriteDb(db)
   const existingPayment = await getPaymentByProviderPaymentId(input.providerPaymentId, client)
   if (existingPayment) {
     return {
@@ -500,7 +589,7 @@ export async function finalizeTopupPurchase(input: {
   amountInr: number
   rawPayload: Record<string, unknown>
 }, db?: DbClient) {
-  const client = await resolveDb(db)
+  const client = resolveWriteDb(db)
   const existingPayment = await getPaymentByProviderPaymentId(input.providerPaymentId, client)
   if (existingPayment) {
     return {
@@ -607,6 +696,7 @@ async function applyWeeklyCreditRefresh(
   lastPeriodStart: string | null,
   db: DbClient
 ): Promise<boolean> {
+  const writeDb = createAdminClient()
   const currentPeriodStart = getCurrentWeeklyPeriodStart()
   const currentPeriodEnd = getCurrentWeeklyPeriodEnd()
 
@@ -632,7 +722,7 @@ async function applyWeeklyCreditRefresh(
   }, 0)
 
   if (nonTopupBalance > 0) {
-    const { error: expiryErr } = await db.from('credit_ledger').insert({
+    const { error: expiryErr } = await writeDb.from('credit_ledger').insert({
       user_id: userId,
       kind: 'weekly_expiry',
       credits: -nonTopupBalance,
@@ -650,7 +740,7 @@ async function applyWeeklyCreditRefresh(
   }
 
   if (weeklyGrant > 0) {
-    const { error: grantErr } = await db.from('credit_ledger').insert({
+    const { error: grantErr } = await writeDb.from('credit_ledger').insert({
       user_id: userId,
       kind: 'weekly_grant',
       credits: weeklyGrant,
@@ -666,7 +756,7 @@ async function applyWeeklyCreditRefresh(
     }
   }
 
-  const { error: updateErr } = await db
+  const { error: updateErr } = await writeDb
     .from('users')
     .update({ weekly_credit_period_start: currentPeriodStart, updated_at: new Date().toISOString() })
     .eq('id', userId)
@@ -791,7 +881,7 @@ export async function assertCanPerformAction(userId: string, actionId: ActionId,
 }
 
 async function incrementActionCounter(userId: string, actionId: ActionId, db?: DbClient): Promise<void> {
-  const client = await resolveDb(db)
+  const client = createAdminClient()
   const periodStart = getCurrentWeeklyPeriodStart()
 
   // Read-modify-write upsert. Postgres has no atomic-increment-on-upsert via
@@ -872,23 +962,29 @@ export async function assertCanAccessMarketingAutomation(userId: string, db?: Db
 }
 
 // ── HTTP-level rate limiter ────────────────────────────────────────────────
-// Counts usage_charges in the last hour (server-side, DB-backed — works on
+// Counts usage_ledger entries in the last hour (server-side, DB-backed — works on
 // Vercel Edge/serverless where in-memory state doesn't persist).
-// Unlimited users are exempt. Continuation runs are exempt (no charge recorded).
+// Unlimited users are exempt. All model runs, including continuations, are charged.
 export async function assertHourlyRateLimit(userId: string, snapshot: BillingSnapshot, db?: DbClient): Promise<void> {
   if (snapshot.hasUnlimitedAccess) return
 
-  const client = db ?? await createDb()
+  const client = createAdminClient()
   const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString()
   const limit = Math.max(1, Number(process.env.RATE_LIMIT_RUNS_PER_HOUR ?? 10))
 
   const { count, error } = await client
-    .from('usage_charges')
+    .from('usage_ledger')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
     .gte('created_at', windowStart)
 
-  if (error) return // fail open — don't block users if DB check fails
+  if (error) {
+    throw new BillingError(
+      'Run limits are temporarily unavailable. Please try again shortly.',
+      503,
+      'rate_limit_unavailable',
+    )
+  }
 
   if ((count ?? 0) >= limit) {
     throw new BillingError(
@@ -924,40 +1020,33 @@ export async function recordUsageCharge(input: {
     return
   }
 
-  const client = await resolveDb(db)
-  const requiredCredits = getModuleCost(input.moduleId)
-  const existingUsage = await client
-    .from('usage_ledger')
-    .select('id')
-    .eq('conversation_id', input.conversationId)
-    .maybeSingle()
-
-  if (existingUsage.data) return
-
-  const { error: usageError } = await client.from('usage_ledger').insert({
-    user_id: input.userId,
-    subscription_id: input.snapshot.currentSubscriptionId,
-    conversation_id: input.conversationId,
-    module_id: input.moduleId,
-    credits: requiredCredits,
-    plan_slug: input.snapshot.planSlug,
+  const client = createAdminClient()
+  const hourlyLimit = Math.max(1, Number(process.env.RATE_LIMIT_RUNS_PER_HOUR ?? 10))
+  const { error } = await client.rpc('charge_module_run', {
+    p_user_id: input.userId,
+    p_conversation_id: input.conversationId,
+    p_module_id: input.moduleId,
+    p_plan_slug: input.snapshot.planSlug,
+    p_subscription_id: input.snapshot.currentSubscriptionId,
+    p_hourly_limit: hourlyLimit,
   })
 
-  if (usageError) throw new Error(`recordUsageCharge usage_ledger failed: ${usageError.message}`)
-
-  const { error: ledgerError } = await client.from('credit_ledger').insert({
-    user_id: input.userId,
-    subscription_id: input.snapshot.currentSubscriptionId,
-    conversation_id: input.conversationId,
-    kind: 'usage',
-    credits: -requiredCredits,
-    metadata: {
-      moduleId: input.moduleId,
-      planSlug: input.snapshot.planSlug,
-    },
-  })
-
-  if (ledgerError) throw new Error(`recordUsageCharge credit_ledger failed: ${ledgerError.message}`)
+  if (!error) return
+  if (/INSUFFICIENT_CREDITS/i.test(error.message)) {
+    throw new BillingError(
+      `You need ${getModuleCost(input.moduleId)} credits to run this module â€” buy a top-up or upgrade your plan`,
+      402,
+      'insufficient_credits',
+    )
+  }
+  if (/RATE_LIMIT_EXCEEDED/i.test(error.message)) {
+    throw new BillingError(
+      `Rate limit reached: maximum ${hourlyLimit} module runs per hour. Try again shortly.`,
+      429,
+      'rate_limit_exceeded',
+    )
+  }
+  throw new Error(`recordUsageCharge failed: ${error.message}`)
 }
 
 export async function getPaymentByProviderPaymentId(providerPaymentId: string, db?: DbClient): Promise<BillingPayment | null> {
@@ -1017,7 +1106,7 @@ export async function cancelSubscriptionAtPeriodEnd(
   providerSubscriptionId: string,
   db?: DbClient
 ) {
-  const client = await resolveDb(db)
+  const client = resolveWriteDb(db)
   const { data, error } = await client
     .from('subscriptions')
     .update({
