@@ -1109,3 +1109,38 @@ This *understates* the production win: the saving is one whole round trip, so fr
 1. **Push and deploy.** None of Day 25 or Day 26 is live — the branch is 40+ commits ahead of `origin/main`. The region pin in particular does nothing until a deploy applies it.
 2. **Confirm the function region actually moved** after deploying — Vercel project → Functions → Region should read Singapore. A single region works on any plan; if `vercel.json` is ignored, set it in project settings instead.
 3. **Then measure for real**: DevTools on a deployed module page, TTFB and LCP. That replaces every synthetic number above.
+
+---
+
+## Day 26 — the intake interview: why it never shipped, and making it fast
+
+**The actual bug was not in the code.** The chat-first intake has been correct locally since `a5b6a92 feat(idea): chat-first intake, conventional textarea removed`. It has simply never been deployed. `origin/main` is pinned at `d9f8b0f` and local `main` is **42 commits ahead of it** — every one of them unpushed. `git show origin/main:app/dashboard/new/page.tsx` still contains `<textarea placeholder="Describe your startup idea in detail…">` and the AI Enhance button. That is the "enter your idea" box that keeps coming back: production has been serving the pre-interview build the whole time.
+
+Confirmed against the live DB rather than guessed. `rate_limit_events` shows `idea-interview` fired **twice, ever, last on 2026-08-06**, while `enhance` and `generate-name` — which only the *old* textarea page calls — fired on **2026-08-17**. Recent venture creations went through a code path that no longer exists in this repo.
+
+**Also ruled out along the way:** `record_rate_limit_event` exists and works in the live DB (probed directly with the service-role client), the Gemini key is good, and `runInterviewStep` returns well-formed questions and briefs on the first try.
+
+### Speed — a full interview went from ~39s of AI wait to 13.1s
+
+`gemini-3-flash-preview` was burning its thinking budget on what is a short, structured, conversational turn: 727 thought tokens to emit a 105-token question. Measured on the real intake prompts:
+
+| turn | before | after |
+|---|---|---|
+| one question | 6.1s | **1.9s** |
+| closing brief | 9.3s | **3.5s** |
+
+- `lib/gemini.ts` — new `getFlashModelInstant(maxOutputTokens)`. Same model id, `thinkingConfig: { thinkingBudget: 0 }` and `responseMimeType: 'application/json'`. Question turns take 1024 tokens, the closing brief 2048. Explicitly **not** for reasoning-heavy agents — Shadow Board and Lead Scout keep their thinking budgets.
+- `lib/idea-intake.ts` — uses it, and `MAX_QUESTIONS` 8 → **6**.
+- **Latent bug fixed:** the timeouts could outlive the route. `withRetry(_, 1)` means two attempts plus a 3s backoff, so the old 30s/45s budgets gave a 63s worst case against `maxDuration = 60` — the graceful fallback would never have returned. Now 22s/26s → 47s and 55s.
+
+### The interview is now the only way in
+
+`components/dashboard/IdeaIntakeChat.tsx`, −321 lines. `ReviewStep` is **deleted** — the editable summary/problem/customer/edge/money form the interview used to dump you into was itself a second "type your idea into boxes" surface, and every degraded path fell straight into it. The interview now hands off directly: a read-only closing card in the transcript showing the brief the agents will build from, the composer swapped for a "Creating your venture…" strip, and `onComplete` fired once behind a ref guard so a double-fire can't create two ventures.
+
+Failure paths no longer end the interview. A 429 or a 5xx keeps the transcript and offers **Retry** on that exact turn instead of discarding the conversation. If the parent's creation call hasn't navigated away after 25s, the strip offers **Try again**. `confirmLabel` / `onBack` removed with the form; `app/dashboard/greeting/page.tsx` updated.
+
+**Verified:** `tsc --noEmit` 0 errors, `npm run build` clean, **98/98 tests pass**. A full interview run live against Gemini through the real `runInterviewStep` — 5 questions + brief in 13.1s, `aiApplied: true` throughout, sharp idea-specific questions, a 680-char summary, populated problem/customer/solution/edge/model, 4 key features, 2 open questions, and a 5-turn transcript carried forward. `getFlashModel` callers (enhance, generate-name, questions, idea-brief, the four agents, the marketing libs) are untouched.
+
+**Not verified:** the new chat UI was not clicked through in a browser. The dev server runs on `--experimental-https` and the extension could not get past the self-signed cert; a plain-HTTP server on 3001 also returned an extension-side error page. Types, build and the engine are green, but the rendered hand-off card and the retry affordances have not been seen.
+
+**Next:** push the backlog, then re-verify the interview against the deployed site.
