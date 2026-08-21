@@ -824,7 +824,7 @@ export default function ModulePage() {
     executeRun(pendingPrompt)
   }
 
-  async function executeRun(text: string, decisions?: UserDecision[], isContinuation = false, partialOutput?: string) {
+  async function executeRun(text: string, decisions?: UserDecision[], continuationOf?: string) {
     setRunError(null)
     setIsSubmitting(true)
 
@@ -845,7 +845,7 @@ export default function ModulePage() {
       const runRes = await fetch(`/api/ventures/${ventureId}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ moduleId: activeModule, prompt: text, depth, decisions, isContinuation, partialOutput }),
+        body: JSON.stringify({ moduleId: activeModule, prompt: text, depth, decisions, continuationOf }),
       })
       if (!runRes.ok) {
         const errorData = await runRes.json().catch(() => null)
@@ -965,11 +965,7 @@ export default function ModulePage() {
   }
 
   function handleContinue(entry: ConversationEntry) {
-    // Strip internal status markers before sending as model history
-    const partialOutput = entry.lines
-      .filter(l => !l.startsWith('__STATUS__'))
-      .join('\n')
-    executeRun(entry.prompt, undefined, true, partialOutput)
+    executeRun(entry.prompt, undefined, entry.conversationId)
   }
 
   async function handleStop() {

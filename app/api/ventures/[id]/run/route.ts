@@ -14,6 +14,7 @@ import {
     setConversationResult,
     updateVentureContext,
     getProject,
+    getConversation,
     getConversationsByModule,
 } from '@/lib/queries'
 import { NextRequest, NextResponse } from 'next/server'
@@ -44,8 +45,7 @@ const bodySchema = z.object({
     prompt: z.string().min(1).max(2000),
     depth: z.enum(['brief', 'medium', 'detailed']).optional(),
     decisions: z.array(DecisionSchema).optional(),
-    isContinuation: z.boolean().optional(),
-    partialOutput: z.string().optional(),
+    continuationOf: z.string().uuid().optional(),
 })
 
 interface Decision {
@@ -84,7 +84,7 @@ async function runAgent(
     depth: 'brief' | 'medium' | 'detailed' = 'medium',
     decisions: Decision[] = [],
     isContinuation: boolean = false,
-    partialOutput?: string
+    continuationOutput?: string
 ) {
     const venture = await getVenture(ventureId, userId)
     if (!venture) throw new Error('Venture not found')
@@ -96,10 +96,10 @@ async function runAgent(
     let finalPrompt = prompt
     let history: Content[] = []
 
-    if (isContinuation && partialOutput) {
+    if (isContinuation && continuationOutput) {
         history = [
             { role: 'user', parts: [{ text: `${prompt}${decisionsContext}` }] },
-            { role: 'model', parts: [{ text: partialOutput }] }
+            { role: 'model', parts: [{ text: continuationOutput }] }
         ]
         finalPrompt = "Continue from where you left off. Do not repeat anything already outputted. Complete the JSON object strictly."
     }
@@ -243,6 +243,7 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    let conversationId: string | null = null
     try {
         const session = await requireAuth()
         const { id } = await params
@@ -253,21 +254,35 @@ export async function POST(
             return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
         }
 
-        const { moduleId, prompt, depth, decisions, isContinuation, partialOutput } = result.data
+        const { moduleId, prompt, depth, decisions, continuationOf } = result.data
 
         const venture = await getVenture(id, session.userId)
         if (!venture) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        const billingCheck = isContinuation
-            ? null
-            : await assertCanRunModule(session.userId, moduleId as BillingModuleId)
+        let isContinuation = false
+        let continuationOutput: string | undefined
+        if (continuationOf) {
+            const previousConversation = await getConversation(continuationOf)
+            if (
+                !previousConversation ||
+                previousConversation.venture_id !== id ||
+                previousConversation.module_id !== moduleId ||
+                !['complete', 'failed'].includes(previousConversation.status)
+            ) {
+                return NextResponse.json({ error: 'Invalid continuation source' }, { status: 400 })
+            }
+            isContinuation = true
+            continuationOutput = previousConversation.stream_output.join('\n').slice(-20000)
+        }
+
+        // Continuations still invoke the model and therefore require the same
+        // server-side plan, credit, and hourly checks as a fresh run.
+        const billingCheck = await assertCanRunModule(session.userId, moduleId as BillingModuleId)
 
         // Rate limit: max N runs/hour per user (unlimited users exempt)
-        if (billingCheck) {
-            await assertHourlyRateLimit(session.userId, billingCheck.snapshot)
-        }
+        await assertHourlyRateLimit(session.userId, billingCheck.snapshot)
 
         const scopeDecision = await evaluateModuleScope({
             moduleId,
@@ -292,6 +307,7 @@ export async function POST(
         }
 
         const conversation = await createConversation(id, moduleId, prompt, ideaVersion)
+        conversationId = conversation.id
         if (!scopeDecision.allowed) {
             await completeScopeRefusal(conversation.id, scopeDecision.refusal)
 
@@ -301,30 +317,27 @@ export async function POST(
             )
         }
 
-        if (billingCheck) {
-            await recordUsageCharge({
-                userId: session.userId,
-                conversationId: conversation.id,
-                moduleId: moduleId as BillingModuleId,
-                snapshot: billingCheck.snapshot,
-            })
-        }
+        await recordUsageCharge({
+            userId: session.userId,
+            conversationId: conversation.id,
+            moduleId: moduleId as BillingModuleId,
+            snapshot: billingCheck.snapshot,
+        })
 
         // Post-charge balance, so the client can refresh its credit counter from
         // this response instead of firing a separate /api/billing/me request —
         // that endpoint rebuilds the whole billing snapshot (6+ queries) purely
-        // to read one number we already have here. Undefined for continuations,
-        // which are never charged, so the client leaves its counter alone.
-        const creditsRemaining = billingCheck
-            ? billingCheck.snapshot.hasUnlimitedAccess
-                ? billingCheck.snapshot.creditsRemaining
-                : Math.max(0, billingCheck.snapshot.creditsRemaining - getModuleCost(moduleId as BillingModuleId))
-            : undefined
+        // to read one number we already have here. The server has already
+        // charged and rate-limited every model run,
+        // including continuations, before this response is returned.
+        const creditsRemaining = billingCheck.snapshot.hasUnlimitedAccess
+            ? billingCheck.snapshot.creditsRemaining
+            : Math.max(0, billingCheck.snapshot.creditsRemaining - getModuleCost(moduleId as BillingModuleId))
 
         // Use after() to run agent after response is sent — must be a callback, not a pre-executed Promise
         after(async () => {
             try {
-                await runAgent(id, conversation.id, moduleId, prompt, session.userId, depth, decisions, isContinuation, partialOutput)
+                await runAgent(id, conversation.id, moduleId, prompt, session.userId, depth, decisions, isContinuation, continuationOutput)
             } catch (err) {
                 logError('ventures/id/run', err, { msg: 'Agent error (after)' })
             }
@@ -336,6 +349,9 @@ export async function POST(
         )
     } catch (e) {
         if (isAuthError(e)) return e.toResponse()
+        if (conversationId) {
+            await updateConversationStatus(conversationId, 'failed').catch(() => undefined)
+        }
         if (e instanceof BillingError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status })
         }
