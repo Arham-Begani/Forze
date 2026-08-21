@@ -54,6 +54,7 @@ export function Navbar() {
   const navLinks: { label: string; id?: string; href?: string }[] = [
     { label: 'How it works', id: 'how-it-works' },
     { label: 'Agents', id: 'agents' },
+    { label: "What's new", id: 'whats-new' },
     { label: 'Modules', id: 'modules' },
     { label: 'Compare', id: 'compare' },
     { label: 'Pricing', id: 'pricing' },

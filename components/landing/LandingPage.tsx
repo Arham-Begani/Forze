@@ -6,6 +6,7 @@ import { Hero } from './Hero'
 import { Marquee } from './Marquee'
 import { HowItWorks } from './HowItWorks'
 import { AgentGrid } from './AgentGrid'
+import { WhatsNew } from './WhatsNew'
 import { OutputTabs } from './OutputTabs'
 import { ModuleShowcase } from './ModuleShowcase'
 import { IdeBanner } from './IdeBanner'
@@ -55,6 +56,7 @@ export function LandingPage() {
       <Marquee />
       <HowItWorks />
       <AgentGrid />
+      <WhatsNew />
       <OutputTabs />
       <ModuleShowcase />
       <IdeBanner />

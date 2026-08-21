@@ -2,18 +2,50 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const ROWS = [
+type Row = {
+  feature: string
+  forze: boolean | string
+  freelancers: boolean | string
+  chatbots: boolean | string
+  tools: boolean | string
+  isNew?: boolean
+}
+
+const ROWS: Row[] = [
   { feature: 'Live Deployed Landing Page', forze: true, freelancers: 'weeks', chatbots: false, tools: 'manual' },
   { feature: 'Inspiration-Grounded Design', forze: true, freelancers: false, chatbots: false, tools: false },
   { feature: 'Shadow Board Review', forze: true, freelancers: false, chatbots: false, tools: false },
   { feature: 'Venture-Aware Co-pilot', forze: true, freelancers: false, chatbots: 'partial', tools: false },
   { feature: 'Built-in CRM + Lead Inbox', forze: true, freelancers: false, chatbots: false, tools: 'separate' },
   { feature: 'Cold Outreach Campaigns', forze: true, freelancers: 'expensive', chatbots: false, tools: 'separate' },
-  { feature: 'LinkedIn + Instagram Publishing', forze: true, freelancers: 'manual', chatbots: false, tools: 'separate' },
+  { feature: 'AI Lead Scout', forze: true, freelancers: 'expensive', chatbots: false, tools: 'separate', isNew: true },
+  { feature: 'LinkedIn + Instagram + YouTube', forze: true, freelancers: 'manual', chatbots: false, tools: 'separate' },
   { feature: 'Auto-posting Routines', forze: true, freelancers: false, chatbots: false, tools: 'separate' },
+  { feature: 'Autopilot Weekly Agenda', forze: true, freelancers: false, chatbots: false, tools: false, isNew: true },
+  { feature: 'Event Radar + Calendar Sync', forze: true, freelancers: false, chatbots: false, tools: false, isNew: true },
+  { feature: 'Testimonial Collection + Wall', forze: true, freelancers: 'manual', chatbots: false, tools: 'separate', isNew: true },
   { feature: 'Investor Kit / Data Room', forze: true, freelancers: 'expensive', chatbots: false, tools: false },
+  { feature: 'Team Seats + Roles', forze: true, freelancers: false, chatbots: false, tools: 'separate', isNew: true },
   { feature: 'Cross-Module Context', forze: true, freelancers: 'manual', chatbots: false, tools: false },
 ]
+
+function NewPill() {
+  return (
+    <span style={{
+      padding: '1px 7px',
+      borderRadius: '999px',
+      background: 'var(--accent)',
+      color: '#fff',
+      fontSize: '9px',
+      fontWeight: 800,
+      letterSpacing: '0.07em',
+      fontFamily: 'var(--font-dm-sans), sans-serif',
+      flexShrink: 0,
+    }}>
+      NEW
+    </span>
+  )
+}
 
 const META = [
   { key: 'time', label: 'Time to first answer', forze: '~5 minutes', freelancers: '6-12 weeks', chatbots: 'Hours', tools: 'Days' },
@@ -153,8 +185,9 @@ export function ComparisonTable() {
               gap: '10px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
                   {row.feature}
+                  {row.isNew && <NewPill />}
                 </span>
                 <Cell value={row.forze} isForze animDelay={`${0.1 + i * 0.06}s`} />
               </div>
@@ -234,7 +267,7 @@ export function ComparisonTable() {
           Most tools give you text. Forze gives you traction.
         </h2>
         <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '17px', color: 'var(--text-soft)', maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
-          A live page, brutal board feedback, a co-pilot that knows your venture, CRM, and outreach — in one connected system, sharing the same venture context.
+          A live page, brutal board feedback, a co-pilot that knows your venture, CRM, outreach, and an Autopilot that plans the week — in one connected system, sharing the same venture context.
         </p>
       </div>
 
@@ -314,8 +347,9 @@ export function ComparisonTable() {
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-soft)')}
             onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'hsla(0,0%,0%,0.015)')}
           >
-            <div style={{ padding: '13px 20px', fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '14px', color: 'var(--text-soft)', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
+            <div style={{ padding: '13px 20px', fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '14px', color: 'var(--text-soft)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
               {row.feature}
+              {row.isNew && <NewPill />}
             </div>
             <div style={{ padding: '13px 12px', display: 'flex', alignItems: 'center', background: 'hsla(28,62%,42%,0.04)', borderLeft: '1px solid hsla(28,62%,42%,0.15)', borderRight: '1px solid hsla(28,62%,42%,0.15)' }}>
               <Cell value={row.forze} isForze animDelay={`${0.1 + i * 0.06}s`} />

@@ -17,12 +17,14 @@ const STREAM_LINES = [
   { prefix: 'Board', text: 'Shadow Board convened — skeptic, evangelist, and operator tearing into the plan...', delay: 800 },
   { prefix: 'Co-pilot', text: 'Venture-aware co-founder briefed on your page, your market, your numbers...', delay: 1600 },
   { prefix: 'Outreach', text: 'Cold-email sequences drafted, segmented, and dispatched to your first leads...', delay: 2400 },
+  { prefix: 'Autopilot', text: 'Week planned, events scored against your calendar, comment drafts queued...', delay: 3200 },
 ]
 
 const STAT_CHIPS = [
   { icon: '01', label: 'Live pages, not mockups' },
   { icon: '02', label: 'A board that pushes back' },
   { icon: '03', label: 'Real leads in your CRM' },
+  { icon: '04', label: 'An agent that plans your week' },
 ]
 
 export function Hero() {
@@ -31,7 +33,7 @@ export function Hero() {
   const [phraseIdx, setPhraseIdx] = useState(0)
   const [displayed, setDisplayed] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
-  const [streamVisible, setStreamVisible] = useState<boolean[]>([false, false, false, false])
+  const [streamVisible, setStreamVisible] = useState<boolean[]>(() => STREAM_LINES.map(() => false))
   const [mouse, setMouse] = useState({ x: 0, y: 0 })
   const [isMobile, setIsMobile] = useState(false)
 
@@ -62,7 +64,7 @@ export function Hero() {
 
   useEffect(() => {
     const play = () => {
-      setStreamVisible([false, false, false, false])
+      setStreamVisible(STREAM_LINES.map(() => false))
       STREAM_LINES.forEach((line, i) => {
         setTimeout(() => {
           setStreamVisible(prev => {
@@ -210,7 +212,7 @@ export function Hero() {
           margin: 0,
           animation: 'fade-in-scale 0.7s 0.2s ease both',
         }}>
-          Any AI can write you a plan. Forze ships the parts that touch reality — a live landing page, a Shadow Board that stress-tests it, and a co-pilot that runs the venture with you.
+          Any AI can write you a plan. Forze ships the parts that touch reality — a live landing page, a Shadow Board that stress-tests it, a co-pilot that runs the venture with you, and an Autopilot that keeps it moving between sessions.
         </p>
 
         <div style={{
@@ -275,12 +277,20 @@ export function Hero() {
         </div>
 
         <div style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
-          gap: '12px',
+          gap: '14px',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          padding: '10px 20px 10px 14px',
+          borderRadius: '999px',
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          WebkitBackdropFilter: 'blur(var(--glass-blur))',
+          border: '1px solid var(--glass-border)',
           animation: 'fade-in-scale 0.7s 0.4s ease both',
         }}>
-          <div style={{ display: 'flex' }}>
+          <div style={{ display: 'flex', flexShrink: 0 }}>
             {['A', 'M', 'J', 'R', 'K'].map((initial, i) => (
               <div key={i} style={{
                 width: '28px',
@@ -305,8 +315,18 @@ export function Hero() {
             fontSize: '13px',
             color: 'var(--muted)',
             fontFamily: 'var(--font-dm-sans), sans-serif',
+            textAlign: 'left',
           }}>
-            <strong style={{ color: 'var(--text-soft)' }}>200+ founders</strong> are running real ventures on Forze — not just decks
+            <strong style={{
+              color: 'var(--text)',
+              fontFamily: 'var(--font-jetbrains-mono), monospace',
+              fontSize: '15px',
+              fontWeight: 700,
+            }}>
+              200+
+            </strong>
+            {' '}
+            <strong style={{ color: 'var(--text-soft)' }}>founders</strong> are running real ventures on Forze — not just decks
           </span>
         </div>
 
@@ -394,8 +414,8 @@ export function Hero() {
               display: 'flex',
               gap: '12px',
               alignItems: 'center',
-              opacity: streamVisible[3] ? 1 : 0,
-              transform: streamVisible[3] ? 'translateY(0)' : 'translateY(8px)',
+              opacity: streamVisible[STREAM_LINES.length - 1] ? 1 : 0,
+              transform: streamVisible[STREAM_LINES.length - 1] ? 'translateY(0)' : 'translateY(8px)',
               transition: 'opacity 0.4s ease, transform 0.4s ease',
             }}>
               <span style={{
@@ -438,7 +458,7 @@ export function Hero() {
               fontSize: '13px',
               fontWeight: 600,
               color: 'var(--text-soft)',
-              animation: `animate-float ${3 + i * 0.7}s ease-in-out infinite`,
+              animation: `float ${3 + i * 0.7}s ease-in-out infinite`,
               animationDelay: `${i * 0.4}s`,
               fontFamily: 'var(--font-dm-sans), sans-serif',
             }}>

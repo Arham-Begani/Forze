@@ -122,7 +122,7 @@ export function CTABlock() {
           margin: 0,
           lineHeight: 1.6,
         }}>
-          A live landing page, a working CRM, real outreach in motion, and an investor-ready story — in the time it takes to brief a freelancer. Join the 200+ founders already building on Forze.
+          A live landing page, a working CRM, real outreach in motion, an Autopilot planning the week, and an investor-ready story — in the time it takes to brief a freelancer. Join the 200+ founders already building on Forze.
         </p>
 
         <button

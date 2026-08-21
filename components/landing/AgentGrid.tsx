@@ -16,7 +16,16 @@ const FEATURED = {
   ],
 }
 
-const AGENTS = [
+type Agent = {
+  icon: string
+  accent: string
+  title: string
+  description: string
+  outputs: string[]
+  isNew?: boolean
+}
+
+const AGENTS: Agent[] = [
   {
     icon: 'IV',
     accent: '#5A6E8C',
@@ -39,11 +48,27 @@ const AGENTS = [
     outputs: ['Contextual answers', 'Strategic pivots', 'Cold email + copy on demand'],
   },
   {
+    icon: 'AP',
+    accent: '#C4975A',
+    title: 'Autopilot',
+    isNew: true,
+    description: 'The agent that works between runs. It plans your week, finds the events worth attending, and drafts the comments worth leaving.',
+    outputs: ['Weekly agenda from your calendar', 'Event Radar with conflict checks', 'Comment drafts in your voice'],
+  },
+  {
     icon: 'OR',
     accent: '#C07A3A',
     title: 'Outreach',
-    description: 'Campaigns, routines, and direct mail — LinkedIn, Instagram, and email, published on schedule.',
+    description: 'Campaigns, routines, and direct mail — LinkedIn, Instagram, YouTube, and email, published on schedule.',
     outputs: ['Cold-email campaigns', 'Auto-posting routines', 'Direct mail copy + assets'],
+  },
+  {
+    icon: 'LS',
+    accent: '#B8864E',
+    title: 'AI Lead Scout',
+    isNew: true,
+    description: 'Drafts your ideal customer profile, then searches the live web for real prospects that match it.',
+    outputs: ['ICP drafted from your venture', 'Real, sourced prospects', 'Never guesses an email address'],
   },
   {
     icon: 'CRM',
@@ -341,15 +366,15 @@ export function AgentGrid() {
               <span style={{
                 padding: '2px 8px',
                 borderRadius: '999px',
-                background: `${agent.accent}15`,
-                color: agent.accent,
+                background: agent.isNew ? 'var(--accent)' : `${agent.accent}15`,
+                color: agent.isNew ? '#fff' : agent.accent,
                 fontSize: '10px',
-                fontWeight: 700,
+                fontWeight: agent.isNew ? 800 : 700,
                 letterSpacing: '0.06em',
                 fontFamily: 'var(--font-dm-sans), sans-serif',
                 flexShrink: 0,
               }}>
-                AI
+                {agent.isNew ? 'NEW' : 'AI'}
               </span>
             </div>
 

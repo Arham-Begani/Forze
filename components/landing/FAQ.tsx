@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 const FAQS = [
   {
     q: 'What does Forze actually do?',
-    a: 'Forze ships the parts of a startup that a chatbot cannot. You describe an idea and Forze deploys a live landing page with lead capture, convenes a Shadow Board that stress-tests the venture, and gives you a co-pilot that knows everything about it. Then Outreach, CRM, and the Investor Kit turn the page into pipeline. You walk away with a running venture — not a folder of prompts and PDFs.',
+    a: 'Forze ships the parts of a startup that a chatbot cannot. You describe an idea and Forze deploys a live landing page with lead capture, convenes a Shadow Board that stress-tests the venture, and gives you a co-pilot that knows everything about it. Then Outreach, CRM, and the Investor Kit turn the page into pipeline, and Autopilot keeps the venture moving between runs — planning your week, finding events worth attending, and drafting the replies worth leaving. You walk away with a running venture — not a folder of prompts and PDFs.',
   },
   {
     q: 'How is Forze different from ChatGPT?',
@@ -25,7 +25,19 @@ const FAQS = [
   },
   {
     q: 'How do the CRM and Outreach modules work?',
-    a: 'The CRM is your lead inbox — every signup from your landing page lands here, with history, tags, and 1:1 or bulk email send. Outreach builds full cold-email campaigns: lead enrichment, sequence drafting, dispatch, and reply tracking. You can also publish drafts directly to LinkedIn and Instagram from your connected accounts.',
+    a: 'The CRM is your lead inbox — every signup from your landing page lands here, with history, tags, and 1:1 or bulk email send. Outreach builds full cold-email campaigns: lead enrichment, sequence drafting, dispatch, and reply tracking. AI Lead Scout can build the list for you — it drafts your ideal customer profile, then searches the live web for real prospects that match. You can also publish drafts directly to LinkedIn, Instagram, and YouTube from your connected accounts.',
+  },
+  {
+    q: 'What is Autopilot?',
+    a: 'Autopilot is the part of Forze that works between your runs. Connect Google Calendar and it assembles a weekly agenda — what is booked, which posts are waiting on your approval, how many new leads landed, and which replies nobody has answered yet. Event Radar searches for real conferences and meetups in your market, scores each against your venture, and flags the ones that clash with something already on your calendar. Comment Scout finds live discussions on LinkedIn, Reddit, and Hacker News where your experience genuinely helps, and drafts the comment in your voice. Nothing is ever published without you approving it.',
+  },
+  {
+    q: 'Does Lead Scout make up email addresses?',
+    a: 'No, and that is deliberate. The scout may only return an email address that literally appeared in a source it actually read — guessing a pattern like first@company.com is explicitly forbidden. Everything it finds is marked unverified in the CRM, and the interface tells you so. A smaller list you can trust beats a big one that bounces.',
+  },
+  {
+    q: 'Can I work on a venture with my co-founders?',
+    a: 'Yes. Invite people into a venture as admin, editor, or viewer, and everyone works against the same venture context, the same CRM, and the same live page. Studio plans are built for running a portfolio of these at once.',
   },
   {
     q: 'What does the Shadow Board do?',
@@ -37,7 +49,7 @@ const FAQS = [
   },
   {
     q: 'How do credits and plans work?',
-    a: 'Credits refresh every Monday 00:00 IST. Free gets 10/week, Builder gets 60/week with Outreach + CRM + Inspiration unlocked, Studio gets 600/week with unlimited sends. Top-ups never expire. Co-pilot chats cost 1 credit, a landing page or Shadow Board run costs 10. Free + Starter focus on shipping pages; Builder and up unlock the growth stack.',
+    a: 'Credits refresh every Monday 00:00 IST. Free gets 10/week, Builder gets 60/week with Outreach + CRM + Inspiration + Autopilot unlocked, Studio gets 600/week with unlimited sends. Top-ups never expire. Co-pilot chats cost 1 credit, a landing page or Shadow Board run costs 10. Free + Starter focus on shipping pages; Builder and up unlock the growth stack.',
   },
   {
     q: 'Can I edit the outputs?',

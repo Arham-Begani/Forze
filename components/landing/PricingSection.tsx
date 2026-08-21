@@ -9,7 +9,7 @@ const PLAN_ORDER: PlanSlug[] = ['free', 'starter', 'builder', 'pro', 'studio']
 const PLAN_DESCRIPTIONS: Record<PlanSlug, string> = {
   free: 'Ship one venture — live page, board review, co-pilot.',
   starter: 'Iterate on pages and board reviews with more headroom.',
-  builder: 'Outreach, CRM, and Inspiration unlock — turn the page into pipeline.',
+  builder: 'Outreach, CRM, Inspiration, and Autopilot unlock — turn the page into pipeline.',
   pro: 'Founder tempo with rerun-heavy quotas.',
   studio: 'Portfolio-level operations for teams and venture studios.',
 }
@@ -30,22 +30,25 @@ const PLAN_HIGHLIGHTS: Record<PlanSlug, string[]> = {
   builder: [
     '5 ventures',
     '60 credits / week',
-    'Outreach, CRM, Inspiration unlocked',
+    'Outreach, CRM, Inspiration, Autopilot unlocked',
     '3 campaign sends / week · 50 CRM emails / week',
+    '2 Lead Scout · 4 Event Radar · 20 comment drafts / week',
     'Priority support',
   ],
   pro: [
     '15 ventures',
     '300 credits / week',
-    'Outreach, CRM, Inspiration unlocked',
+    'Outreach, CRM, Inspiration, Autopilot unlocked',
     '15 campaign sends / week · 250 CRM emails / week',
+    '10 Lead Scout · 15 Event Radar · 100 comment drafts / week',
     'Dedicated support',
   ],
   studio: [
     'Unlimited ventures',
     '600 credits / week',
-    'Outreach, CRM, Inspiration unlocked',
+    'Outreach, CRM, Inspiration, Autopilot unlocked',
     'Unlimited campaign + CRM sends',
+    '30 Lead Scout · 40 Event Radar · unlimited comment drafts',
     'White-glove support',
   ],
 }
@@ -84,7 +87,7 @@ export function PricingSection() {
             Pricing for validation velocity
           </h2>
           <p style={{ fontFamily: 'var(--font-dm-sans), sans-serif', fontSize: '17px', color: 'var(--text-soft)', maxWidth: '460px', margin: '0 auto 28px', lineHeight: 1.6 }}>
-            Credits refresh every Monday 00:00 IST. Outreach, CRM, and Inspiration unlock on Builder and up. Top-ups never expire.
+            Credits refresh every Monday 00:00 IST. Outreach, CRM, Inspiration, and Autopilot unlock on Builder and up. Top-ups never expire.
           </p>
 
           {/* Billing toggle */}

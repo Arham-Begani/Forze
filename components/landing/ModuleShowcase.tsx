@@ -12,6 +12,7 @@ type ModuleConfig = {
   bullets: { label: string; detail: string }[]
   visualLabel: string
   reverse?: boolean
+  isNew?: boolean
   render: (visible: boolean) => ReactNode
 }
 
@@ -431,6 +432,154 @@ function RoutinesVisual({ visible }: { visible: boolean }) {
   )
 }
 
+function AutopilotVisual({ visible }: { visible: boolean }) {
+  const agenda = [
+    { time: 'Tue · 11:00', title: 'Design partner call — Northpoint', source: 'calendar', accent: '#5A6E8C' },
+    { time: 'Wed · 18:00', title: 'Build log post — awaiting approval', source: 'forze', accent: '#C4975A' },
+    { time: 'Fri · 09:30', title: 'Investor intro — Priya Rao', source: 'calendar', accent: '#5A6E8C' },
+  ]
+
+  const events = [
+    { name: 'SaaSBoomi Annual', city: 'Chennai', score: 92, conflict: false },
+    { name: 'Nasscom Product Conclave', city: 'Bengaluru', score: 84, conflict: true },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+          This week · agenda
+        </p>
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '2px 10px',
+          borderRadius: '999px',
+          background: '#C4975A20',
+          color: '#C4975A',
+          fontSize: '10px',
+          fontWeight: 700,
+          fontFamily: 'var(--font-jetbrains-mono)',
+        }}>
+          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#C4975A', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          calendar synced
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {agenda.map((row, i) => (
+          <div key={row.title} style={{
+            display: 'grid',
+            gridTemplateColumns: '78px 1fr auto',
+            gap: '10px',
+            alignItems: 'center',
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--border)',
+            borderLeft: `3px solid ${row.accent}`,
+            opacity: visible ? 1 : 0,
+            transform: visible ? 'translateX(0)' : 'translateX(-8px)',
+            transition: `opacity 0.4s ${0.1 + i * 0.08}s ease, transform 0.4s ${0.1 + i * 0.08}s ease`,
+          }}>
+            <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '10px', color: row.accent, fontWeight: 700 }}>
+              {row.time}
+            </span>
+            <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '12px', color: 'var(--text-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {row.title}
+            </span>
+            {row.source === 'forze' && (
+              <span style={{
+                padding: '1px 7px',
+                borderRadius: '999px',
+                background: '#C4975A18',
+                color: '#C4975A',
+                fontSize: '9px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-dm-sans)',
+                flexShrink: 0,
+              }}>
+                approve
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <p style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', color: 'var(--muted)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+          Event Radar · scored for your venture
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {events.map((ev, i) => (
+            <div key={ev.name} style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr auto auto',
+              gap: '10px',
+              alignItems: 'center',
+              padding: '10px 12px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              opacity: visible ? 1 : 0,
+              transition: `opacity 0.4s ${0.35 + i * 0.1}s ease`,
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '12px', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {ev.name}
+                </div>
+                <div style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '10px', color: 'var(--muted)' }}>
+                  {ev.city}
+                </div>
+              </div>
+              {ev.conflict && (
+                <span style={{
+                  padding: '1px 7px',
+                  borderRadius: '999px',
+                  background: '#E0484815',
+                  color: '#E04848',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-dm-sans)',
+                  flexShrink: 0,
+                }}>
+                  clashes
+                </span>
+              )}
+              <span style={{ fontFamily: 'var(--font-jetbrains-mono)', fontSize: '12px', fontWeight: 700, color: '#5A8CA5', flexShrink: 0 }}>
+                {ev.score}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{
+        padding: '12px 14px',
+        borderRadius: 'var(--radius-md)',
+        background: '#8C5A7A12',
+        border: '1px solid #8C5A7A30',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.4s 0.55s ease',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#8C5A7A', fontFamily: 'var(--font-jetbrains-mono)', fontSize: '11px' }}>❞</span>
+          <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '11px', fontWeight: 700, color: '#8C5A7A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Comment Scout · draft ready
+          </span>
+        </div>
+        <span style={{ fontFamily: 'var(--font-dm-sans)', fontSize: '12px', color: 'var(--text-soft)', lineHeight: 1.5 }}>
+          &ldquo;We ran the same onboarding experiment last quarter — the drop-off was not the form, it was asking for the team size before showing any value...&rdquo;
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Module configs ────────────────────────────────────────────────────────
 
 const MODULES: ModuleConfig[] = [
@@ -499,6 +648,23 @@ const MODULES: ModuleConfig[] = [
     visualLabel: 'autopilot · 3 routines firing',
     reverse: true,
     render: (visible) => <RoutinesVisual visible={visible} />,
+  },
+  {
+    id: 'autopilot',
+    eyebrow: 'Module · Autopilot',
+    icon: 'AP',
+    accent: '#C4975A',
+    title: 'The agent that works between your runs.',
+    isNew: true,
+    description: 'Connect Google Calendar and Autopilot becomes the operator you never hired. It assembles a weekly agenda from what is actually booked, runs Event Radar to find the conferences and meetups worth your time, checks each one against your existing commitments, and hands you drafted comments for the discussions where your experience genuinely helps.',
+    bullets: [
+      { label: 'Weekly agenda, assembled', detail: 'What is booked, what needs approval, new leads, replies nobody has answered.' },
+      { label: 'Event Radar with conflict checks', detail: 'Real events found by web search, scored against your venture, clashes flagged.' },
+      { label: 'Comment Scout', detail: 'Finds live threads on LinkedIn, Reddit and HN — drafts your reply, in your voice.' },
+      { label: 'Nothing ships unapproved', detail: 'Every suggestion lands in a queue. You approve, edit, or bin it.' },
+    ],
+    visualLabel: 'week of Aug 18 · agenda',
+    render: (visible) => <AutopilotVisual visible={visible} />,
   },
 ]
 
@@ -592,6 +758,21 @@ function ModuleSection({ module, index }: { module: ModuleConfig; index: number 
           }}>
             {module.eyebrow}
           </p>
+          {module.isNew && (
+            <span style={{
+              padding: '2px 9px',
+              borderRadius: '999px',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: '10px',
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              fontFamily: 'var(--font-dm-sans), sans-serif',
+              flexShrink: 0,
+            }}>
+              NEW
+            </span>
+          )}
         </div>
 
         <h3 style={{
@@ -784,7 +965,7 @@ export function ModuleShowcase() {
           lineHeight: 1.65,
           maxWidth: '620px',
         }}>
-          Most AI tools stop at "we made a thing." Forze keeps going. Inspiration grounds your design in reality, CRM captures every lead, Outreach sends the cold-email campaigns, and Routines run the whole growth loop on autopilot.
+          Most AI tools stop at &ldquo;we made a thing.&rdquo; Forze keeps going. Inspiration grounds your design in reality, CRM captures every lead, Outreach sends the cold-email campaigns, Routines run the growth loop, and Autopilot plans the week around all of it.
         </p>
       </div>
 

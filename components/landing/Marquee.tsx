@@ -10,11 +10,16 @@ const ITEMS = [
   { label: 'Smart CRM', accent: '#5A8C5A' },
   { label: 'Outbound Campaigns', accent: '#B8864E' },
   { label: 'Direct Mail Generator', accent: '#A56B5A' },
-  { label: 'LinkedIn + Instagram Publishing', accent: '#5A6E8C' },
+  { label: 'AI Lead Scout', accent: '#B8864E' },
+  { label: 'LinkedIn + Instagram + YouTube Publishing', accent: '#5A6E8C' },
   { label: 'Auto-posting Routines', accent: '#C07A3A' },
+  { label: 'Autopilot Weekly Agenda', accent: '#C4975A' },
+  { label: 'Event Radar', accent: '#5A8CA5' },
+  { label: 'Comment Scout', accent: '#8C5A7A' },
   { label: 'Lead Capture + Analytics', accent: '#7A5A8C' },
   { label: 'Investor Kit', accent: '#7A8C5A' },
   { label: 'Testimonial Wall', accent: '#B86A8E' },
+  { label: 'Team Seats + Roles', accent: '#5A8C6E' },
   { label: 'Forze IDE', accent: '#5A8CA5' },
 ]
 
