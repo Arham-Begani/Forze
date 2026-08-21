@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { getFlashModel, extractJSON } from '@/lib/gemini'
 import { evaluateModuleScope } from '@/lib/module-scope'
 import { logError } from '@/lib/log'
+import { AI_RUN_LIMIT, AI_RUN_WINDOW_SEC, clientIpKey, enforceAnonRateLimit, enforceRateLimit } from '@/lib/rate-limit'
 
 const bodySchema = z.object({
     moduleId: z.enum(['landing']),
@@ -47,6 +48,18 @@ export async function POST(
         const venture = await getVenture(id, session.userId)
         if (!venture) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
+
+        const userRate = await enforceRateLimit(session.userId, 'ai:questions', AI_RUN_WINDOW_SEC, AI_RUN_LIMIT)
+        const ipRate = await enforceAnonRateLimit(
+            clientIpKey(request),
+            'ai:questions',
+            AI_RUN_WINDOW_SEC,
+            AI_RUN_LIMIT * 3,
+            true,
+        )
+        if (!userRate.allowed || !ipRate.allowed) {
+            return NextResponse.json({ error: 'Too many AI requests. Try again shortly.' }, { status: 429 })
         }
 
         const scopeDecision = await evaluateModuleScope({

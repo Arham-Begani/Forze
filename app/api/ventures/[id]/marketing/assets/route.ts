@@ -13,6 +13,7 @@ import {
 } from '@/lib/marketing-queries'
 import type { CreateMarketingAssetSeed } from '@/lib/marketing.shared'
 import { NextRequest, NextResponse } from 'next/server'
+import { AI_RUN_LIMIT, AI_RUN_WINDOW_SEC, clientIpKey, enforceAnonRateLimit, enforceRateLimit } from '@/lib/rate-limit'
 
 const INSTAGRAM_DRAFT_QUEUE_CAP = 2
 const DRAFT_LIKE_STATUSES = new Set(['draft', 'approved', 'scheduled'])
@@ -64,6 +65,18 @@ export async function POST(
     const parsed = createDraftSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid asset payload' }, { status: 400 })
+    }
+
+    const userRate = await enforceRateLimit(session.userId, 'ai:marketing-assets', AI_RUN_WINDOW_SEC, AI_RUN_LIMIT)
+    const ipRate = await enforceAnonRateLimit(
+      clientIpKey(request),
+      'ai:marketing-assets',
+      AI_RUN_WINDOW_SEC,
+      AI_RUN_LIMIT * 3,
+      true,
+    )
+    if (!userRate.allowed || !ipRate.allowed) {
+      return NextResponse.json({ error: 'Too many AI requests. Try again shortly.' }, { status: 429 })
     }
 
     let assets
