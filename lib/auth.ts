@@ -3,6 +3,7 @@ import 'server-only'
 
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
 export interface Session {
@@ -76,7 +77,7 @@ export const getSession = cache(async function getSession(): Promise<Session | n
   // known-present on this instance so it doesn't block every request.
   if (!ensuredUserIds.has(session.userId)) {
     try {
-      await supabase.from('users').upsert({
+      await createAdminClient().from('users').upsert({
         id: session.userId,
         email: session.email,
         name: session.name,
