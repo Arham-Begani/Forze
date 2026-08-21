@@ -261,7 +261,6 @@ function GreetingContent() {
             busy={loading}
             onComplete={handleSubmit}
             onSeedCaptured={setIdea}
-            confirmLabel="Save my idea"
           />
           {saveError && (
             <p style={{ fontSize: 12, color: '#e05252', textAlign: 'center', margin: 0 }}>{saveError}</p>

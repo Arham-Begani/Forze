@@ -35,8 +35,6 @@ interface Props {
     seed?: string
     docNames?: string[]
     onComplete: (brief: IdeaBriefValue, suggestedName: string | null) => void | Promise<void>
-    onBack?: () => void
-    confirmLabel?: string
     busy?: boolean
     openingLine?: string
     placeholder?: string
@@ -119,8 +117,6 @@ export function IdeaIntakeChat({
     seed: seedProp,
     docNames = [],
     onComplete,
-    onBack,
-    confirmLabel = 'Create my venture',
     busy = false,
     openingLine = 'What do you want to build? Give me a sentence or two — I’ll ask the rest.',
     placeholder = 'Describe your idea…',
@@ -142,11 +138,24 @@ export function IdeaIntakeChat({
     const [suggestedName, setSuggestedName] = useState<string | null>(null)
     const [degraded, setDegraded] = useState(false)
     const [notice, setNotice] = useState('')
-    const [totalSteps, setTotalSteps] = useState(8)
+    const [totalSteps, setTotalSteps] = useState(6)
+    // A turn we could not complete (rate limit / network). Holding it lets the
+    // founder retry that exact turn instead of losing the interview.
+    const [retryable, setRetryable] = useState<{ seed: string; answers: Answer[]; finalize: boolean } | null>(null)
+    const [stalled, setStalled] = useState(false)
 
     const scrollRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const turnRef = useRef(0)
+    // The interview hands off to the parent exactly once. There is no review
+    // form to come back to, so a double-fire would create two ventures.
+    const completedRef = useRef(false)
+    // Parents redefine their handler every render; read it through a ref so a
+    // turn started earlier always calls the current one.
+    const onCompleteRef = useRef(onComplete)
+    useEffect(() => {
+        onCompleteRef.current = onComplete
+    })
     const awaitingSeed = !seed
 
     const scrollToBottom = useCallback(() => {
@@ -161,12 +170,31 @@ export function IdeaIntakeChat({
         if (question && !thinking) inputRef.current?.focus()
     }, [question, thinking])
 
+    // Nothing has been written yet when this fires — the parent creates the
+    // project and navigates. If it is still on screen well after that, the
+    // creation failed, so surface a retry rather than spinning forever.
+    useEffect(() => {
+        if (!brief) return
+        const t = setTimeout(() => setStalled(true), 25000)
+        return () => clearTimeout(t)
+    }, [brief])
+
+    const finish = useCallback((finalBrief: IdeaBriefValue, name: string | null) => {
+        if (completedRef.current) return
+        completedRef.current = true
+        setQuestion(null)
+        setBrief(finalBrief)
+        setSuggestedName(name)
+        void onCompleteRef.current(finalBrief, name)
+    }, [])
+
     const runTurn = useCallback(
         async (activeSeed: string, nextAnswers: Answer[], finalize: boolean) => {
             const turn = ++turnRef.current
             setThinking(true)
             setQuestion(null)
             setNotice('')
+            setRetryable(null)
 
             try {
                 const res = await fetch('/api/idea/interview', {
@@ -177,18 +205,23 @@ export function IdeaIntakeChat({
 
                 if (turn !== turnRef.current) return
 
-                if (res.status === 429) {
-                    setNotice('Slow down a moment — too many questions too quickly.')
-                    setBrief(coerceBrief(null, activeSeed))
-                    setDegraded(true)
+                // Losing the whole interview to a blip is worse than a pause.
+                // Keep the transcript and let them pick the same turn back up.
+                if (res.status === 429 || res.status >= 500) {
+                    setNotice(
+                        res.status === 429
+                            ? 'Too many questions too quickly — give it a few seconds.'
+                            : 'That question did not come through.'
+                    )
+                    setRetryable({ seed: activeSeed, answers: nextAnswers, finalize })
                     return
                 }
 
                 const data = res.ok ? await res.json().catch(() => null) : null
 
                 if (!data) {
-                    setBrief(coerceBrief(null, activeSeed))
-                    setDegraded(true)
+                    setNotice('That question did not come through.')
+                    setRetryable({ seed: activeSeed, answers: nextAnswers, finalize })
                     return
                 }
 
@@ -196,15 +229,17 @@ export function IdeaIntakeChat({
                 if (data.aiApplied === false) setDegraded(true)
 
                 if (data.done) {
-                    setBrief(coerceBrief(data.brief, activeSeed))
-                    setSuggestedName(typeof data.suggestedName === 'string' ? data.suggestedName : null)
+                    finish(
+                        coerceBrief(data.brief, activeSeed),
+                        typeof data.suggestedName === 'string' ? data.suggestedName : null
+                    )
                     return
                 }
 
                 const q = data.question
                 if (!q || typeof q.question !== 'string') {
-                    setBrief(coerceBrief(data.brief, activeSeed))
                     setDegraded(true)
+                    finish(coerceBrief(data.brief, activeSeed), null)
                     return
                 }
 
@@ -222,13 +257,13 @@ export function IdeaIntakeChat({
                 ])
             } catch {
                 if (turn !== turnRef.current) return
-                setBrief(coerceBrief(null, activeSeed))
-                setDegraded(true)
+                setNotice('That question did not come through.')
+                setRetryable({ seed: activeSeed, answers: nextAnswers, finalize })
             } finally {
                 if (turn === turnRef.current) setThinking(false)
             }
         },
-        [docNames]
+        [docNames, finish]
     )
 
     useEffect(() => {
@@ -261,25 +296,10 @@ export function IdeaIntakeChat({
         void runTurn(seed, answers, true)
     }
 
-    if (brief) {
-        return (
-            <ReviewStep
-                brief={brief}
-                suggestedName={suggestedName}
-                degraded={degraded}
-                busy={busy}
-                confirmLabel={confirmLabel}
-                onChange={setBrief}
-                onConfirm={() => void onComplete(brief, suggestedName)}
-                onBack={onBack}
-            />
-        )
-    }
-
     const answered = answers.length
     const suggestion = question?.suggestion?.trim() ?? ''
     const canSendFree = freeText.trim().length >= (awaitingSeed ? MIN_SEED_LEN : 1)
-    const composerOpen = (awaitingSeed || !!question) && !thinking
+    const composerOpen = (awaitingSeed || !!question) && !thinking && !retryable && !brief
 
     return (
         <div style={{ width: '100%', maxWidth: 660, position: 'relative' }}>
@@ -334,13 +354,19 @@ export function IdeaIntakeChat({
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                        <HexMark size={18} spinning={thinking} />
+                        <HexMark size={18} spinning={thinking || !!brief} />
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
                                 Idea interview
                             </div>
                             <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.35 }}>
-                                {thinking ? 'Forze is thinking…' : awaitingSeed ? 'Tell me the idea' : 'Answer or skip — nothing is saved yet'}
+                                {brief
+                                    ? 'Brief locked — building your venture'
+                                    : thinking
+                                        ? 'Forze is thinking…'
+                                        : awaitingSeed
+                                            ? 'Tell me the idea'
+                                            : 'Answer or skip — nothing is saved yet'}
                             </div>
                         </div>
                     </div>
@@ -352,8 +378,8 @@ export function IdeaIntakeChat({
                                     key={i}
                                     initial={false}
                                     animate={{
-                                        background: i < answered ? 'var(--accent)' : 'var(--border-strong)',
-                                        opacity: i < answered ? 1 : 0.45,
+                                        background: brief || i < answered ? 'var(--accent)' : 'var(--border-strong)',
+                                        opacity: brief || i < answered ? 1 : 0.45,
                                     }}
                                     transition={{ duration: 0.35, delay: i < answered ? i * 0.03 : 0 }}
                                     style={{ width: 12, height: 3, borderRadius: 2, display: 'block' }}
@@ -458,6 +484,52 @@ export function IdeaIntakeChat({
                         )
                     )}
 
+                    {brief && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                            style={{ display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: '96%' }}
+                        >
+                            <div style={{ paddingTop: 3 }}>
+                                <HexMark size={15} />
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+                                    <span
+                                        style={{
+                                            fontFamily: MONO,
+                                            fontSize: 9,
+                                            fontWeight: 700,
+                                            letterSpacing: '0.14em',
+                                            textTransform: 'uppercase',
+                                            color: 'var(--accent)',
+                                        }}
+                                    >
+                                        {suggestedName || 'Brief'}
+                                    </span>
+                                    <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                                </div>
+                                <div
+                                    style={{
+                                        padding: '11px 15px',
+                                        borderRadius: '4px 14px 14px 14px',
+                                        fontSize: 13.5,
+                                        lineHeight: 1.65,
+                                        background: 'var(--bg-deep)',
+                                        border: '1px solid var(--border)',
+                                        color: 'var(--text-soft)',
+                                    }}
+                                >
+                                    {degraded
+                                        ? 'Got it — I have enough to start from what you told me.'
+                                        : 'That is everything I need. Here is what every agent will build from:'}
+                                    <div style={{ marginTop: 9, color: 'var(--text)' }}>{brief.summary}</div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
                     {thinking && (
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -496,15 +568,70 @@ export function IdeaIntakeChat({
                             padding: '8px 12px',
                             borderRadius: 9,
                             fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
                             color: '#e05252',
                             background: 'rgba(224,82,82,0.08)',
                             border: '1px solid rgba(224,82,82,0.25)',
                         }}
                     >
-                        {notice}
+                        <span>{notice}</span>
+                        {retryable && (
+                            <button
+                                type="button"
+                                onClick={() => void runTurn(retryable.seed, retryable.answers, retryable.finalize)}
+                                style={{ ...quietButton, color: 'var(--accent)', marginLeft: 10 }}
+                            >
+                                Retry
+                            </button>
+                        )}
                     </div>
                 )}
 
+                {brief ? (
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            padding: '14px 20px',
+                            borderTop: '1px solid var(--border)',
+                            background: 'var(--glass-bg-strong)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <motion.span
+                                aria-hidden
+                                style={{
+                                    width: 13,
+                                    height: 13,
+                                    flexShrink: 0,
+                                    border: '2px solid var(--accent-glow)',
+                                    borderTopColor: 'var(--accent)',
+                                    borderRadius: '50%',
+                                }}
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+                            />
+                            <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-soft)' }}>
+                                {stalled ? 'This is taking longer than it should.' : 'Creating your venture…'}
+                            </span>
+                        </div>
+                        {stalled && (
+                            <button
+                                type="button"
+                                onClick={() => void onCompleteRef.current(brief, suggestedName)}
+                                disabled={busy}
+                                style={{ ...quietButton, color: 'var(--accent)' }}
+                            >
+                                Try again
+                            </button>
+                        )}
+                    </div>
+                ) : (
                 <div style={{ padding: '12px 18px 14px' }}>
                     <div
                         style={{
@@ -634,334 +761,14 @@ export function IdeaIntakeChat({
                                     Skip this question
                                 </button>
                             )}
-                            <button type="button" onClick={finishEarly} disabled={thinking} style={{ ...quietButton, color: 'var(--accent)' }}>
+                            <button type="button" onClick={finishEarly} disabled={thinking || !!retryable} style={{ ...quietButton, color: 'var(--accent)' }}>
                                 I’m done — build it →
                             </button>
                         </div>
                     )}
                 </div>
+                )}
             </motion.div>
-        </div>
-    )
-}
-
-function ReviewStep({
-    brief,
-    suggestedName,
-    degraded,
-    busy,
-    confirmLabel,
-    onChange,
-    onConfirm,
-    onBack,
-}: {
-    brief: IdeaBriefValue
-    suggestedName: string | null
-    degraded: boolean
-    busy: boolean
-    confirmLabel: string
-    onChange: (b: IdeaBriefValue) => void
-    onConfirm: () => void
-    onBack?: () => void
-}) {
-    const rows: { label: string; key: keyof IdeaBriefValue }[] = [
-        { label: 'Problem', key: 'problem' },
-        { label: 'Customer', key: 'targetCustomer' },
-        { label: 'Solution', key: 'solution' },
-        { label: 'Edge', key: 'differentiator' },
-        { label: 'Money', key: 'businessModel' },
-    ]
-    const filled = rows.filter(r => typeof brief[r.key] === 'string' && (brief[r.key] as string).trim())
-
-    return (
-        <div style={{ width: '100%', maxWidth: 660, position: 'relative' }}>
-            <div
-                aria-hidden
-                style={{
-                    position: 'absolute',
-                    inset: '-12% -8% 24%',
-                    background: 'radial-gradient(ellipse at 50% 0%, var(--accent-glow) 0%, transparent 70%)',
-                    filter: 'blur(48px)',
-                    opacity: 0.32,
-                    pointerEvents: 'none',
-                }}
-            />
-
-            <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="glass-card"
-                style={{ position: 'relative', zIndex: 1, overflow: 'hidden', boxShadow: 'var(--shadow-lg)' }}
-            >
-                <div
-                    aria-hidden
-                    style={{
-                        height: 2,
-                        background: 'linear-gradient(90deg, transparent, var(--accent), #e8a04e, var(--accent), transparent)',
-                    }}
-                />
-
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 11,
-                        padding: '15px 20px',
-                        borderBottom: '1px solid var(--border)',
-                        background: 'var(--glass-bg-strong)',
-                    }}
-                >
-                    <HexMark size={20} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>
-                            Your brief
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
-                            {degraded
-                                ? 'Captured from what you told us — edit anything.'
-                                : 'Every agent builds from this. Edit anything that looks off.'}
-                        </div>
-                    </div>
-                    {suggestedName && (
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <div style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--muted)', textTransform: 'uppercase' }}>
-                                Name
-                            </div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', letterSpacing: '-0.01em' }}>
-                                {suggestedName}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="no-scrollbar" style={{ maxHeight: '52vh', overflowY: 'auto', padding: '18px 20px' }}>
-                    <FieldLabel>Summary</FieldLabel>
-                    <textarea
-                        value={brief.summary}
-                        onChange={e => onChange({ ...brief, summary: e.target.value.slice(0, 900) })}
-                        maxLength={900}
-                        rows={6}
-                        disabled={busy}
-                        style={{
-                            width: '100%',
-                            resize: 'vertical',
-                            padding: '12px 14px',
-                            borderRadius: 11,
-                            background: 'var(--bg)',
-                            border: '1px solid var(--border)',
-                            color: 'var(--text)',
-                            fontSize: 14,
-                            lineHeight: 1.7,
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                            display: 'block',
-                        }}
-                        aria-label="Idea summary"
-                    />
-                    <div
-                        style={{
-                            fontFamily: MONO,
-                            fontSize: 9.5,
-                            color: brief.summary.length > 850 ? '#e05252' : 'var(--muted)',
-                            textAlign: 'right',
-                            marginTop: 5,
-                        }}
-                    >
-                        {brief.summary.length}/900
-                    </div>
-
-                    {filled.length > 0 && (
-                        <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column' }}>
-                            {filled.map(({ label, key }, i) => (
-                                <div
-                                    key={key}
-                                    style={{
-                                        display: 'flex',
-                                        gap: 12,
-                                        alignItems: 'flex-start',
-                                        padding: '10px 0',
-                                        borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontFamily: MONO,
-                                            fontSize: 9,
-                                            fontWeight: 700,
-                                            letterSpacing: '0.12em',
-                                            textTransform: 'uppercase',
-                                            color: 'var(--muted)',
-                                            width: 74,
-                                            flexShrink: 0,
-                                            paddingTop: 7,
-                                        }}
-                                    >
-                                        {label}
-                                    </span>
-                                    <textarea
-                                        value={brief[key] as string}
-                                        onChange={e => onChange({ ...brief, [key]: e.target.value })}
-                                        disabled={busy}
-                                        rows={2}
-                                        style={{
-                                            flex: 1,
-                                            minWidth: 0,
-                                            padding: '5px 9px',
-                                            borderRadius: 8,
-                                            background: 'transparent',
-                                            border: '1px solid transparent',
-                                            color: 'var(--text-soft)',
-                                            fontSize: 13,
-                                            lineHeight: 1.55,
-                                            fontFamily: 'inherit',
-                                            outline: 'none',
-                                            resize: 'vertical',
-                                            transition: 'background 160ms, border-color 160ms',
-                                        }}
-                                        onFocus={e => {
-                                            e.currentTarget.style.background = 'var(--bg)'
-                                            e.currentTarget.style.borderColor = 'var(--border-strong)'
-                                        }}
-                                        onBlur={e => {
-                                            e.currentTarget.style.background = 'transparent'
-                                            e.currentTarget.style.borderColor = 'transparent'
-                                        }}
-                                        aria-label={label}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {brief.keyFeatures.length > 0 && (
-                        <div style={{ marginTop: 18 }}>
-                            <FieldLabel>Key features</FieldLabel>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {brief.keyFeatures.map((f, i) => (
-                                    <span
-                                        key={i}
-                                        style={{
-                                            fontSize: 11.5,
-                                            padding: '4px 11px',
-                                            borderRadius: 999,
-                                            background: 'var(--glass-bg-strong)',
-                                            border: '1px solid var(--border)',
-                                            color: 'var(--text-soft)',
-                                        }}
-                                    >
-                                        {f}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {brief.openQuestions.length > 0 && (
-                        <div style={{ marginTop: 18 }}>
-                            <FieldLabel>Still open</FieldLabel>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {brief.openQuestions.map((q, i) => (
-                                    <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                                        <span
-                                            style={{
-                                                width: 4,
-                                                height: 4,
-                                                borderRadius: '50%',
-                                                background: 'var(--accent)',
-                                                marginTop: 7,
-                                                flexShrink: 0,
-                                                opacity: 0.7,
-                                            }}
-                                        />
-                                        <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>{q}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        padding: '13px 20px',
-                        borderTop: '1px solid var(--border)',
-                        background: 'var(--glass-bg-strong)',
-                    }}
-                >
-                    {onBack ? (
-                        <button type="button" onClick={onBack} disabled={busy} style={quietButton}>
-                            ← Start over
-                        </button>
-                    ) : (
-                        <span />
-                    )}
-                    <motion.button
-                        type="button"
-                        onClick={onConfirm}
-                        disabled={busy || !brief.summary.trim()}
-                        whileHover={!busy ? { scale: 1.03 } : {}}
-                        whileTap={!busy ? { scale: 0.97 } : {}}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 9,
-                            padding: '10px 22px',
-                            borderRadius: 11,
-                            background: 'linear-gradient(135deg, var(--accent), #e8963a)',
-                            border: 'none',
-                            color: '#fff',
-                            fontSize: 13.5,
-                            fontWeight: 650,
-                            cursor: busy ? 'wait' : 'pointer',
-                            fontFamily: 'inherit',
-                            boxShadow: '0 4px 16px var(--accent-glow)',
-                            opacity: busy || !brief.summary.trim() ? 0.6 : 1,
-                        }}
-                    >
-                        {busy ? (
-                            <>
-                                <motion.span
-                                    style={{
-                                        width: 13,
-                                        height: 13,
-                                        border: '2px solid rgba(255,255,255,0.35)',
-                                        borderTopColor: '#fff',
-                                        borderRadius: '50%',
-                                    }}
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
-                                />
-                                Creating…
-                            </>
-                        ) : (
-                            confirmLabel
-                        )}
-                    </motion.button>
-                </div>
-            </motion.div>
-        </div>
-    )
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-    return (
-        <div
-            style={{
-                fontFamily: MONO,
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: 'var(--muted)',
-                marginBottom: 7,
-            }}
-        >
-            {children}
         </div>
     )
 }
