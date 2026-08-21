@@ -1,18 +1,27 @@
 // app/api/ventures/[id]/investor-kit/route.ts
 import { requireAuth, isAuthError } from '@/lib/auth'
-import { getBillingSnapshot } from '@/lib/billing-queries'
+import {
+    BillingError,
+    assertCanRunModule,
+    assertHourlyRateLimit,
+    recordUsageCharge,
+} from '@/lib/billing-queries'
 import {
     getVenture,
     createInvestorKit,
     getInvestorKitByVenture,
     updateInvestorKit,
     getProject,
+    createConversation,
+    setConversationResult,
+    updateConversationStatus,
 } from '@/lib/queries'
 import { runInvestorKitAgent, InvestorKitSchema } from '@/agents/investor-kit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { logError } from '@/lib/log'
+import { AI_RUN_LIMIT, AI_RUN_WINDOW_SEC, clientIpKey, enforceAnonRateLimit, enforceRateLimit } from '@/lib/rate-limit'
 
 // Zod schema for PATCH — only the exact fields that can be manually edited
 const InvestorKitPatchSchema = z.object({
@@ -51,8 +60,6 @@ export async function GET(
             return NextResponse.json({ error: 'Venture not found' }, { status: 404 })
         }
 
-        const billing = await getBillingSnapshot(session.userId)
-
         const kit = await getInvestorKitByVenture(id)
         if (!kit) {
             return NextResponse.json({ kit: null })
@@ -76,9 +83,10 @@ export async function GET(
 
 // POST — generate investor kit (runs agent, stores in DB)
 export async function POST(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    let conversationId: string | null = null
     try {
         const session = await requireAuth()
         const { id } = await params
@@ -88,7 +96,19 @@ export async function POST(
             return NextResponse.json({ error: 'Venture not found' }, { status: 404 })
         }
 
-        const billing = await getBillingSnapshot(session.userId)
+        const billingCheck = await assertCanRunModule(session.userId, 'investor-kit')
+        const userRate = await enforceRateLimit(session.userId, 'ai:investor-kit', AI_RUN_WINDOW_SEC, AI_RUN_LIMIT)
+        const ipRate = await enforceAnonRateLimit(
+            clientIpKey(request),
+            'ai:investor-kit',
+            AI_RUN_WINDOW_SEC,
+            AI_RUN_LIMIT * 3,
+            true,
+        )
+        if (!userRate.allowed || !ipRate.allowed) {
+            return NextResponse.json({ error: 'Too many AI requests. Try again shortly.' }, { status: 429 })
+        }
+        await assertHourlyRateLimit(session.userId, billingCheck.snapshot)
 
         const ctx = venture.context as any
         if (!ctx?.research && !ctx?.feasibility) {
@@ -97,6 +117,15 @@ export async function POST(
                 { status: 400 }
             )
         }
+
+        const conversation = await createConversation(id, 'investor-kit', 'Generate investor kit')
+        conversationId = conversation.id
+        await recordUsageCharge({
+            userId: session.userId,
+            conversationId: conversation.id,
+            moduleId: 'investor-kit',
+            snapshot: billingCheck.snapshot,
+        })
 
         const project = venture.project_id ? await getProject(venture.project_id, session.userId) : null
 
@@ -119,6 +148,7 @@ export async function POST(
         )
 
         if (!kitData) {
+            await updateConversationStatus(conversation.id, 'failed')
             return NextResponse.json({ error: 'Agent failed to produce output' }, { status: 500 })
         }
 
@@ -126,9 +156,12 @@ export async function POST(
         const agentValidation = InvestorKitSchema.safeParse(kitData)
         if (!agentValidation.success) {
             console.error('Investor kit agent output failed schema validation:', agentValidation.error.flatten())
+            await updateConversationStatus(conversation.id, 'failed')
             return NextResponse.json({ error: 'Agent produced invalid output' }, { status: 500 })
         }
         kitData = agentValidation.data as unknown as Record<string, unknown>
+        await setConversationResult(conversation.id, kitData)
+        await updateConversationStatus(conversation.id, 'complete')
 
         // ── AI/manual merge policy ──
         // If an existing kit has manual edits, preserve manually-edited fields
@@ -173,6 +206,12 @@ export async function POST(
         return NextResponse.json({ kit }, { status: 201 })
     } catch (e) {
         if (isAuthError(e)) return (e as any).toResponse()
+        if (conversationId) {
+            await updateConversationStatus(conversationId, 'failed').catch(() => undefined)
+        }
+        if (e instanceof BillingError) {
+            return NextResponse.json({ error: e.message, code: e.code }, { status: e.status })
+        }
         const msg = (e as Error)?.message ?? ''
         logError('ventures/id/investor-kit', msg, { msg: 'Investor kit generation error' })
         // Check if it's a missing table error
@@ -199,8 +238,6 @@ export async function PATCH(
         if (!venture) {
             return NextResponse.json({ error: 'Venture not found' }, { status: 404 })
         }
-
-        const billing = await getBillingSnapshot(session.userId)
 
         const kit = await getInvestorKitByVenture(id)
         if (!kit) {
