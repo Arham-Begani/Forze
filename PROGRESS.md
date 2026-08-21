@@ -1110,6 +1110,42 @@ This *understates* the production win: the saving is one whole round trip, so fr
 2. **Confirm the function region actually moved** after deploying — Vercel project → Functions → Region should read Singapore. A single region works on any plan; if `vercel.json` is ignored, set it in project settings instead.
 3. **Then measure for real**: DevTools on a deployed module page, TTFB and LCP. That replaces every synthetic number above.
 
+### Day 27 — August 21, 2026
+**Goal:** Bring the landing page in line with what the product actually is — cut nothing that exists, add the surfaces that shipped since the page was last written, and mark the new ones so a returning visitor can see them.
+
+**Audit first.** Every claim on the page was checked against the codebase before anything was written. The page had **no false claims to remove** — Direct Mail, auto-posting Routines, LinkedIn/Instagram publishing, `sitemap.xml`/`schema.org` on generated pages and the Forze IDE all exist. What it had instead was a **large silent omission**: several shipped surfaces had zero representation.
+
+Missing entirely, now added:
+- **Autopilot** — a full `FeatureId` in `lib/billing.ts` with its own dashboard, API and sidebar entry, and it appeared nowhere on the page.
+- **Event Radar** (`lib/event-radar.ts`) and **Comment Scout** (`lib/comment-scout.ts`) — the two web-search agents under Autopilot.
+- **AI Lead Scout** (`agents/lead-scout.ts`) — the fifth agent, named nowhere.
+- **Team seats + roles**, **Testimonial wall**, **Brand Voice**, and **YouTube** as a third social provider.
+
+**Built:**
+- **New `components/landing/WhatsNew.tsx`** — a dedicated highlight section (7 cards, `NEW` badges, mono proof line each), mounted between `AgentGrid` and `OutputTabs`. This is the "what changed" surface the page never had.
+- **`AgentGrid`** — added Autopilot and AI Lead Scout cards; the top-right `AI` pill renders as a filled `NEW` pill for flagged agents. Array is now explicitly typed so the optional `isNew` is safe.
+- **`ModuleShowcase`** — added a fifth module section for Autopilot with its own `AutopilotVisual` (weekly agenda rows, Event Radar picks with relevance score + clash flag, a Comment Scout draft). `NEW` badge next to the eyebrow.
+- **`ComparisonTable`** — five new rows (Lead Scout, Autopilot Agenda, Event Radar, Testimonials, Team seats), `NEW` pills, LinkedIn row widened to include YouTube. Renders in both the desktop table and the mobile card layout.
+- **`PricingSection`** — Autopilot added to every unlock line; per-plan Lead Scout / Event Radar / comment-draft ceilings now listed, read off `weeklyActionLimits`.
+- **`FAQ`** — three stale answers corrected, three new entries (what Autopilot is, whether Lead Scout invents emails — it does not, and team collaboration).
+- **`Hero`** — 200+ founders promoted into a glass proof pill with the figure in mono; Autopilot added to the run stream and a fourth stat chip; subheadline extended.
+- **`Marquee`** / **`Navbar`** / **`CTABlock`** — new capability chips, a "What's new" nav link, closing copy updated.
+
+**Fixed in passing:** `Hero` animated its stat chips with `animation: animate-float …`, but `animate-float` is a CSS *class* in `globals.css`, not a keyframe — the animation silently never ran. Now `float`. The same latent bug exists in `components/download/DownloadClient.tsx` and `components/ide-landing/IdeHero.tsx`; left alone as out of scope.
+
+**Verified (on an intact tree, before the dependency change below):** `tsc` 0 errors, `npm run build` clean, **98/98 tests pass**. Production server on localhost: hero, the new What's New grid and the nav link confirmed visually in Chrome; server-rendered HTML confirmed Autopilot ×23, Event Radar ×13, Lead Scout ×11, Comment Scout ×7, and `200+` in both the hero and the closing CTA.
+
+**Pre-existing bug found, NOT introduced here.** Scrolling deep into `ModuleShowcase` freezes the renderer — a CDP `Runtime.evaluate` times out at 45s. Confirmed **on the unmodified baseline too** by stashing all landing changes, rebuilding, and reproducing the identical freeze at the equivalent depth. The page runs 89 concurrent CSS animations at first paint, most of them large animated radial-gradient blobs. Adding the Autopilot section adds one more such blob, so this is worth fixing before the section count grows again.
+
+**Not verified:** the Autopilot module section, comparison table, pricing and FAQ were confirmed in server-rendered HTML but not screenshotted — the tree became unbuildable mid-verification (see below).
+
+**Blocked on the user — unrelated concurrent change.** Partway through this task, `package.json` was bumped (`next` 16.2.0 → 16.3.1, `jspdf` 4.2.0 → 4.2.1), `package-lock.json` was modified, and **`node_modules/next` was removed** — an `npm install` that is in progress or was interrupted. That, not this work, is why `tsc` currently errors across ~140 files and `test/autopilot.test.ts` + `test/outreach.test.ts` fail to load on `Cannot find package 'next/headers'`. No landing file appears in any error. Several API routes, `lib/rate-limit.ts`, `lib/billing-queries.ts` and a new `db/migrations/049_security_hardening.sql` were also modified by that same concurrent work and are untouched here.
+
+**Next:**
+1. Finish the interrupted `npm install`, then re-run `tsc` / `build` / `test` to confirm the tree is green again.
+2. Screenshot the Autopilot module section, comparison table, pricing and FAQ.
+3. Fix the animation load in `ModuleShowcase` — pause off-screen blobs, or drop to a static gradient.
+
 ---
 
 ## Day 26 — the intake interview: why it never shipped, and making it fast
