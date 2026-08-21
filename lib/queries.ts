@@ -970,7 +970,7 @@ export async function getInvestorKitByVenture(ventureId: string): Promise<Invest
 }
 
 export async function getInvestorKitByCode(code: string): Promise<(InvestorKit & { venture: Venture }) | null> {
-  const db = await createDb()
+  const db = createPublicClient()
   const { data, error } = await db
     .from('investor_kits')
     .select('*, venture:ventures(*)')
@@ -983,7 +983,7 @@ export async function getInvestorKitByCode(code: string): Promise<(InvestorKit &
 }
 
 export async function incrementKitViews(kitId: string): Promise<void> {
-  const db = await createDb()
+  const db = createPublicClient()
   
   // Try atomic RPC first to prevent race conditions
   const { error } = await db.rpc('increment_int_column', {
