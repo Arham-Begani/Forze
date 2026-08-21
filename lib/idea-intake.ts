@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { getFlashModel, extractJSON, withRetry, withTimeout } from '@/lib/gemini'
+import { getFlashModelInstant, extractJSON, withRetry, withTimeout } from '@/lib/gemini'
 import { sanitize, sanitizeForPrompt, sanitizeLabel } from '@/lib/sanitize'
 import {
     InterviewStepSchema,
@@ -26,10 +26,14 @@ import { logError } from '@/lib/log'
 /** Below this we always ask at least one more question. */
 export const MIN_QUESTIONS = 4
 /** Hard ceiling — the interview must never trap a founder in a loop. */
-export const MAX_QUESTIONS = 8
+export const MAX_QUESTIONS = 6
 
-const STEP_TIMEOUT_MS = 30_000
-const FINALIZE_TIMEOUT_MS = 45_000
+// Both budgets have to survive `withRetry(_, 1)`: worst case is two attempts
+// plus the 3s backoff, and that total must land inside the route's
+// `maxDuration = 60` or the graceful fallback never gets to return.
+// 2 x 22s + 3s = 47s, and 2 x 26s + 3s = 55s. A turn measures ~2-4s.
+const STEP_TIMEOUT_MS = 22_000
+const FINALIZE_TIMEOUT_MS = 26_000
 
 export interface InterviewStep {
     done: boolean
@@ -152,7 +156,7 @@ export async function runInterviewStep(input: InterviewRequest): Promise<Intervi
             () =>
                 withTimeout(
                     (async () => {
-                        const model = getFlashModel(8192)
+                        const model = getFlashModelInstant(mustFinish ? 2048 : 1024)
                         const chat = model.startChat({
                             history: [],
                             systemInstruction: {
