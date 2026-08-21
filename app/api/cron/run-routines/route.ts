@@ -11,6 +11,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { claimDueRoutines } from '@/lib/queries/routine-queries'
 import { executeRoutine } from '@/lib/routine-executor'
 import { logError } from '@/lib/log'
+import { isCronAuthorized } from '@/lib/cron-auth'
 
 export const maxDuration = 300
 // Cron must run on a Node.js runtime — the executor pulls in the Gmail
@@ -19,46 +20,8 @@ export const runtime = 'nodejs'
 // Never serve from cache. Each invocation must hit the DB to claim due rows.
 export const dynamic = 'force-dynamic'
 
-function timingSafeStringCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
 function isAuthorized(request: NextRequest): boolean {
-  // Accepted shapes:
-  //   1. `x-routines-cron-secret: <ROUTINES_CRON_SECRET>` — manual curl + tests.
-  //   2. `Authorization: Bearer <ROUTINES_CRON_SECRET>` — manual curl.
-  //   3. `Authorization: Bearer <CRON_SECRET>` — Vercel Cron auto-injects
-  //      this header using the project-level CRON_SECRET env var. Without
-  //      this branch, every scheduled invocation 401s and routines silently
-  //      stop firing on their own.
-  //   4. `x-vercel-cron: 1` header present — Vercel sets this internally on
-  //      every cron invocation and strips it from inbound external requests
-  //      at the edge, so its mere presence is sufficient proof the request
-  //      came from Vercel's scheduler. This is the fallback that lets the
-  //      cron Just Work on first deploy without the user having to
-  //      configure CRON_SECRET in their project env.
-  const routinesSecret = process.env.ROUTINES_CRON_SECRET
-  const vercelCronSecret = process.env.CRON_SECRET
-
-  const headerSecret = request.headers.get('x-routines-cron-secret') ?? ''
-  if (routinesSecret && headerSecret && timingSafeStringCompare(headerSecret, routinesSecret)) return true
-
-  const auth = request.headers.get('authorization') ?? ''
-  if (auth.startsWith('Bearer ')) {
-    const token = auth.slice('Bearer '.length)
-    if (routinesSecret && timingSafeStringCompare(token, routinesSecret)) return true
-    if (vercelCronSecret && timingSafeStringCompare(token, vercelCronSecret)) return true
-  }
-
-  // Only trust x-vercel-cron when actually running on Vercel — its edge strips
-  // the header from inbound external requests, but a self-hosted/local deploy
-  // has no such stripping, so there the header is attacker-suppliable.
-  if (process.env.VERCEL && request.headers.get('x-vercel-cron')) return true
-
-  return false
+  return isCronAuthorized(request, ['ROUTINES_CRON_SECRET', 'CRON_SECRET'])
 }
 
 async function runOnce(): Promise<NextResponse> {

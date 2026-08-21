@@ -5,36 +5,19 @@
 // your week" summary. Per-user once-a-week dedup lives in runWeeklyDigest via
 // the anon rate limiter, so a double cron fire never double-sends.
 //
-// Same auth pattern as the other crons: timing-safe Bearer CRON_SECRET, with
-// x-vercel-cron trusted only when actually running on Vercel.
+// Requests require the configured cron secret.
 import { NextRequest, NextResponse } from 'next/server'
 
 import { runWeeklyDigest, weekAgoIso } from '@/lib/weekly-digest'
 import { logError } from '@/lib/log'
+import { isCronAuthorized } from '@/lib/cron-auth'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function timingSafeStringCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
 function isAuthorized(request: NextRequest): boolean {
-  const vercelCronSecret = process.env.CRON_SECRET
-
-  const auth = request.headers.get('authorization') ?? ''
-  if (auth.startsWith('Bearer ') && vercelCronSecret) {
-    const token = auth.slice('Bearer '.length)
-    if (timingSafeStringCompare(token, vercelCronSecret)) return true
-  }
-
-  if (process.env.VERCEL && request.headers.get('x-vercel-cron')) return true
-
-  return false
+  return isCronAuthorized(request, ['CRON_SECRET'])
 }
 
 async function runOnce(): Promise<NextResponse> {

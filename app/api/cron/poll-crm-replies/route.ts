@@ -2,37 +2,19 @@
 //
 // Background sweep: persists + AI-classifies new Gmail replies to CRM
 // outreach sends across every venture, so the CRM Replies panel doesn't
-// depend solely on a user manually clicking "Check for replies". Same auth
-// pattern as /api/cron/run-outreach (Bearer CRON_SECRET / x-vercel-cron).
+// depend solely on a user manually clicking "Check for replies". Requests
+// require the configured cron secret.
 import { NextRequest, NextResponse } from 'next/server'
 import { runCrmRepliesSync } from '@/lib/crm-replies-cron'
 import { logError } from '@/lib/log'
+import { isCronAuthorized } from '@/lib/cron-auth'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function timingSafeStringCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
 function isAuthorized(request: NextRequest): boolean {
-  const vercelCronSecret = process.env.CRON_SECRET
-
-  const auth = request.headers.get('authorization') ?? ''
-  if (auth.startsWith('Bearer ') && vercelCronSecret) {
-    const token = auth.slice('Bearer '.length)
-    if (timingSafeStringCompare(token, vercelCronSecret)) return true
-  }
-
-  // Only trust x-vercel-cron when actually running on Vercel — its edge strips
-  // the header from inbound external requests; elsewhere it is spoofable.
-  if (process.env.VERCEL && request.headers.get('x-vercel-cron')) return true
-
-  return false
+  return isCronAuthorized(request, ['CRON_SECRET'])
 }
 
 async function runOnce(): Promise<NextResponse> {
