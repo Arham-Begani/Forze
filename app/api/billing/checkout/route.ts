@@ -11,10 +11,13 @@ import {
 } from '@/lib/billing'
 import {
   BillingError,
+  confirmBillingCheckoutIntent,
+  createBillingCheckoutIntent,
   createPendingSubscriptionRecord,
   ensureBillingCustomer,
   finalizeSubscriptionPurchase,
   finalizeTopupPurchase,
+  getBillingCheckoutIntent,
   getBillingSnapshot,
 } from '@/lib/billing-queries'
 import {
@@ -113,6 +116,15 @@ export async function POST(request: NextRequest) {
         providerSubscriptionId: subscription.id,
         providerPlanId: subscription.plan_id,
       })
+      await createBillingCheckoutIntent({
+        userId: session.userId,
+        kind: 'subscription',
+        productSlug: payload.planSlug,
+        billingPeriod: payload.billingPeriod,
+        providerId: subscription.id,
+        providerPlanId: subscription.plan_id,
+        amountInr: getPlanPrice(payload.planSlug, payload.billingPeriod),
+      })
 
       return NextResponse.json({
         checkoutKind: 'plan',
@@ -144,6 +156,13 @@ export async function POST(request: NextRequest) {
           topupSlug: payload.topupSlug,
         },
       })
+      await createBillingCheckoutIntent({
+        userId: session.userId,
+        kind: 'topup',
+        productSlug: payload.topupSlug,
+        providerId: order.id,
+        amountInr: topup.amountInr,
+      })
 
       return NextResponse.json({
         checkoutKind: 'topup',
@@ -168,17 +187,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid Razorpay signature' }, { status: 400 })
       }
 
+      const intent = await getBillingCheckoutIntent({
+        userId: session.userId,
+        kind: 'subscription',
+        providerId: payload.razorpaySubscriptionId,
+      })
+      if (
+        !intent ||
+        intent.product_slug !== payload.planSlug ||
+        intent.billing_period !== payload.billingPeriod ||
+        !intent.provider_plan_id
+      ) {
+        return NextResponse.json({ error: 'Checkout intent does not match this subscription' }, { status: 400 })
+      }
+
       const result = await finalizeSubscriptionPurchase({
         userId: session.userId,
-        planSlug: payload.planSlug,
-        billingPeriod: payload.billingPeriod,
+        planSlug: intent.product_slug as Exclude<PlanSlug, 'free'>,
+        billingPeriod: intent.billing_period as BillingPeriod,
         providerSubscriptionId: payload.razorpaySubscriptionId,
-        providerPlanId: getRazorpayPlanId(payload.planSlug, payload.billingPeriod),
+        providerPlanId: intent.provider_plan_id,
         providerPaymentId: payload.razorpayPaymentId,
         providerSignature: payload.razorpaySignature,
-        amountInr: getPlanPrice(payload.planSlug, payload.billingPeriod),
+        amountInr: intent.amount_inr,
         rawPayload: payload,
       })
+      await confirmBillingCheckoutIntent(
+        session.userId,
+        'subscription',
+        payload.razorpaySubscriptionId,
+      )
 
       return NextResponse.json(result)
     }
@@ -192,16 +230,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid Razorpay signature' }, { status: 400 })
     }
 
-    const topup = TOPUP_PRODUCTS[payload.topupSlug]
+    const intent = await getBillingCheckoutIntent({
+      userId: session.userId,
+      kind: 'topup',
+      providerId: payload.razorpayOrderId,
+    })
+    if (!intent || intent.product_slug !== payload.topupSlug) {
+      return NextResponse.json({ error: 'Checkout intent does not match this order' }, { status: 400 })
+    }
+
     const result = await finalizeTopupPurchase({
       userId: session.userId,
-      topupSlug: payload.topupSlug,
+      topupSlug: intent.product_slug as TopupSlug,
       providerPaymentId: payload.razorpayPaymentId,
       providerOrderId: payload.razorpayOrderId,
       providerSignature: payload.razorpaySignature,
-      amountInr: topup.amountInr,
+      amountInr: intent.amount_inr,
       rawPayload: payload,
     })
+    await confirmBillingCheckoutIntent(session.userId, 'topup', payload.razorpayOrderId)
 
     return NextResponse.json(result)
   } catch (e) {
